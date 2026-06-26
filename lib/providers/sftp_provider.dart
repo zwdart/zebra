@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import '../models/sftp_file_item.dart';
 import '../services/sftp_service.dart';
 import '../services/compression_service.dart';
@@ -103,7 +104,7 @@ class SftpProvider extends ChangeNotifier {
       {void Function(String fileName, int current, int total)? onProgress}) async {
     for (int i = 0; i < localPaths.length; i++) {
       final localPath = localPaths[i];
-      final fileName = localPath.split('/').last;
+      final fileName = p.basename(localPath);
       final remotePath = '$remoteDir/$fileName';
       onProgress?.call(fileName, i + 1, localPaths.length);
       await _sftpService.uploadFile(localPath, remotePath);
@@ -116,7 +117,7 @@ class SftpProvider extends ChangeNotifier {
     for (int i = 0; i < remotePaths.length; i++) {
       final remotePath = remotePaths[i];
       final fileName = remotePath.split('/').last;
-      final localPath = '$localDir/$fileName';
+      final localPath = p.join(localDir, fileName);
       onProgress?.call(fileName, i + 1, remotePaths.length);
       await _sftpService.downloadFile(remotePath, localPath);
     }

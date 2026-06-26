@@ -584,7 +584,7 @@ class _SftpScreenState extends State<SftpScreen> {
     if (result == null) return;
 
     final fileName = p.basename(remotePath);
-    final localPath = '$result/$fileName';
+    final localPath = p.join(result, fileName);
 
     if (mounted) {
       showDialog(

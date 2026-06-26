@@ -113,6 +113,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
       key: _terminalKey,
       focusNode: _focusNode,
       autofocus: true,
+      hardwareKeyboardOnly: true,
       textStyle: TerminalStyle(
         fontSize: 14,
         fontFamily: Platform.isWindows ? 'Consolas' : 'monospace',
