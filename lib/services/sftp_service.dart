@@ -49,7 +49,7 @@ class SftpService {
     for (final entry in entries) {
       final name = entry.filename;
       if (name == '.' || name == '..') continue;
-      final fullPath = p.join(path, name);
+      final fullPath = p.posix.join(path, name);
       final attrs = entry.attr;
       final isDir = attrs.isDirectory;
 
