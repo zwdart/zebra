@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/ssh_provider.dart';
 import '../l10n/app_localizations.dart';
 import 'process_screen.dart';
+import 'cleanup_screen.dart';
 
 class MonitorScreen extends StatefulWidget {
   const MonitorScreen({super.key});
@@ -59,7 +60,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
       cmd.writeln(r"echo 'LOAD:$(cat /proc/loadavg 2>/dev/null || echo 0 0 0)'");
       cmd.writeln(r'echo "PROCS:$(ps -e --no-headers 2>/dev/null | wc -l || echo 0)"');
       cmd.writeln(r"""echo 'NET:'$(cat /proc/net/dev 2>/dev/null | awk 'NR>2{gsub(/:/,"",$1); rx+=$2; tx+=$10}END{print rx,tx}' || echo '0 0')""");
-      cmd.writeln(r"echo 'UPTIME:$(cat /proc/uptime 2>/dev/null | awk '{print $1}' || echo 0)'");
+      cmd.writeln(r"echo 'UPTIME:'$(cat /proc/uptime 2>/dev/null | awk '{print $1}' || echo 0)");
 
       final output = await _exec('LC_ALL=C ${cmd.toString().replaceAll('\n', '; ')}');
 
@@ -469,6 +470,17 @@ class _MonitorScreenState extends State<MonitorScreen> {
             Text(
               '${AppLocalizations.of(context).available}: ${_formatBytes(m.availableDisk.toDouble())}',
               style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const CleanupScreen()));
+                },
+                icon: const Icon(Icons.cleaning_services, size: 16),
+                label: Text(AppLocalizations.of(context).diskCleanup),
+              ),
             ),
           ],
         ),

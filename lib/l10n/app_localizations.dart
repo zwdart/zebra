@@ -144,6 +144,32 @@ class AppLocalizations {
   String processSentSignal(int pid) {
     return translate('processSentSignal').replaceAll('{pid}', '$pid');
   }
+  String get diskCleanup => translate('diskCleanup');
+  String get totalCleanable => translate('totalCleanable');
+  String get quickClean => translate('quickClean');
+  String get tempFileBrowser => translate('tempFileBrowser');
+  String get clean => translate('clean');
+  String get cleanAll => translate('cleanAll');
+  String cleanAllMsgParam(String size) {
+    return translate('cleanAllMsg').replaceAll('{size}', size);
+  }
+  String cleanCompleted(String label) {
+    return translate('cleanCompleted').replaceAll('{label}', label);
+  }
+  String get cleanFailed => translate('cleanFailed');
+  String get confirmClean => translate('confirmClean');
+  String get scanTempFiles => translate('scanTempFiles');
+  String get scanTempFilesDesc => translate('scanTempFilesDesc');
+  String get scan => translate('scan');
+  String get rescan => translate('rescan');
+  String get confirmDeleteSelected => translate('confirmDeleteSelected');
+  String confirmDeleteSelectedMsg(int count) {
+    return translate('confirmDeleteSelectedMsg').replaceAll('{count}', '$count');
+  }
+  String deletedFiles(int count) {
+    return translate('deletedFiles').replaceAll('{count}', '$count');
+  }
+  String get deleteFailed => translate('deleteFailed');
 
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
@@ -260,6 +286,24 @@ class AppLocalizations {
     'user': 'User',
     'memSize': 'RSS',
     'processSentSignal': 'Sent SIGTERM to process {pid}',
+    'diskCleanup': 'Disk Cleanup',
+    'totalCleanable': 'Total Cleanable',
+    'quickClean': 'Quick Clean',
+    'tempFileBrowser': 'Temporary File Browser',
+    'clean': 'Clean',
+    'cleanAll': 'Clean All',
+    'cleanAllMsg': 'Clean all junk files? Total: {size}',
+    'cleanCompleted': 'Cleaned: {label}',
+    'cleanFailed': 'Clean failed',
+    'confirmClean': 'Confirm Clean?',
+    'scanTempFiles': 'Scan Temp Files',
+    'scanTempFilesDesc': 'Scan /tmp, logs and cache for large files',
+    'scan': 'Scan',
+    'rescan': 'Rescan',
+    'confirmDeleteSelected': 'Delete Selected?',
+    'confirmDeleteSelectedMsg': 'Delete {count} selected files?',
+    'deletedFiles': 'Deleted {count} files',
+    'deleteFailed': 'Delete failed',
   };
 
   static const Map<String, String> _zh = {
@@ -377,6 +421,24 @@ class AppLocalizations {
     'user': '用户',
     'memSize': 'RSS',
     'processSentSignal': '已发送 SIGTERM 到进程 {pid}',
+    'diskCleanup': '磁盘清理',
+    'totalCleanable': '可清理总量',
+    'quickClean': '快速清理',
+    'tempFileBrowser': '临时文件浏览',
+    'clean': '清理',
+    'cleanAll': '全部清理',
+    'cleanAllMsg': '确定清理所有垃圾文件？共 {size}',
+    'cleanCompleted': '已清理: {label}',
+    'cleanFailed': '清理失败',
+    'confirmClean': '确认清理？',
+    'scanTempFiles': '扫描临时文件',
+    'scanTempFilesDesc': '扫描 /tmp、日志和缓存中的大文件',
+    'scan': '扫描',
+    'rescan': '重新扫描',
+    'confirmDeleteSelected': '删除所选？',
+    'confirmDeleteSelectedMsg': '删除选中的 {count} 个文件？',
+    'deletedFiles': '已删除 {count} 个文件',
+    'deleteFailed': '删除失败',
   };
 }
 
