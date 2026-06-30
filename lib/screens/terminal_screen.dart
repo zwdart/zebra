@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:xterm/xterm.dart';
 import '../providers/ssh_provider.dart';
 import '../l10n/app_localizations.dart';
+import 'monitor_screen.dart';
 
 class TerminalScreen extends StatefulWidget {
   const TerminalScreen({super.key});
@@ -73,6 +74,16 @@ class _TerminalScreenState extends State<TerminalScreen> {
       appBar: AppBar(
         title: Text('${conn?.name ?? "SSH"} - ${loc.terminal}'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.monitor_heart),
+            tooltip: loc.serverMonitor,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MonitorScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.file_copy),
             tooltip: loc.sftp,

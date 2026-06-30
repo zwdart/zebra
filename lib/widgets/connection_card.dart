@@ -7,6 +7,7 @@ class ConnectionCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback? onSftp;
+  final VoidCallback? onMonitor;
 
   const ConnectionCard({
     super.key,
@@ -15,6 +16,7 @@ class ConnectionCard extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     this.onSftp,
+    this.onMonitor,
   });
 
   @override
@@ -76,6 +78,9 @@ class ConnectionCard extends StatelessWidget {
                         case 'sftp':
                           onSftp?.call();
                           break;
+                        case 'monitor':
+                          onMonitor?.call();
+                          break;
                         case 'edit':
                           onEdit();
                           break;
@@ -87,6 +92,7 @@ class ConnectionCard extends StatelessWidget {
                     itemBuilder: (ctx) => [
                       const PopupMenuItem(value: 'connect', child: Text('Connect')),
                       const PopupMenuItem(value: 'sftp', child: Text('SFTP')),
+                      PopupMenuItem(value: 'monitor', child: Text('Monitor')),
                       const PopupMenuItem(value: 'edit', child: Text('Edit')),
                       PopupMenuItem(
                         value: 'delete',

@@ -7,6 +7,7 @@ import 'connection_form_screen.dart';
 import 'terminal_screen.dart';
 import 'sftp_screen.dart';
 import 'settings_screen.dart';
+import 'monitor_screen.dart';
 import '../widgets/connection_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -83,12 +84,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemCount: connections.length,
                   itemBuilder: (ctx, i) {
                     final conn = connections[i];
-                    return ConnectionCard(
+                      return ConnectionCard(
                       connection: conn,
                       onConnect: () => _connectToServer(context, conn),
                       onEdit: () => _editConnection(context, conn),
                       onDelete: () => _deleteConnection(context, conn),
                       onSftp: () => _openSftp(context, conn),
+                      onMonitor: () => _openMonitor(context, conn),
                     );
                   },
                 );
@@ -227,6 +229,49 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const SftpScreen()),
+    );
+  }
+
+  Future<void> _openMonitor(BuildContext context, dynamic conn) async {
+    final loc = AppLocalizations.of(context);
+    final sshProvider = context.read<SshProvider>();
+
+    final needConnect = !sshProvider.isConnected ||
+        sshProvider.currentConnection?.id != conn.id;
+
+    if (needConnect) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(loc.connecting),
+            ],
+          ),
+        ),
+      );
+
+      await sshProvider.connect(conn);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+
+      if (!sshProvider.isConnected) {
+        if (sshProvider.error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${loc.connectionError}: ${sshProvider.error}')),
+          );
+        }
+        return;
+      }
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const MonitorScreen()),
     );
   }
 }

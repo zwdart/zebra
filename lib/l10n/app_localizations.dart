@@ -98,6 +98,52 @@ class AppLocalizations {
   String get sortByDate => translate('sortByDate');
   String get ascending => translate('ascending');
   String get descending => translate('descending');
+  String get serverMonitor => translate('serverMonitor');
+  String get systemInfo => translate('systemInfo');
+  String get cpuUsage => translate('cpuUsage');
+  String get memory => translate('memory');
+  String get disk => translate('disk');
+  String get loadAverage => translate('loadAverage');
+  String get network => translate('network');
+  String get processes => translate('processes');
+  String get hostname => translate('hostname');
+  String get operatingSystem => translate('operatingSystem');
+  String get kernel => translate('kernel');
+  String get cpuModelLabel => translate('cpuModelLabel');
+  String get cpuCores => translate('cpuCores');
+  String get frequency => translate('frequency');
+  String get uptimeLabel => translate('uptimeLabel');
+  String get available => translate('available');
+  String get received => translate('received');
+  String get sent => translate('sent');
+  String get runningProcesses => translate('runningProcesses');
+  String get autoRefresh => translate('autoRefresh');
+  String get pauseRefresh => translate('pauseRefresh');
+  String get refreshInterval => translate('refreshInterval');
+  String get refresh => translate('refresh');
+  String get retry => translate('retry');
+  String get lastUpdated => translate('lastUpdated');
+  String get processList => translate('processList');
+  String get searchProcesses => translate('searchProcesses');
+  String get noProcessesFound => translate('noProcessesFound');
+  String get killProcess => translate('killProcess');
+  String get killSystemProcess => translate('killSystemProcess');
+  String get confirmKillSystemProcess => translate('confirmKillSystemProcess');
+  String get kill => translate('kill');
+  String get killFailed => translate('killFailed');
+  String get sortByCpu => translate('sortByCpu');
+  String get sortByMem => translate('sortByMem');
+  String get sortByMemSize => translate('sortByMemSize');
+  String get sortByPid => translate('sortByPid');
+  String get sortByUser => translate('sortByUser');
+  String get user => translate('user');
+  String get memSize => translate('memSize');
+  String confirmKillSystemProcessMsg(int pid, String user) {
+    return translate('confirmKillSystemProcessMsg').replaceAll('{pid}', '$pid').replaceAll('{user}', user);
+  }
+  String processSentSignal(int pid) {
+    return translate('processSentSignal').replaceAll('{pid}', '$pid');
+  }
 
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
@@ -172,6 +218,48 @@ class AppLocalizations {
     'sortByDate': 'Modified Date',
     'ascending': 'Ascending',
     'descending': 'Descending',
+    'serverMonitor': 'Server Monitor',
+    'systemInfo': 'System Info',
+    'cpuUsage': 'CPU Usage',
+    'memory': 'Memory',
+    'disk': 'Disk',
+    'loadAverage': 'Load Average',
+    'network': 'Network',
+    'processes': 'Processes',
+    'hostname': 'Hostname',
+    'operatingSystem': 'Operating System',
+    'kernel': 'Kernel',
+    'cpuModelLabel': 'CPU Model',
+    'cpuCores': 'Cores',
+    'frequency': 'Frequency',
+    'uptimeLabel': 'Uptime',
+    'available': 'Available',
+    'received': 'Received',
+    'sent': 'Sent',
+    'runningProcesses': 'running processes',
+    'autoRefresh': 'Auto Refresh',
+    'pauseRefresh': 'Pause Refresh',
+    'refreshInterval': 'Refresh Interval',
+    'refresh': 'Refresh',
+    'retry': 'Retry',
+    'lastUpdated': 'Last Updated',
+    'processList': 'Process List',
+    'searchProcesses': 'Search processes...',
+    'noProcessesFound': 'No processes found',
+    'killProcess': 'Kill Process',
+    'killSystemProcess': 'Kill System Process (Confirm)',
+    'confirmKillSystemProcess': 'Kill System Process?',
+    'confirmKillSystemProcessMsg': 'Process {pid} (user: {user}) is a system process. Are you sure you want to kill it?',
+    'kill': 'Kill',
+    'killFailed': 'Failed to kill process',
+    'sortByCpu': 'CPU Usage',
+    'sortByMem': 'Memory Usage',
+    'sortByMemSize': 'Memory Size (RSS)',
+    'sortByPid': 'PID',
+    'sortByUser': 'User',
+    'user': 'User',
+    'memSize': 'RSS',
+    'processSentSignal': 'Sent SIGTERM to process {pid}',
   };
 
   static const Map<String, String> _zh = {
@@ -247,6 +335,48 @@ class AppLocalizations {
     'sortByDate': '修改时间',
     'ascending': '升序',
     'descending': '降序',
+    'serverMonitor': '服务器监控',
+    'systemInfo': '系统信息',
+    'cpuUsage': 'CPU 使用率',
+    'memory': '内存',
+    'disk': '磁盘',
+    'loadAverage': '负载均衡',
+    'network': '网络',
+    'processes': '进程',
+    'hostname': '主机名',
+    'operatingSystem': '操作系统',
+    'kernel': '内核',
+    'cpuModelLabel': 'CPU 型号',
+    'cpuCores': '核心数',
+    'frequency': '频率',
+    'uptimeLabel': '运行时间',
+    'available': '可用',
+    'received': '接收',
+    'sent': '发送',
+    'runningProcesses': '个运行进程',
+    'autoRefresh': '自动刷新',
+    'pauseRefresh': '暂停刷新',
+    'refreshInterval': '刷新间隔',
+    'refresh': '刷新',
+    'retry': '重试',
+    'lastUpdated': '最后更新',
+    'processList': '进程列表',
+    'searchProcesses': '搜索进程...',
+    'noProcessesFound': '未找到进程',
+    'killProcess': '终止进程',
+    'killSystemProcess': '终止系统进程（需确认）',
+    'confirmKillSystemProcess': '终止系统进程？',
+    'confirmKillSystemProcessMsg': '进程 {pid}（用户: {user}）是系统进程，确定要终止吗？',
+    'kill': '终止',
+    'killFailed': '终止进程失败',
+    'sortByCpu': 'CPU 使用率',
+    'sortByMem': '内存使用率',
+    'sortByMemSize': '内存大小 (RSS)',
+    'sortByPid': 'PID',
+    'sortByUser': '用户',
+    'user': '用户',
+    'memSize': 'RSS',
+    'processSentSignal': '已发送 SIGTERM 到进程 {pid}',
   };
 }
 

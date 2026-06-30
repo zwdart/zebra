@@ -11,6 +11,8 @@ import 'providers/locale_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/terminal_screen.dart';
 import 'screens/sftp_screen.dart';
+import 'screens/monitor_screen.dart';
+import 'screens/process_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +53,8 @@ class ZebraApp extends StatelessWidget {
             routes: {
               '/terminal': (_) => const TerminalScreen(),
               '/sftp': (_) => const SftpScreen(),
+              '/monitor': (_) => const MonitorScreen(),
+              '/processes': (_) => const ProcessScreen(),
             },
           );
         },
