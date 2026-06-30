@@ -170,6 +170,10 @@ class AppLocalizations {
     return translate('deletedFiles').replaceAll('{count}', '$count');
   }
   String get deleteFailed => translate('deleteFailed');
+  String get recentLogins => translate('recentLogins');
+  String get noLoginHistory => translate('noLoginHistory');
+  String get failedLogins => translate('failedLogins');
+  String get noFailedLogins => translate('noFailedLogins');
 
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
@@ -304,6 +308,10 @@ class AppLocalizations {
     'confirmDeleteSelectedMsg': 'Delete {count} selected files?',
     'deletedFiles': 'Deleted {count} files',
     'deleteFailed': 'Delete failed',
+    'recentLogins': 'Recent Logins',
+    'noLoginHistory': 'No login history',
+    'failedLogins': 'Failed Logins',
+    'noFailedLogins': 'No failed logins in the last 7 days',
   };
 
   static const Map<String, String> _zh = {
@@ -439,6 +447,10 @@ class AppLocalizations {
     'confirmDeleteSelectedMsg': '删除选中的 {count} 个文件？',
     'deletedFiles': '已删除 {count} 个文件',
     'deleteFailed': '删除失败',
+    'recentLogins': '最近登录',
+    'noLoginHistory': '无登录记录',
+    'failedLogins': '失败登录',
+    'noFailedLogins': '最近7天无失败登录记录',
   };
 }
 

@@ -23,6 +23,8 @@ class _MonitorScreenState extends State<MonitorScreen> {
   String? _error;
   int _cpuTicks1 = 0;
   int _cpuTotal1 = 0;
+  List<_LoginRecord> _loginHistory = [];
+  List<_FailedLoginRecord> _failedLogins = [];
 
   @override
   void initState() {
@@ -164,6 +166,8 @@ class _MonitorScreenState extends State<MonitorScreen> {
           _isLoading = false;
         });
         _startAutoRefresh();
+        _fetchLogins();
+        _fetchFailedLogins();
       }
     } catch (e) {
       if (mounted) {
@@ -173,6 +177,145 @@ class _MonitorScreenState extends State<MonitorScreen> {
         });
       }
     }
+  }
+
+  Future<void> _fetchLogins() async {
+    try {
+      final output = await _exec('last -F -n 20 2>/dev/null || last -n 20 2>/dev/null || echo ""');
+      final lines = output.split('\n');
+      final records = <_LoginRecord>[];
+
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty || trimmed.startsWith('wtmp') || trimmed.startsWith('reboot')) continue;
+        final parts = trimmed.split(RegExp(r'\s+'));
+        if (parts.length < 3) continue;
+
+        final user = parts[0];
+        if (user == 'wtmp' || user == 'reboot' || user == 'runlevel' || user == 'shutdown') continue;
+
+        String terminal = '';
+        String from = '';
+        String loginTime = '';
+        String duration = '';
+
+        if (trimmed.contains('pts/') || trimmed.contains('tty')) {
+          terminal = parts.firstWhere((p) => p.startsWith('pts/') || p.startsWith('tty'), orElse: () => '');
+          final termIdx = parts.indexOf(terminal);
+          if (termIdx >= 0 && termIdx + 1 < parts.length) {
+            from = parts[termIdx + 1];
+          }
+          final timeParts = parts.sublist(termIdx + 2);
+          loginTime = timeParts.take(5).join(' ');
+          duration = timeParts.length > 5 ? timeParts.sublist(5).join(' ') : '';
+        } else {
+          if (parts.length >= 4) {
+            terminal = parts[1];
+            from = parts[2];
+            loginTime = parts.sublist(3).take(5).join(' ');
+            duration = parts.length > 8 ? parts.sublist(8).join(' ') : '';
+          }
+        }
+
+        if (loginTime.isNotEmpty) {
+          records.add(_LoginRecord(
+            user: user,
+            terminal: terminal,
+            from: from,
+            loginTime: loginTime.trim(),
+            duration: duration.trim(),
+          ));
+        }
+      }
+
+      if (mounted) {
+        setState(() => _loginHistory = records);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchFailedLogins() async {
+    try {
+      final output = await _exec(r"""
+        (
+          # Try journalctl first
+          journalctl -u sshd -u ssh --since "7 days ago" --no-pager -n 500 2>/dev/null | grep -i 'failed\|invalid\|authentication failure'
+        ) || (
+          # Fallback to auth.log / secure
+          grep -i 'failed password\|invalid user\|authentication failure' /var/log/auth.log /var/log/secure 2>/dev/null | tail -500
+        ) || (
+          # Try lastb
+          lastb -F -n 100 2>/dev/null | head -100
+        ) || echo ""
+""");
+
+      final lines = output.split('\n');
+      final records = <_FailedLoginRecord>[];
+
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+
+        String user = 'unknown';
+        String from = 'unknown';
+        String time = '';
+
+        if (trimmed.contains('Failed password')) {
+          final userMatch = RegExp(r'for (?:invalid user )?(\S+)').firstMatch(trimmed);
+          final fromMatch = RegExp(r'from (\S+)').firstMatch(trimmed);
+          user = userMatch?.group(1) ?? 'unknown';
+          from = fromMatch?.group(1) ?? 'unknown';
+          final timeMatch = RegExp(r'^\w+\s+\d+\s+[\d:]+').firstMatch(trimmed);
+          if (timeMatch != null) time = timeMatch.group(0)!;
+          if (time.isEmpty) {
+            final bracketMatch = RegExp(r'(\w+\s+\d+\s+[\d:]+)').firstMatch(trimmed);
+            time = bracketMatch?.group(1) ?? '';
+          }
+        } else if (trimmed.contains('Invalid user')) {
+          final userMatch = RegExp(r'Invalid user (\S+)').firstMatch(trimmed);
+          final fromMatch = RegExp(r'from (\S+)').firstMatch(trimmed);
+          user = userMatch?.group(1) ?? 'unknown';
+          from = fromMatch?.group(1) ?? 'unknown';
+          final bracketMatch = RegExp(r'(\w+\s+\d+\s+[\d:]+)').firstMatch(trimmed);
+          time = bracketMatch?.group(1) ?? '';
+        } else if (trimmed.contains('authentication failure')) {
+          final userMatch = RegExp(r'rhost=(\S+)').firstMatch(trimmed);
+          final fromMatch = RegExp(r'ruser=(\S+)').firstMatch(trimmed);
+          from = userMatch?.group(1) ?? 'unknown';
+          user = fromMatch?.group(1) ?? 'unknown';
+          if (user.isEmpty || user == 'unknown') {
+            final altUser = RegExp(r'USER=(\S+)').firstMatch(trimmed);
+            user = altUser?.group(1) ?? 'unknown';
+          }
+          final bracketMatch = RegExp(r'(\w+\s+\d+\s+[\d:]+)').firstMatch(trimmed);
+          time = bracketMatch?.group(1) ?? '';
+        } else if (trimmed.contains('pts/') || trimmed.contains('tty')) {
+          final parts = trimmed.split(RegExp(r'\s+'));
+          if (parts.length >= 3) {
+            user = parts[0];
+            final termIdx = parts.indexWhere((p) => p.startsWith('pts/') || p.startsWith('tty'));
+            if (termIdx >= 0 && termIdx + 1 < parts.length) {
+              from = parts[termIdx + 1];
+            }
+            final timeParts = parts.sublist(termIdx + 1);
+            final bracketMatch = RegExp(r'(\w+\s+\d+\s+[\d:]+)').firstMatch(timeParts.join(' '));
+            time = bracketMatch?.group(1) ?? '';
+          }
+        }
+
+        if (user != 'unknown' || from != 'unknown') {
+          records.add(_FailedLoginRecord(
+            user: user,
+            from: from,
+            time: time,
+          ));
+        }
+      }
+
+      if (mounted) {
+        setState(() => _failedLogins = records);
+      }
+    } catch (_) {}
   }
 
   void _startAutoRefresh() {
@@ -282,6 +425,10 @@ class _MonitorScreenState extends State<MonitorScreen> {
                       _buildNetworkCard(theme),
                       const SizedBox(height: 12),
                       _buildProcessCard(theme),
+                      const SizedBox(height: 12),
+                      _buildLoginCard(theme),
+                      const SizedBox(height: 12),
+                      _buildFailedLoginCard(theme),
                       const SizedBox(height: 16),
                       Text(
                         '${loc.lastUpdated}: ${_metrics!.fetchedAt.hour.toString().padLeft(2, '0')}:${_metrics!.fetchedAt.minute.toString().padLeft(2, '0')}:${_metrics!.fetchedAt.second.toString().padLeft(2, '0')}',
@@ -645,6 +792,177 @@ class _MonitorScreenState extends State<MonitorScreen> {
     );
   }
 
+  Widget _buildLoginCard(ThemeData theme) {
+    final loc = AppLocalizations.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle(theme, Icons.history, loc.recentLogins),
+            if (_loginHistory.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: Text(
+                    loc.noLoginHistory,
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                  ),
+                ),
+              )
+            else ...[
+              const SizedBox(height: 8),
+              ..._loginHistory.take(10).map((r) => _loginRow(r, theme)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _loginRow(_LoginRecord r, ThemeData theme) {
+    final isCurrentSession = r.duration.toLowerCase().contains('still') ||
+        r.duration.toLowerCase().contains('online');
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Icon(
+            isCurrentSession ? Icons.circle : Icons.circle_outlined,
+            size: 8,
+            color: isCurrentSession ? Colors.green : theme.colorScheme.outline,
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 60,
+            child: Text(
+              r.user,
+              style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(Icons.lan, size: 12, color: theme.colorScheme.outline),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              r.from,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+                fontFamily: 'monospace',
+                fontSize: 11,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              r.loginTime,
+              style: theme.textTheme.bodySmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (r.duration.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: (isCurrentSession ? Colors.green : theme.colorScheme.outline).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                r.duration,
+                style: theme.textTheme.labelSmall?.copyWith(fontSize: 10),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFailedLoginCard(ThemeData theme) {
+    final loc = AppLocalizations.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle(theme, Icons.warning_amber, loc.failedLogins),
+            if (_failedLogins.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: Text(
+                    loc.noFailedLogins,
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                  ),
+                ),
+              )
+            else ...[
+              const SizedBox(height: 8),
+              ..._failedLogins.take(15).map((r) => _failedLoginRow(r, theme)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _failedLoginRow(_FailedLoginRecord r, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          const Icon(Icons.close, size: 10, color: Colors.red),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 80,
+            child: Text(
+              r.user,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                fontFamily: 'monospace',
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(Icons.lan, size: 12, color: theme.colorScheme.outline),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              r.from,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+                fontFamily: 'monospace',
+                fontSize: 11,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (r.time.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: Text(
+                r.time,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                  fontSize: 11,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _infoRow(ThemeData theme, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -729,5 +1047,33 @@ class _ServerMetrics {
     required this.netRx,
     required this.netTx,
     required this.fetchedAt,
+  });
+}
+
+class _LoginRecord {
+  final String user;
+  final String terminal;
+  final String from;
+  final String loginTime;
+  final String duration;
+
+  _LoginRecord({
+    required this.user,
+    required this.terminal,
+    required this.from,
+    required this.loginTime,
+    required this.duration,
+  });
+}
+
+class _FailedLoginRecord {
+  final String user;
+  final String from;
+  final String time;
+
+  _FailedLoginRecord({
+    required this.user,
+    required this.from,
+    required this.time,
   });
 }
