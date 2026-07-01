@@ -14,6 +14,9 @@ import 'screens/sftp_screen.dart';
 import 'screens/monitor_screen.dart';
 import 'screens/process_screen.dart';
 import 'screens/cleanup_screen.dart';
+import 'providers/monitor_provider.dart';
+import 'providers/process_provider.dart';
+import 'providers/cleanup_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +36,18 @@ class ZebraApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ConnectionProvider()),
         ChangeNotifierProvider(create: (_) => SshProvider()),
         ChangeNotifierProvider(create: (_) => SftpProvider()),
+        ChangeNotifierProxyProvider<SshProvider, MonitorProvider>(
+          create: (_) => MonitorProvider(),
+          update: (_, ssh, provider) => provider!..updateSsh(ssh),
+        ),
+        ChangeNotifierProxyProvider<SshProvider, ProcessProvider>(
+          create: (_) => ProcessProvider(),
+          update: (_, ssh, provider) => provider!..updateSsh(ssh),
+        ),
+        ChangeNotifierProxyProvider<SshProvider, CleanupProvider>(
+          create: (_) => CleanupProvider(),
+          update: (_, ssh, provider) => provider!..updateSsh(ssh),
+        ),
       ],
       child: Consumer2<ThemeProvider, LocaleProvider>(
         builder: (ctx, themeProvider, localeProvider, _) {
