@@ -1,0 +1,36 @@
+[package]
+name = "zebra-pack"
+version = "1.0.0"
+edition = "2021"
+description = "Zebra SSH - Portable Packer"
+
+[[bin]]
+name = "zebra-pack"
+path = "src/bin_pack.rs"
+
+[[bin]]
+name = "zebra"
+path = "src/main.rs"
+
+[[bin]]
+name = "icon-gen"
+path = "src/icon_gen.rs"
+
+[dependencies]
+brotli = "7.0"
+md-5 = "0.10"
+dirs = "6.0"
+walkdir = "2.5"
+clap = { version = "4", features = ["derive"] }
+resvg = { version = "0.44", features = ["text"] }
+usvg = "0.44"
+tiny-skia = "0.11"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[build-dependencies]
+winres = "0.1"
+
+[profile.release]
+lto = true
+strip = true
+opt-level = "z"
