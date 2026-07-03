@@ -55,6 +55,15 @@ class SettingsScreen extends StatelessWidget {
             trailing: const Icon(Icons.folder_open),
             onTap: () => _openDatabaseDirectory(context),
           ),
+          if (Platform.isLinux) ...[
+            const Divider(),
+            _buildSectionHeader(context, loc.systemIntegration),
+            ListTile(
+              leading: const Icon(Icons.delete_forever, color: Colors.red),
+              title: Text(loc.uninstallFromSystem, style: const TextStyle(color: Colors.red)),
+              onTap: () => _uninstallFromSystem(context),
+            ),
+          ],
         ],
       ),
     );
@@ -180,6 +189,68 @@ class SettingsScreen extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  String? _findPackerBinary() {
+    final home = Platform.environment['HOME'];
+    if (home == null) return null;
+
+    final candidates = [
+      '$home/.local/bin/zebra',
+      '${Directory.current.path}/zebra',
+    ];
+
+    for (final path in candidates) {
+      if (File(path).existsSync()) return path;
+    }
+    return null;
+  }
+
+  void _uninstallFromSystem(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.confirmUninstall),
+        content: Text(loc.confirmUninstallMsg),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(loc.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(loc.confirm, style: const TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    final packer = _findPackerBinary();
+    if (packer == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(loc.uninstallFailed)),
+        );
+      }
+      return;
+    }
+
+    final result = await Process.run(packer, ['--uninstall']);
+    if (context.mounted) {
+      if (result.exitCode == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(loc.uninstallSuccess)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${loc.uninstallFailed}: ${result.stderr}')),
         );
       }
     }

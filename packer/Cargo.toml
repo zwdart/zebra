@@ -25,7 +25,6 @@ clap = { version = "4", features = ["derive"] }
 resvg = { version = "0.44", features = ["text"] }
 usvg = "0.44"
 tiny-skia = "0.11"
-image = { version = "0.25", default-features = false, features = ["png"] }
 
 [build-dependencies]
 winres = "0.1"
