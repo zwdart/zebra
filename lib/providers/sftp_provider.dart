@@ -9,6 +9,7 @@ import '../services/ssh_service.dart';
 class SftpProvider extends ChangeNotifier {
   final SftpService _sftpService = SftpService();
   final CompressionService _compressionService = CompressionService();
+  SshService? _sshService;
 
   List<SftpFileItem> _files = [];
   String _currentPath = '/';
@@ -28,6 +29,7 @@ class SftpProvider extends ChangeNotifier {
   bool get canGoBack => _pathHistory.length > 1;
 
   Future<void> attachToSsh(SshService sshService) async {
+    _sshService = sshService;
     final client = sshService.client;
     if (client == null) throw Exception('SSH not connected');
     final sftpClient = await client.sftp();
@@ -130,11 +132,17 @@ class SftpProvider extends ChangeNotifier {
   }
 
   Future<void> deleteSelected() async {
+    if (_sshService == null) throw Exception('SSH not connected');
     for (final path in _selectedFiles) {
-      await _sftpService.remove(path);
+      await _sshService!.execute('rm -rf "$path"');
     }
     _selectedFiles.clear();
     await listDirectory();
+  }
+
+  Future<void> remove(String path) async {
+    if (_sshService == null) throw Exception('SSH not connected');
+    await _sshService!.execute('rm -rf "$path"');
   }
 
   Future<void> compressSelected(String outputPath) async {

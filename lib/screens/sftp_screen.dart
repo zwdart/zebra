@@ -608,11 +608,12 @@ class _SftpScreenState extends State<SftpScreen> {
 
   Future<void> _deleteFile(BuildContext context, String path) async {
     final loc = AppLocalizations.of(context);
+    final name = p.basename(path);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(loc.delete),
-        content: Text('Delete ${p.basename(path)}?'),
+        content: Text('Delete "$name" and all its contents?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(loc.cancel)),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(loc.confirm)),
@@ -620,7 +621,7 @@ class _SftpScreenState extends State<SftpScreen> {
       ),
     );
     if (confirmed == true) {
-      await context.read<SftpProvider>().sftpService.remove(path);
+      await context.read<SftpProvider>().remove(path);
       await context.read<SftpProvider>().listDirectory();
     }
   }

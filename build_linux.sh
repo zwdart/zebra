@@ -14,7 +14,8 @@ show_menu() {
     echo "  [3] Uninstall"
     echo "  [4] Clean build artifacts"
     echo "  [5] Clean + Build"
-    echo "  [6] Exit"
+    echo "  [6] Run"
+    echo "  [7] Exit"
     echo ""
 }
 
@@ -102,6 +103,20 @@ do_build() {
     echo "Done! Binary: packer/target/release/zebra"
 }
 
+do_run() {
+    cd "$SCRIPT_DIR"
+    local binary="packer/target/release/zebra"
+
+    if [ ! -f "$binary" ]; then
+        echo "[ERROR] Binary not found. Run Build first."
+        return 1
+    fi
+
+    echo ""
+    echo "Launching Zebra SSH..."
+    "$binary" &
+}
+
 do_install() {
     cd "$SCRIPT_DIR"
     echo ""
@@ -156,10 +171,15 @@ if [ "$1" = "--clean" ]; then
     exit 0
 fi
 
+if [ "$1" = "--run" ]; then
+    do_run
+    exit 0
+fi
+
 # 交互式菜单
 while true; do
     show_menu
-    read -p "  Select option [1-6]: " choice
+    read -p "  Select option [1-7]: " choice
 
     case $choice in
         1) do_build ;;
@@ -167,7 +187,8 @@ while true; do
         3) do_uninstall ;;
         4) do_clean ;;
         5) do_clean; do_build ;;
-        6) exit 0 ;;
+        6) do_run ;;
+        7) exit 0 ;;
         *) echo "Invalid option!" ;;
     esac
 

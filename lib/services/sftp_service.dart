@@ -237,7 +237,27 @@ class SftpService {
 
   Future<void> remove(String path, {bool recursive = false}) async {
     if (_sftpClient == null) throw Exception('SFTP not initialized');
-    await _sftpClient!.remove(path);
+    if (recursive) {
+      await _removeRecursive(path);
+    } else {
+      await _sftpClient!.remove(path);
+    }
+  }
+
+  Future<void> _removeRecursive(String path) async {
+    if (_sftpClient == null) throw Exception('SFTP not initialized');
+    final entries = await _sftpClient!.listdir(path);
+    for (final entry in entries) {
+      final name = entry.filename;
+      if (name == '.' || name == '..') continue;
+      final fullPath = p.posix.join(path, name);
+      if (entry.attr.isDirectory) {
+        await _removeRecursive(fullPath);
+      } else {
+        await _sftpClient!.remove(fullPath);
+      }
+    }
+    await _sftpClient!.rmdir(path);
   }
 
   Future<void> rename(String oldPath, String newPath) async {

@@ -11,6 +11,15 @@ const EMBEDDED_DATA: &[u8] = include_bytes!("../target/data.bin");
 const EMBEDDED_ICON: &[u8] = include_bytes!("../../linux/icons/icon_512.png");
 const DESKTOP_FILE: &str = "xin.dart.zebra.desktop";
 
+fn data_checksum(data: &[u8]) -> u64 {
+    let mut hash: u64 = 14695981039346656037;
+    for &byte in data {
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(1099511628211);
+    }
+    hash
+}
+
 fn get_extract_dir() -> PathBuf {
     if let Some(local) = dirs::data_local_dir() {
         local.join(APP_NAME)
@@ -25,12 +34,14 @@ fn needs_extract(dir: &Path, reader: &bin_reader::BinaryReader) -> bool {
         return true;
     }
     let stored = fs::read_to_string(&meta).unwrap_or_default();
-    let current = format!("{}-{}", reader.files.len(), reader.exe);
+    let checksum = data_checksum(EMBEDDED_DATA);
+    let current = format!("{}-{}-{}", reader.files.len(), reader.exe, checksum);
     stored.trim() != current.trim()
 }
 
 fn write_version(dir: &Path, reader: &bin_reader::BinaryReader) {
-    let _ = fs::write(dir.join(".version"), format!("{}-{}", reader.files.len(), reader.exe));
+    let checksum = data_checksum(EMBEDDED_DATA);
+    let _ = fs::write(dir.join(".version"), format!("{}-{}-{}", reader.files.len(), reader.exe, checksum));
 }
 
 fn extract(reader: &bin_reader::BinaryReader, dir: &Path, force: bool) -> Option<PathBuf> {
