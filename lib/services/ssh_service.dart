@@ -8,9 +8,15 @@ import 'package:xterm/xterm.dart';
 
 class SshService {
   SSHClient? _client;
+  bool _isConnected = false;
+
+  // Legacy single terminal support (for backward compatibility)
   Terminal? _terminal;
   SSHSession? _shellSession;
-  bool _isConnected = false;
+
+  // Multi-terminal support
+  final Map<String, SSHSession> _sessions = {};
+  final Map<String, Terminal> _terminals = {};
 
   bool get isConnected => _isConnected;
   SSHClient? get client => _client;
@@ -61,6 +67,7 @@ class SshService {
     }
   }
 
+  // Legacy single terminal open (backward compatibility)
   Future<Terminal> openTerminal({
     int cols = 80,
     int rows = 24,
@@ -99,6 +106,62 @@ class SshService {
     return _terminal!;
   }
 
+  // Multi-terminal: open a named terminal session
+  Future<Terminal> openTerminalSession(String sessionId, {
+    int cols = 80,
+    int rows = 24,
+  }) async {
+    if (_client == null) throw Exception('Not connected');
+
+    final terminal = Terminal(
+      onOutput: (data) {
+        _sessions[sessionId]?.write(Uint8List.fromList(utf8.encode(data)));
+      },
+    );
+
+    final session = await _client!.shell(
+      pty: SSHPtyConfig(width: cols, height: rows),
+    );
+
+    _sessions[sessionId] = session;
+    _terminals[sessionId] = terminal;
+
+    session.stdout.listen((data) {
+      final text = utf8.decode(data, allowMalformed: true);
+      terminal.write(text);
+      _outputController.add(text);
+    });
+
+    session.stderr.listen((data) {
+      final text = utf8.decode(data, allowMalformed: true);
+      terminal.write(text);
+      _outputController.add(text);
+    });
+
+    session.done.then((_) {
+      _sessions.remove(sessionId);
+      _terminals.remove(sessionId);
+      terminal.write('\r\n\x1b[31m[Connection closed]\x1b[0m\r\n');
+    });
+
+    return terminal;
+  }
+
+  // Multi-terminal: close a specific session
+  void closeTerminalSession(String sessionId) {
+    _sessions[sessionId]?.close();
+    _sessions.remove(sessionId);
+    _terminals.remove(sessionId);
+  }
+
+  // Multi-terminal: get terminal by session id
+  Terminal? getTerminalSession(String sessionId) => _terminals[sessionId];
+
+  // Multi-terminal: resize a specific session
+  void resizeTerminalSession(String sessionId, int cols, int rows) {
+    _sessions[sessionId]?.resizeTerminal(cols, rows, 0, 0);
+  }
+
   void sendInput(String input) {
     _shellSession?.write(Uint8List.fromList(utf8.encode(input)));
   }
@@ -123,6 +186,14 @@ class SshService {
   }
 
   void disconnect() {
+    // Close all terminal sessions
+    for (final session in _sessions.values) {
+      session.close();
+    }
+    _sessions.clear();
+    _terminals.clear();
+
+    // Legacy
     _shellSession?.close();
     _client?.close();
     _client = null;

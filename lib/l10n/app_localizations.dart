@@ -180,6 +180,8 @@ class AppLocalizations {
   String get confirmUninstall => translate('confirmUninstall');
   String get confirmUninstallMsg => translate('confirmUninstallMsg');
   String get systemIntegration => translate('systemIntegration');
+  String get newTab => translate('newTab');
+  String get noSessions => translate('noSessions');
 
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
@@ -324,6 +326,8 @@ class AppLocalizations {
     'confirmUninstall': 'Confirm Uninstall',
     'confirmUninstallMsg': 'This will remove the application from your system. Continue?',
     'systemIntegration': 'System Integration',
+    'newTab': 'New Tab',
+    'noSessions': 'No sessions',
   };
 
   static const Map<String, String> _zh = {
@@ -469,6 +473,8 @@ class AppLocalizations {
     'confirmUninstall': '确认卸载',
     'confirmUninstallMsg': '将从系统中移除应用程序，是否继续？',
     'systemIntegration': '系统集成',
+    'newTab': '新建标签页',
+    'noSessions': '无会话',
   };
 }
 
