@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zebra SSH - 友好的 SSH 客户端</title>
+    <style>
+        :root {
+            --primary: #7dd3fc;
+            --primary-light: #bae6fd;
+            --primary-dark: #38bdf8;
+            --gradient: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%);
+            --bg-dark: #0c1f35;
+            --bg-section-alt: #102744;
+            --text-white: #ffffff;
+            --text-light: #94a3b8;
+            --card-bg: rgba(255, 255, 255, 0.06);
+            --card-border: rgba(125, 211, 252, 0.25);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-white);
+            background: var(--bg-dark);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* ===== Navbar ===== */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(12, 31, 53, 0.92);
+            backdrop-filter: blur(20px);
+            z-index: 1000;
+            border-bottom: 1px solid rgba(125, 211, 252, 0.2);
+        }
+        
+        .navbar .container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 70px;
+        }
+        
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+        
+        .nav-logo img {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+        }
+        
+        .nav-logo span {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 40px;
+            list-style: none;
+        }
+        
+        .nav-links a {
+            color: var(--text-light);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+            position: relative;
+        }
+        
+        .nav-links a:hover,
+        .nav-links a.active {
+            color: var(--primary);
+        }
+        
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 2px;
+            background: var(--gradient);
+            transition: width 0.3s;
+            border-radius: 2px;
+        }
+        
+        .nav-links a:hover::after,
+        .nav-links a.active::after {
+            width: 100%;
+        }
+        
+        .nav-download-btn {
+            padding: 10px 28px;
+            background: var(--gradient);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3);
+        }
+        
+        .nav-download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(56, 189, 248, 0.4);
+        }
+        
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--primary);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        /* ===== Header ===== */
+        header {
+            padding: 140px 20px 80px;
+            text-align: center;
+            background: radial-gradient(ellipse at top, rgba(125, 211, 252, 0.18) 0%, transparent 60%);
+        }
+        
+        .logo-container {
+            display: inline-block;
+            margin-bottom: 30px;
+        }
+        
+        .logo {
+            width: 130px;
+            height: 130px;
+            border-radius: 28px;
+            box-shadow: 0 20px 60px rgba(125, 211, 252, 0.4);
+        }
+        
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 50%, #0ea5e9 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .tagline {
+            font-size: 1.3rem;
+            color: var(--text-light);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        /* ===== Sections ===== */
+        section {
+            padding: 100px 0;
+        }
+        
+        .section-title {
+            font-size: 2.2rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 15px;
+            color: var(--text-white);
+        }
+        
+        .section-subtitle {
+            text-align: center;
+            color: var(--text-light);
+            margin-bottom: 50px;
+            font-size: 1.1rem;
+        }
+        
+        /* ===== Features Section ===== */
+        .features-section {
+            background: var(--bg-section-alt);
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+        }
+        
+        .feature-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid var(--card-border);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            background: rgba(125, 211, 252, 0.1);
+            border-color: var(--primary);
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(125, 211, 252, 0.18);
+        }
+        
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--gradient);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(125, 211, 252, 0.3);
+        }
+        
+        .feature-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-white);
+            margin-bottom: 10px;
+        }
+        
+        .feature-desc {
+            color: var(--text-light);
+            line-height: 1.7;
+        }
+        
+        .feature-details {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            border-left: 3px solid var(--primary);
+        }
+        
+        .feature-card.active .feature-details {
+            display: block;
+        }
+        
+        .feature-details h4 {
+            color: var(--primary-light);
+            margin-bottom: 15px;
+            font-size: 1rem;
+        }
+        
+        .feature-details ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-details li {
+            color: var(--text-light);
+            padding: 5px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .feature-details li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+        }
+        
+        /* ===== Usage Section ===== */
+        .usage-section {
+            background: var(--bg-dark);
+        }
+        
+        .usage-steps {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .step {
+            display: flex;
+            gap: 25px;
+            margin-bottom: 25px;
+            padding: 25px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            border: 1px solid var(--card-border);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .step:hover {
+            background: rgba(125, 211, 252, 0.1);
+            border-color: var(--primary);
+        }
+        
+        .step-number {
+            width: 55px;
+            height: 55px;
+            background: var(--gradient);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.4rem;
+            color: white;
+            flex-shrink: 0;
+            box-shadow: 0 6px 20px rgba(125, 211, 252, 0.35);
+        }
+        
+        .step-content h3 {
+            font-size: 1.2rem;
+            color: var(--text-white);
+            margin-bottom: 8px;
+        }
+        
+        .step-content p {
+            color: var(--text-light);
+        }
+        
+        .step-details {
+            display: none;
+            margin-top: 15px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            border-left: 3px solid var(--primary);
+        }
+        
+        .step.active .step-details {
+            display: block;
+        }
+        
+        .step-details p {
+            color: var(--text-light);
+            margin-bottom: 10px;
+        }
+        
+        .step-details strong {
+            color: var(--primary-light);
+        }
+        
+        .step-details ul {
+            list-style: none;
+            padding: 0;
+            margin-top: 10px;
+        }
+        
+        .step-details li {
+            color: var(--text-light);
+            padding: 4px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .step-details li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+        }
+        
+        /* ===== Download Section ===== */
+        .download-section {
+            background: var(--bg-section-alt);
+        }
+        
+        .platform-group {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid var(--card-border);
+            transition: all 0.3s ease;
+        }
+        
+        .platform-group:hover {
+            background: rgba(125, 211, 252, 0.1);
+            border-color: var(--primary);
+            box-shadow: 0 10px 30px rgba(125, 211, 252, 0.12);
+        }
+        
+        .platform-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .platform-icon {
+            width: 50px;
+            height: 50px;
+            background: var(--gradient);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 6px 20px rgba(125, 211, 252, 0.3);
+        }
+        
+        .platform-name {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--text-white);
+        }
+        
+        .download-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 24px;
+            background: var(--gradient);
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(125, 211, 252, 0.35);
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(125, 211, 252, 0.45);
+        }
+        
+        .download-btn i {
+            font-size: 1.2rem;
+        }
+        
+        .download-btn.disabled {
+            background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
+            box-shadow: none;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        
+        .download-btn.disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* ===== Sponsors Section ===== */
+        .sponsors-section {
+            background: var(--bg-dark);
+        }
+        
+        .sponsors-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 25px;
+        }
+        
+        .sponsor-card {
+            text-align: center;
+            padding: 30px 20px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            border: 1px solid var(--card-border);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .sponsor-card:hover {
+            background: rgba(125, 211, 252, 0.1);
+            border-color: var(--primary);
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(125, 211, 252, 0.18);
+        }
+        
+        .sponsor-icon {
+            width: 70px;
+            height: 70px;
+            background: var(--gradient);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin: 0 auto 15px;
+            box-shadow: 0 8px 25px rgba(125, 211, 252, 0.35);
+        }
+        
+        .sponsor-icon i {
+            color: white;
+        }
+        
+        .sponsor-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-white);
+            margin-bottom: 5px;
+        }
+        
+        .sponsor-desc {
+            font-size: 0.9rem;
+            color: var(--text-light);
+        }
+        
+        /* ===== Footer ===== */
+        footer {
+            padding: 40px 20px;
+            text-align: center;
+            border-top: 1px solid rgba(125, 211, 252, 0.2);
+            background: var(--bg-section-alt);
+        }
+        
+        footer p {
+            color: var(--text-light);
+            margin-bottom: 20px;
+        }
+        
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+        }
+        
+        .footer-links a {
+            color: var(--text-light);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .footer-links a:hover {
+            color: var(--primary);
+        }
+        
+        /* ===== Responsive ===== */
+        @media (max-width: 768px) {
+            .menu-toggle {
+                display: block;
+            }
+            
+            .nav-links {
+                position: fixed;
+                top: 70px;
+                left: 0;
+                right: 0;
+                background: rgba(12, 31, 53, 0.98);
+                flex-direction: column;
+                align-items: center;
+                padding: 30px 0;
+                gap: 25px;
+                transform: translateY(-150%);
+                transition: transform 0.3s ease;
+                border-bottom: 1px solid rgba(125, 211, 252, 0.2);
+            }
+            
+            .nav-links.active {
+                transform: translateY(0);
+            }
+            
+            .nav-download-btn {
+                display: none;
+            }
+            
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            .tagline {
+                font-size: 1.1rem;
+            }
+            
+            .logo {
+                width: 100px;
+                height: 100px;
+            }
+            
+            .download-list {
+                flex-direction: column;
+            }
+            
+            .download-btn {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .step {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .sponsors-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="./assets/icons/icon.png">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="#" class="nav-logo">
+                <img src="./assets/icons/icon.png" alt="Zebra SSH">
+                <span>Zebra SSH</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="#features">核心功能</a></li>
+                <li><a href="#usage">使用说明</a></li>
+                <li><a href="#download">下载安装</a></li>
+                <li><a href="#sponsors">友情赞助</a></li>
+            </ul>
+            <a href="#download" class="nav-download-btn">立即下载</a>
+            <button class="menu-toggle" onclick="toggleMenu()">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+    </nav>
+    
+    <header>
+        <div class="container">
+            <div class="logo-container">
+                <img src="./assets/icons/icon.png" alt="Zebra SSH Logo" class="logo">
+            </div>
+            <h1>Zebra SSH</h1>
+            <p class="tagline">友好的 SSH 客户端，跨平台服务器管理工具</p>
+        </div>
+    </header>
+    
+    
+    <!-- 第一部分：核心功能 -->
+    <section id="features" class="features-section">
+        <div class="container">
+            <h2 class="section-title">核心功能</h2>
+            <p class="section-subtitle">点击功能卡片查看详细说明</p>
+            
+            <div class="feature-grid">
+                <div class="feature-card" onclick="toggleFeature(this)">
+                    <div class="feature-icon">
+                        <i class="fas fa-terminal"></i>
+                    </div>
+                    <h3 class="feature-title">SSH 终端</h3>
+                    <p class="feature-desc">完整的 SSH 终端体验，支持多种终端操作</p>
+                    <div class="feature-details">
+                        <h4>详细功能：</h4>
+                        <ul>
+                            <li>支持 SSH2 协议连接</li>
+                            <li>密钥认证和密码认证</li>
+                            <li>终端窗口大小自适应</li>
+                            <li>支持 ANSI 颜色</li>
+                            <li>会话保持和重连</li>
+                            <li>终端历史记录</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="feature-card" onclick="toggleFeature(this)">
+                    <div class="feature-icon">
+                        <i class="fas fa-folder-open"></i>
+                    </div>
+                    <h3 class="feature-title">SFTP 文件管理</h3>
+                    <p class="feature-desc">图形化文件传输和管理界面</p>
+                    <div class="feature-details">
+                        <h4>详细功能：</h4>
+                        <ul>
+                            <li>可视化文件浏览</li>
+                            <li>拖拽上传下载</li>
+                            <li>批量文件操作</li>
+                            <li>文件权限管理</li>
+                            <li>目录同步功能</li>
+                            <li>文件搜索和过滤</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="feature-card" onclick="toggleFeature(this)">
+                    <div class="feature-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3 class="feature-title">服务器监控</h3>
+                    <p class="feature-desc">实时监控服务器资源使用情况</p>
+                    <div class="feature-details">
+                        <h4>详细功能：</h4>
+                        <ul>
+                            <li>CPU 使用率监控</li>
+                            <li>内存使用情况</li>
+                            <li>磁盘空间监控</li>
+                            <li>网络流量统计</li>
+                            <li>系统负载查看</li>
+                            <li>进程资源占用</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="feature-card" onclick="toggleFeature(this)">
+                    <div class="feature-icon">
+                        <i class="fas fa-cogs"></i>
+                    </div>
+                    <h3 class="feature-title">进程管理</h3>
+                    <p class="feature-desc">查看和管理系统进程</p>
+                    <div class="feature-details">
+                        <h4>详细功能：</h4>
+                        <ul>
+                            <li>进程列表查看</li>
+                            <li>进程详情信息</li>
+                            <li>进程状态监控</li>
+                            <li>进程资源占用</li>
+                            <li>进程搜索过滤</li>
+                            <li>进程终止操作</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="feature-card" onclick="toggleFeature(this)">
+                    <div class="feature-icon">
+                        <i class="fas fa-broom"></i>
+                    </div>
+                    <h3 class="feature-title">磁盘清理</h3>
+                    <p class="feature-desc">清理服务器磁盘空间</p>
+                    <div class="feature-details">
+                        <h4>详细功能：</h4>
+                        <ul>
+                            <li>磁盘空间分析</li>
+                            <li>大文件查找</li>
+                            <li>临时文件清理</li>
+                            <li>日志文件清理</li>
+                            <li>缓存文件清理</li>
+                            <li>自定义清理规则</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="feature-card" onclick="toggleFeature(this)">
+                    <div class="feature-icon">
+                        <i class="fas fa-globe"></i>
+                    </div>
+                    <h3 class="feature-title">跨平台支持</h3>
+                    <p class="feature-desc">支持多种操作系统平台</p>
+                    <div class="feature-details">
+                        <h4>支持平台：</h4>
+                        <ul>
+                            <li>Android 手机和平板</li>
+                            <li>iOS 设备</li>
+                            <li>Windows 桌面</li>
+                            <li>macOS 桌面</li>
+                            <li>Linux 桌面</li>
+                            <li>Web 浏览器</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- 第二部分：使用说明 -->
+    <section id="usage" class="usage-section">
+        <div class="container">
+            <h2 class="section-title">使用说明</h2>
+            <p class="section-subtitle">点击步骤查看详细操作指南</p>
+            
+            <div class="usage-steps">
+                <div class="step" onclick="toggleStep(this)">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>下载安装</h3>
+                        <p>选择适合您设备的版本进行下载</p>
+                        <div class="step-details">
+                            <p><strong>Android 用户：</strong>下载 APK 文件后，允许安装未知来源应用，按照提示完成安装。</p>
+                            <p><strong>iOS 用户：</strong>通过 App Store 搜索 "Zebra SSH" 下载安装。</p>
+                            <p><strong>桌面用户：</strong>下载对应平台的安装包，运行安装程序。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="step" onclick="toggleStep(this)">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>添加服务器连接</h3>
+                        <p>配置您的服务器连接信息</p>
+                        <div class="step-details">
+                            <p>1. 打开 Zebra SSH 应用</p>
+                            <p>2. 点击右下角的 "+" 按钮</p>
+                            <p>3. 填写服务器信息：</p>
+                            <ul>
+                                <li>连接名称（便于识别）</li>
+                                <li>服务器地址（IP 或域名）</li>
+                                <li>端口号（默认 22）</li>
+                                <li>用户名</li>
+                                <li>密码或密钥文件</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="step" onclick="toggleStep(this)">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>连接服务器</h3>
+                        <p>点击连接按钮建立 SSH 连接</p>
+                        <div class="step-details">
+                            <p>1. 在服务器列表中找到您的服务器</p>
+                            <p>2. 点击 "连接" 按钮</p>
+                            <p>3. 等待连接建立</p>
+                            <p>4. 连接成功后将自动进入终端界面</p>
+                            <p><strong>提示：</strong>首次连接可能需要确认服务器指纹。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="step" onclick="toggleStep(this)">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>使用各项功能</h3>
+                        <p>探索 Zebra SSH 的强大功能</p>
+                        <div class="step-details">
+                            <p><strong>终端功能：</strong>在终端界面输入命令，支持完整的 SSH 终端体验。</p>
+                            <p><strong>SFTP 文件管理：</strong>点击 "文件管理" 按钮，图形化管理服务器文件。</p>
+                            <p><strong>服务器监控：</strong>点击 "监控" 按钮，实时查看服务器资源使用情况。</p>
+                            <p><strong>进程管理：</strong>点击 "进程" 按钮，查看和管理系统进程。</p>
+                            <p><strong>磁盘清理：</strong>点击 "清理" 按钮，清理服务器磁盘空间。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- 第三部分：下载安装 -->
+    <section id="download" class="download-section">
+        <div class="container">
+            <h2 class="section-title">下载安装</h2>
+            <p class="section-subtitle">选择适合您设备的版本开始使用</p>
+            
+            <!-- Android -->
+            <div class="platform-group">
+                <div class="platform-header">
+                    <div class="platform-icon">
+                        <i class="fab fa-android"></i>
+                    </div>
+                    <span class="platform-name">Android</span>
+                </div>
+                <div class="download-list">
+                    <a href="./assets/bundles/app-arm64-v8a-release.apk" class="download-btn" download>
+                        <i class="fas fa-mobile-alt"></i>
+                        ARM64-v8a (推荐)
+                    </a>
+                    <a href="./assets/bundles/app-armeabi-v7a-release.apk" class="download-btn" download>
+                        <i class="fas fa-mobile-alt"></i>
+                        ARMv7a
+                    </a>
+                    <a href="./assets/bundles/app-x86_64-release.apk" class="download-btn" download>
+                        <i class="fas fa-desktop"></i>
+                        x86_64
+                    </a>
+                </div>
+            </div>
+            
+            <!-- iOS -->
+            <div class="platform-group">
+                <div class="platform-header">
+                    <div class="platform-icon">
+                        <i class="fab fa-apple"></i>
+                    </div>
+                    <span class="platform-name">iOS</span>
+                </div>
+                <div class="download-list">
+                    <a href="javascript:void(0)" class="download-btn disabled" onclick="return false">
+                        <i class="fab fa-app-store"></i>
+                        App Store
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Windows -->
+            <div class="platform-group">
+                <div class="platform-header">
+                    <div class="platform-icon">
+                        <i class="fab fa-windows"></i>
+                    </div>
+                    <span class="platform-name">Windows</span>
+                </div>
+                <div class="download-list">
+                    <a href="javascript:void(0)" class="download-btn disabled" onclick="return false">
+                        <i class="fas fa-download"></i>
+                        Windows (64位)
+                    </a>
+                    <a href="javascript:void(0)" class="download-btn disabled" onclick="return false">
+                        <i class="fas fa-download"></i>
+                        Windows (32位)
+                    </a>
+                </div>
+            </div>
+            
+            <!-- macOS -->
+            <div class="platform-group">
+                <div class="platform-header">
+                    <div class="platform-icon">
+                        <i class="fab fa-apple"></i>
+                    </div>
+                    <span class="platform-name">macOS</span>
+                </div>
+                <div class="download-list">
+                    <a href="javascript:void(0)" class="download-btn disabled" onclick="return false">
+                        <i class="fas fa-download"></i>
+                        macOS (Intel)
+                    </a>
+                    <a href="javascript:void(0)" class="download-btn disabled" onclick="return false">
+                        <i class="fas fa-download"></i>
+                        macOS (Apple Silicon)
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Linux -->
+            <div class="platform-group">
+                <div class="platform-header">
+                    <div class="platform-icon">
+                        <i class="fab fa-linux"></i>
+                    </div>
+                    <span class="platform-name">Linux</span>
+                </div>
+                <div class="download-list">
+                    <a href="javascript:void(0)" class="download-btn disabled" onclick="return false">
+                        <i class="fab fa-ubuntu"></i>
+                        Ubuntu/Debian
+                    </a>
+                    <a href="javascript:void(0)" class="download-btn disabled" onclick="return false">
+                        <i class="fab fa-fedora"></i>
+                        Fedora/RHEL
+                    </a>
+                    <a href="javascript:void(0)" class="download-btn disabled" onclick="return false">
+                        <i class="fas fa-archive"></i>
+                        AppImage
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- 第四部分：友情赞助 -->
+    <section id="sponsors" class="sponsors-section">
+        <div class="container">
+            <h2 class="section-title">友情赞助</h2>
+            <p class="section-subtitle">感谢以下赞助商的支持</p>
+            
+            <div class="sponsors-grid">
+                <a href="https://fone.taobao.com/" class="sponsor-card" target="_blank">
+                    <div class="sponsor-icon">
+                        <i class="fas fa-store"></i>
+                    </div>
+                    <div class="sponsor-name">一间小店</div>
+                    <div class="sponsor-desc">兴趣爱好</div>
+                </a>
+                
+                <a href="https://github.com/zebra-ssh" class="sponsor-card" target="_blank">
+                    <div class="sponsor-icon">
+                        <i class="fab fa-github"></i>
+                    </div>
+                    <div class="sponsor-name">GitHub</div>
+                    <div class="sponsor-desc">项目主页</div>
+                </a>
+                
+                <a href="http://zebra.dart.xin" class="sponsor-card" target="_blank">
+                    <div class="sponsor-icon">
+                        <i class="fas fa-globe"></i>
+                    </div>
+                    <div class="sponsor-name">官方网站</div>
+                    <div class="sponsor-desc">了解更多资讯</div>
+                </a>
+                
+                <a href="mailto:zebra@dart.xin" class="sponsor-card">
+                    <div class="sponsor-icon">
+                        <i class="fas fa-envelope"></i>
+                    </div>
+                    <div class="sponsor-name">联系我们</div>
+                    <div class="sponsor-desc">商务合作咨询</div>
+                </a>
+            </div>
+        </div>
+    </section>
+    
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Zebra SSH. All rights reserved.</p>
+            <div class="footer-links">
+                <a href="http://zebra.dart.xin">官方网站</a>
+                <a href="https://github.com/zebra-ssh">GitHub</a>
+                <a href="mailto:zebra@dart.xin">联系我们</a>
+            </div>
+        </div>
+    </footer>
+    
+    <script>
+        function toggleMenu() {
+            document.querySelector('.nav-links').classList.toggle('active');
+        }
+        
+        function toggleFeature(card) {
+            document.querySelectorAll('.feature-card.active').forEach(c => {
+                if (c !== card) c.classList.remove('active');
+            });
+            card.classList.toggle('active');
+        }
+        
+        function toggleStep(step) {
+            document.querySelectorAll('.step.active').forEach(s => {
+                if (s !== step) s.classList.remove('active');
+            });
+            step.classList.toggle('active');
+        }
+        
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', () => {
+                document.querySelector('.nav-links').classList.remove('active');
+            });
+        });
+        
+        window.addEventListener('scroll', () => {
+            const sections = document.querySelectorAll('section');
+            const navLinks = document.querySelectorAll('.nav-links a');
+            
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (window.scrollY >= sectionTop - 100) {
+                    current = section.getAttribute('id');
+                }
+            });
+            
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === `#${current}`) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
