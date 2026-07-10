@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -62,7 +64,7 @@ class AboutScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${loc.buildTime}: ${const String.fromEnvironment("BUILD_TIME", defaultValue: "unknown")}',
+                  '${loc.buildTime}: ${Platform.environment["BUILD_TIME"] ?? const String.fromEnvironment("BUILD_TIME", defaultValue: "unknown")}',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,

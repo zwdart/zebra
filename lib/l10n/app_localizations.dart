@@ -57,6 +57,15 @@ class AppLocalizations {
   String get newFolder => translate('newFolder');
   String get delete => translate('delete');
   String get rename => translate('rename');
+  String get copy => translate('copy');
+  String get cut => translate('cut');
+  String get paste => translate('paste');
+  String get filesCopied => translate('filesCopied');
+  String get filesCut => translate('filesCut');
+  String get fileRenamed => translate('fileRenamed');
+  String get fileMoved => translate('fileMoved');
+  String get enterNewName => translate('enterNewName');
+  String get noFilesToPaste => translate('noFilesToPaste');
   String get selectAll => translate('selectAll');
   String get deselectAll => translate('deselectAll');
   String get compress => translate('compress');
@@ -251,6 +260,15 @@ class AppLocalizations {
     'newFolder': 'New Folder',
     'delete': 'Delete',
     'rename': 'Rename',
+    'copy': 'Copy',
+    'cut': 'Cut',
+    'paste': 'Paste',
+    'filesCopied': 'Files copied',
+    'filesCut': 'Files cut',
+    'fileRenamed': 'File renamed',
+    'fileMoved': 'File moved',
+    'enterNewName': 'Enter new name',
+    'noFilesToPaste': 'No files to paste',
     'selectAll': 'Select All',
     'deselectAll': 'Deselect All',
     'compress': 'Compress',
@@ -434,6 +452,15 @@ class AppLocalizations {
     'newFolder': '新建文件夹',
     'delete': '删除',
     'rename': '重命名',
+    'copy': '复制',
+    'cut': '剪切',
+    'paste': '粘贴',
+    'filesCopied': '文件已复制',
+    'filesCut': '文件已剪切',
+    'fileRenamed': '文件已重命名',
+    'fileMoved': '文件已移动',
+    'enterNewName': '输入新名称',
+    'noFilesToPaste': '没有可粘贴的文件',
     'selectAll': '全选',
     'deselectAll': '取消全选',
     'compress': '压缩',

@@ -136,7 +136,8 @@ bool Win32Window::Create(const std::wstring& title,
   double scale_factor = dpi / 96.0;
 
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
+      window_class, title.c_str(),
+      (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN),
       Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
       Scale(size.width, scale_factor), Scale(size.height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
@@ -144,6 +145,13 @@ bool Win32Window::Create(const std::wstring& title,
   if (!window) {
     return false;
   }
+
+  // Remove the window frame borders. window_manager's TitleBarStyle.hidden
+  // removes the title bar, but the Win32 frame borders still show as
+  // black borders on left/right/bottom. We remove them here.
+  LONG style = GetWindowLong(window, GWL_STYLE);
+  style &= ~(WS_CAPTION | WS_THICKFRAME | WS_BORDER);
+  SetWindowLong(window, GWL_STYLE, style);
 
   UpdateTheme(window);
 
@@ -180,6 +188,15 @@ Win32Window::MessageHandler(HWND hwnd,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
   switch (message) {
+    case WM_NCCALCSIZE: {
+      // Remove the non-client area (borders) entirely when wparam is TRUE.
+      // This makes the client area fill the entire window.
+      if (wparam) {
+        return 0;
+      }
+      break;
+    }
+
     case WM_DESTROY:
       window_handle_ = nullptr;
       Destroy();

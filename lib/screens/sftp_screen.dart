@@ -14,6 +14,7 @@ import '../widgets/progress_dialog.dart';
 import '../widgets/batch_upload_dialog.dart';
 import '../models/sftp_file_item.dart';
 import '../services/sftp_service.dart';
+import '../widgets/custom_title_bar.dart';
 
 class SftpScreen extends StatefulWidget {
   const SftpScreen({super.key});
@@ -31,6 +32,8 @@ class _SftpScreenState extends State<SftpScreen> {
   SortField _sortField = SortField.name;
   SortOrder _sortOrder = SortOrder.asc;
   final _searchController = TextEditingController();
+  final List<String> _clipboardPaths = [];
+  bool _clipboardIsCut = false;
 
   @override
   void initState() {
@@ -134,14 +137,18 @@ class _SftpScreenState extends State<SftpScreen> {
     final filteredFiles = _getFilteredFiles(sftpProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CustomTitleBar.isDesktop ? null : AppBar(
         title: Text(sftpProvider.currentPath),
-        leading: sftpProvider.canGoBack
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => sftpProvider.goBack(),
-              )
-            : null,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (sftpProvider.canGoBack) {
+              sftpProvider.goBack();
+            } else {
+              Navigator.of(context).maybePop();
+            }
+          },
+        ),
         actions: [
           if (sftpProvider.isSelectionMode) ...[
             IconButton(
@@ -165,6 +172,12 @@ class _SftpScreenState extends State<SftpScreen> {
               onPressed: () => _compressSelected(context),
             ),
           ] else ...[
+            if (_clipboardPaths.isNotEmpty)
+              IconButton(
+                icon: Icon(_clipboardIsCut ? Icons.content_cut : Icons.copy),
+                tooltip: loc.paste,
+                onPressed: () => _pasteFiles(context),
+              ),
             IconButton(
               icon: Icon(_showRawValues ? Icons.auto_awesome : Icons.code),
               tooltip: _showRawValues ? loc.showConverted : loc.showRaw,
@@ -198,7 +211,45 @@ class _SftpScreenState extends State<SftpScreen> {
           ],
         ],
       ),
-      body: DropTarget(
+      body: Column(
+        children: [
+          if (CustomTitleBar.isDesktop)
+            CustomTitleBar(
+              title: sftpProvider.currentPath,
+              showBackButton: true,
+              onBack: () {
+                if (sftpProvider.canGoBack) {
+                  sftpProvider.goBack();
+                } else {
+                  Navigator.of(context).maybePop();
+                }
+              },
+              showCloseButton: true,
+              onClose: () => Navigator.of(context).maybePop(),
+              actions: [
+                if (sftpProvider.isSelectionMode) ...[
+                  _buildTitleBarIconBtn(loc.selectAll, Icons.select_all, sftpProvider.selectAll),
+                  _buildTitleBarIconBtn(loc.deselectAll, Icons.close, sftpProvider.clearSelection),
+                  _buildTitleBarIconBtn(loc.delete, Icons.delete, () => _deleteSelected(context)),
+                  _buildTitleBarIconBtn(loc.compress, Icons.archive, () => _compressSelected(context)),
+                ] else ...[
+                  if (_clipboardPaths.isNotEmpty)
+                    _buildTitleBarIconBtn(loc.paste, _clipboardIsCut ? Icons.content_cut : Icons.copy, () => _pasteFiles(context)),
+                  _buildTitleBarIconBtn(
+                    _showRawValues ? loc.showConverted : loc.showRaw,
+                    _showRawValues ? Icons.auto_awesome : Icons.code,
+                    () => setState(() => _showRawValues = !_showRawValues),
+                  ),
+                  _buildTitleBarIconBtn(loc.sort, Icons.sort, () => _showSortMenu(context)),
+                  _buildTitleBarIconBtn(loc.newFolder, Icons.create_new_folder, () => _createFolder(context)),
+                  _buildTitleBarIconBtn(loc.upload, Icons.upload_file, () => _uploadFiles(context)),
+                  _buildTitleBarIconBtn(loc.openTerminalHere, Icons.terminal, () => _openTerminalHere(context)),
+                  _buildTitleBarIconBtn(loc.navigateToPath, Icons.folder_special, () => _navigateToPath(context)),
+                ],
+              ],
+            ),
+          Expanded(
+            child: DropTarget(
         onDragEntered: (_) => setState(() => _isDragOver = true),
         onDragExited: (_) => setState(() => _isDragOver = false),
         onDragDone: (details) async {
@@ -316,6 +367,36 @@ class _SftpScreenState extends State<SftpScreen> {
                                                 ),
                                               ),
                                               PopupMenuItem(
+                                                value: 'rename',
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.edit, size: 20),
+                                                    const SizedBox(width: 8),
+                                                    Text(loc.rename),
+                                                  ],
+                                                ),
+                                              ),
+                                              PopupMenuItem(
+                                                value: 'copy',
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.copy, size: 20),
+                                                    const SizedBox(width: 8),
+                                                    Text(loc.copy),
+                                                  ],
+                                                ),
+                                              ),
+                                              PopupMenuItem(
+                                                value: 'cut',
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.content_cut, size: 20),
+                                                    const SizedBox(width: 8),
+                                                    Text(loc.cut),
+                                                  ],
+                                                ),
+                                              ),
+                                              PopupMenuItem(
                                                 value: 'delete',
                                                 child: Row(
                                                   children: [
@@ -367,6 +448,9 @@ class _SftpScreenState extends State<SftpScreen> {
           ],
         ),
       ),
+    ),
+  ],
+),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _uploadFiles(context),
         child: const Icon(Icons.upload),
@@ -392,14 +476,141 @@ class _SftpScreenState extends State<SftpScreen> {
       case 'delete':
         _deleteFile(context, file.path);
         break;
+      case 'rename':
+        _renameFile(context, file);
+        break;
+      case 'copy':
+        _copyFiles(context, [file.path], false);
+        break;
+      case 'cut':
+        _copyFiles(context, [file.path], true);
+        break;
       case 'copyPath':
         Clipboard.setData(ClipboardData(text: file.path));
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${loc.pathCopied}')),
+            SnackBar(content: Text(loc.pathCopied)),
           );
         }
         break;
+    }
+  }
+
+  Widget _buildTitleBarIconBtn(String tooltip, IconData icon, VoidCallback onPressed) {
+    return IconButton(
+      icon: Icon(icon, size: 18),
+      tooltip: tooltip,
+      onPressed: onPressed,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+    );
+  }
+
+  void _renameFile(BuildContext context, SftpFileItem file) {
+    final loc = AppLocalizations.of(context);
+    final controller = TextEditingController(text: file.name);
+    showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.rename),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(hintText: loc.enterNewName),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(loc.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: Text(loc.confirm),
+          ),
+        ],
+      ),
+    ).then((newName) async {
+      if (newName != null && newName.isNotEmpty && newName != file.name) {
+        final sftpProvider = context.read<SftpProvider>();
+        final oldPath = file.path;
+        final newPath = '${sftpProvider.currentPath}/$newName';
+        try {
+          await sftpProvider.sftpService.rename(oldPath, newPath);
+          await sftpProvider.listDirectory();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(loc.fileRenamed)),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error: $e')),
+            );
+          }
+        }
+      }
+    });
+  }
+
+  void _copyFiles(BuildContext context, List<String> paths, bool isCut) {
+    final loc = AppLocalizations.of(context);
+    setState(() {
+      _clipboardPaths.clear();
+      _clipboardPaths.addAll(paths);
+      _clipboardIsCut = isCut;
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isCut ? loc.filesCut : loc.filesCopied)),
+      );
+    }
+  }
+
+  void _pasteFiles(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+    final sftpProvider = context.read<SftpProvider>();
+    final sshService = context.read<SshProvider>().sshService;
+
+    if (_clipboardPaths.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(loc.noFilesToPaste)),
+        );
+      }
+      return;
+    }
+
+    final destDir = sftpProvider.currentPath;
+    for (final srcPath in _clipboardPaths) {
+      final fileName = srcPath.split('/').last;
+      final destPath = '$destDir/$fileName';
+      try {
+        if (_clipboardIsCut) {
+          await sshService.execute('mv "$srcPath" "$destPath"');
+        } else {
+          await sshService.execute('cp -r "$srcPath" "$destPath"');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
+      }
+    }
+
+    final wasCut = _clipboardIsCut;
+    setState(() {
+      _clipboardPaths.clear();
+      _clipboardIsCut = false;
+    });
+
+    await sftpProvider.listDirectory();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(wasCut ? loc.fileMoved : loc.filesCopied)),
+      );
     }
   }
 

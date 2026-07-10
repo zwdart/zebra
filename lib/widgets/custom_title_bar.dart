@@ -8,12 +8,18 @@ class CustomTitleBar extends StatelessWidget {
   final String? title;
   final List<Widget>? actions;
   final bool showBackButton;
+  final VoidCallback? onBack;
+  final bool showCloseButton;
+  final VoidCallback? onClose;
 
   const CustomTitleBar({
     super.key,
     this.title,
     this.actions,
     this.showBackButton = false,
+    this.onBack,
+    this.showCloseButton = false,
+    this.onClose,
   });
 
   static bool get isDesktop => !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
@@ -45,7 +51,7 @@ class CustomTitleBar extends StatelessWidget {
             if (showBackButton)
               _WindowButton(
                 icon: Icons.arrow_back,
-                onTap: () => Navigator.of(context).maybePop(),
+                onTap: onBack ?? () => Navigator.of(context).maybePop(),
                 tooltip: 'Back',
               )
             else ...[
@@ -56,6 +62,12 @@ class CustomTitleBar extends StatelessWidget {
                 height: 20,
               ),
             ],
+            if (showCloseButton)
+              _WindowButton(
+                icon: Icons.close,
+                onTap: onClose ?? () => Navigator.of(context).maybePop(),
+                tooltip: 'Exit SFTP',
+              ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
