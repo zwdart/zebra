@@ -116,6 +116,30 @@ class SshProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Close all tabs except the one at keepIndex
+  void closeOtherSessions(int keepIndex) {
+    if (keepIndex < 0 || keepIndex >= _sessions.length) return;
+
+    for (int i = _sessions.length - 1; i >= 0; i--) {
+      if (i != keepIndex) {
+        _sshService.closeTerminalSession(_sessions[i].id);
+        _sessions.removeAt(i);
+      }
+    }
+    _activeSessionIndex = 0;
+    notifyListeners();
+  }
+
+  // Close all tabs
+  void closeAllSessions() {
+    for (final session in _sessions) {
+      _sshService.closeTerminalSession(session.id);
+    }
+    _sessions.clear();
+    _activeSessionIndex = -1;
+    notifyListeners();
+  }
+
   void disconnect() {
     // Close all sessions
     for (final session in _sessions) {

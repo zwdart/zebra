@@ -1,6 +1,8 @@
 #!/bin/bash
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+DART_DEFINE="--dart-define=BUILD_TIME=$BUILD_TIME"
 
 show_menu() {
     clear
@@ -43,7 +45,7 @@ do_build() {
 
     echo
     echo "[2/7] Building Flutter macOS release..."
-    flutter build macos --release
+    flutter build macos --release $DART_DEFINE
     if [ $? -ne 0 ]; then
         echo "[ERROR] Flutter build failed!"
         return 1

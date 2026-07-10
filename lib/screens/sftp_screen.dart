@@ -11,7 +11,9 @@ import '../providers/ssh_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/file_list_tile.dart';
 import '../widgets/progress_dialog.dart';
+import '../widgets/batch_upload_dialog.dart';
 import '../models/sftp_file_item.dart';
+import '../services/sftp_service.dart';
 
 class SftpScreen extends StatefulWidget {
   const SftpScreen({super.key});
@@ -259,7 +261,7 @@ class _SftpScreenState extends State<SftpScreen> {
                                             } else if (file.isDirectory) {
                                               sftpProvider.navigateTo(file.path);
                                             } else {
-                                              _downloadFile(context, file.path);
+                                              _editFile(context, file.path);
                                             }
                                           },
                                           onLongPress: () {
@@ -356,7 +358,7 @@ class _SftpScreenState extends State<SftpScreen> {
                       Icon(Icons.cloud_upload,
                           size: 64, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(height: 16),
-                      Text(loc.dragFilesHere,
+                      Text(loc.dragFilesOrFoldersHere,
                           style: Theme.of(context).textTheme.titleLarge),
                     ],
                   ),
@@ -376,7 +378,7 @@ class _SftpScreenState extends State<SftpScreen> {
     final loc = AppLocalizations.of(context);
     switch (action) {
       case 'view':
-        _downloadFile(context, file.path);
+        _editFile(context, file.path);
         break;
       case 'edit':
         _editFile(context, file.path);
@@ -445,57 +447,29 @@ class _SftpScreenState extends State<SftpScreen> {
     final loc = AppLocalizations.of(context);
 
     try {
+      // Try to read with 5MB limit
       final content = await sftpProvider.sftpService.readFileContent(remotePath);
-      if (content == null) {
+      if (content != null) {
+        // File is within size limit, open editor
+        _openEditor(context, remotePath, content, loc);
+        return;
+      }
+
+      // File is too large, try to read for preview only
+      final size = await sftpProvider.sftpService.getFileSize(remotePath);
+      if (size > 5 * 1024 * 1024) {
+        // Show read-only preview for large files
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Cannot read file')),
-          );
+          _showLargeFilePreview(context, remotePath, size, loc);
         }
         return;
       }
 
-      final controller = TextEditingController(text: content);
-      final result = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('${loc.editFile} - ${p.basename(remotePath)}'),
-          content: SizedBox(
-            width: 600,
-            height: 400,
-            child: TextField(
-              controller: controller,
-              maxLines: null,
-              expands: true,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-              ),
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(loc.cancel),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, controller.text),
-              child: Text(loc.save),
-            ),
-          ],
-        ),
-      );
-
-      if (result != null && result != content) {
-        await sftpProvider.sftpService.writeFileContent(remotePath, result);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${p.basename(remotePath)} saved')),
-          );
-        }
+      // Other error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cannot read file')),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -506,37 +480,226 @@ class _SftpScreenState extends State<SftpScreen> {
     }
   }
 
-  Future<void> _handleDroppedFiles(List<DropItem> droppedFiles) async {
-    final sftpProvider = context.read<SftpProvider>();
-    final loc = AppLocalizations.of(context);
-
-    for (final dropItem in droppedFiles) {
-      final filePath = dropItem.path;
-      final file = File(filePath);
-      if (file.existsSync()) {
-        final fileName = p.basename(filePath);
-        final remotePath = '${sftpProvider.currentPath}/$fileName';
-
-        if (mounted) {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (ctx) => UploadProgressDialog(
-              sftpService: sftpProvider.sftpService,
-              fileName: fileName,
-              localPath: filePath,
-              remotePath: remotePath,
-              onComplete: () {
-                Navigator.pop(ctx);
-                sftpProvider.listDirectory();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${loc.upload} $fileName ${loc.confirm}')),
-                );
-              },
+  void _openEditor(BuildContext context, String remotePath, String content, AppLocalizations loc) {
+    final controller = TextEditingController(text: content);
+    showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${loc.editFile} - ${p.basename(remotePath)}'),
+        content: SizedBox(
+          width: 600,
+          height: 400,
+          child: TextField(
+            controller: controller,
+            maxLines: null,
+            expands: true,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
             ),
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 12,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(loc.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: Text(loc.save),
+          ),
+        ],
+      ),
+    ).then((result) async {
+      if (result != null && result != content) {
+        final sftpProvider = context.read<SftpProvider>();
+        await sftpProvider.sftpService.writeFileContent(remotePath, result);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${p.basename(remotePath)} saved')),
           );
         }
       }
+    });
+  }
+
+  void _showLargeFilePreview(BuildContext context, String remotePath, int fileSize, AppLocalizations loc) {
+    final sftpProvider = context.read<SftpProvider>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${loc.viewFile} - ${p.basename(remotePath)}'),
+        content: SizedBox(
+          width: 600,
+          height: 400,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: Theme.of(ctx).colorScheme.outline),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'File size: ${_formatFileSize(fileSize)} - Read-only preview',
+                        style: Theme.of(ctx).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: FutureBuilder<String?>(
+                  future: _readLastLines(sftpProvider.sftpService, remotePath, 1000),
+                  builder: (ctx, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError || !snapshot.hasData) {
+                      return const Center(child: Text('Failed to load file'));
+                    }
+                    return Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Theme.of(ctx).dividerColor),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.all(8),
+                      child: SelectableText(
+                        snapshot.data!,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(loc.cancel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String?> _readLastLines(SftpService sftpService, String remotePath, int maxLines) async {
+    try {
+      // Read the file content with 5MB limit
+      final content = await sftpService.readFileContent(remotePath);
+      if (content == null) return null;
+
+      // Get last N lines
+      final lines = content.split('\n');
+      final lastLines = lines.length > maxLines
+          ? lines.sublist(lines.length - maxLines)
+          : lines;
+      return lastLines.join('\n');
+    } catch (e) {
+      return null;
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+  }
+
+  Future<void> _handleDroppedFiles(List<DropItem> droppedFiles) async {
+    final sftpProvider = context.read<SftpProvider>();
+
+    final items = <BatchUploadItem>[];
+
+    for (final dropItem in droppedFiles) {
+      final filePath = dropItem.path;
+      final entity = FileSystemEntity.typeSync(filePath);
+
+      if (entity == FileSystemEntityType.directory) {
+        // Recursively collect files from directory
+        final dirName = p.basename(filePath);
+        final remoteDirPath = '${sftpProvider.currentPath}/$dirName';
+        items.add(BatchUploadItem(
+          localPath: filePath,
+          remotePath: remoteDirPath,
+          isDirectory: true,
+        ));
+        _collectDirectoryFiles(filePath, remoteDirPath, items);
+      } else if (entity == FileSystemEntityType.file) {
+        final fileName = p.basename(filePath);
+        final remotePath = '${sftpProvider.currentPath}/$fileName';
+        final localFile = File(filePath);
+        final fileSize = localFile.existsSync() ? localFile.lengthSync() : 0;
+        items.add(BatchUploadItem(
+          localPath: filePath,
+          remotePath: remotePath,
+          size: fileSize,
+        ));
+      }
+    }
+
+    if (items.isEmpty) return;
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => BatchUploadProgressDialog(
+          sftpService: sftpProvider.sftpService,
+          items: items,
+          onComplete: () {
+            sftpProvider.listDirectory();
+          },
+        ),
+      );
+    }
+  }
+
+  void _collectDirectoryFiles(String localDir, String remoteDir, List<BatchUploadItem> items) {
+    final dir = Directory(localDir);
+    if (!dir.existsSync()) return;
+
+    try {
+      for (final entity in dir.listSync()) {
+        if (entity is File) {
+          final fileName = p.basename(entity.path);
+          final remotePath = '$remoteDir/$fileName';
+          final fileSize = entity.existsSync() ? entity.lengthSync() : 0;
+          items.add(BatchUploadItem(
+            localPath: entity.path,
+            remotePath: remotePath,
+            size: fileSize,
+          ));
+        } else if (entity is Directory) {
+          final dirName = p.basename(entity.path);
+          final remotePath = '$remoteDir/$dirName';
+          items.add(BatchUploadItem(
+            localPath: entity.path,
+            remotePath: remotePath,
+            isDirectory: true,
+          ));
+          _collectDirectoryFiles(entity.path, remotePath, items);
+        }
+      }
+    } catch (e) {
+      // Skip inaccessible directories
     }
   }
 
@@ -544,33 +707,100 @@ class _SftpScreenState extends State<SftpScreen> {
     final sftpProvider = context.read<SftpProvider>();
     final loc = AppLocalizations.of(context);
 
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
-    if (result == null || result.files.isEmpty) return;
+    // Show choice dialog for files vs folders
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(loc.upload),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'files'),
+            child: Row(
+              children: [
+                const Icon(Icons.upload_file),
+                const SizedBox(width: 12),
+                Text(loc.uploadFiles),
+              ],
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'folders'),
+            child: Row(
+              children: [
+                const Icon(Icons.folder),
+                const SizedBox(width: 12),
+                Text(loc.uploadFolders),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
 
-    for (final file in result.files) {
-      if (file.path == null) continue;
-      final fileName = p.basename(file.path!);
-      final remotePath = '${sftpProvider.currentPath}/$fileName';
+    if (choice == null) return;
 
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => UploadProgressDialog(
-            sftpService: sftpProvider.sftpService,
-            fileName: fileName,
+    final items = <BatchUploadItem>[];
+
+    if (choice == 'files') {
+      final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+      if (result == null || result.files.isEmpty) return;
+
+      for (final file in result.files) {
+        if (file.path == null) continue;
+
+        final entity = FileSystemEntity.typeSync(file.path!);
+        if (entity == FileSystemEntityType.directory) {
+          // 用户选中了目录，递归收集目录内容
+          final dirName = p.basename(file.path!);
+          final remoteDirPath = '${sftpProvider.currentPath}/$dirName';
+          items.add(BatchUploadItem(
+            localPath: file.path!,
+            remotePath: remoteDirPath,
+            isDirectory: true,
+          ));
+          _collectDirectoryFiles(file.path!, remoteDirPath, items);
+        } else if (entity == FileSystemEntityType.file) {
+          final fileName = p.basename(file.path!);
+          final remotePath = '${sftpProvider.currentPath}/$fileName';
+          final localFile = File(file.path!);
+          final fileSize = localFile.existsSync() ? localFile.lengthSync() : 0;
+          items.add(BatchUploadItem(
             localPath: file.path!,
             remotePath: remotePath,
-            onComplete: () {
-              Navigator.pop(ctx);
-              sftpProvider.listDirectory();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('${loc.upload} $fileName ${loc.confirm}')),
-              );
-            },
-          ),
-        );
+            size: fileSize,
+          ));
+        }
       }
+    } else if (choice == 'folders') {
+      final dirPath = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: loc.uploadFolders,
+      );
+      if (dirPath == null) return;
+
+      final dirName = p.basename(dirPath);
+      final remoteDirPath = '${sftpProvider.currentPath}/$dirName';
+      items.add(BatchUploadItem(
+        localPath: dirPath,
+        remotePath: remoteDirPath,
+        isDirectory: true,
+      ));
+      _collectDirectoryFiles(dirPath, remoteDirPath, items);
+    }
+
+    if (items.isEmpty) return;
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => BatchUploadProgressDialog(
+          sftpService: sftpProvider.sftpService,
+          items: items,
+          onComplete: () {
+            sftpProvider.listDirectory();
+          },
+        ),
+      );
     }
   }
 

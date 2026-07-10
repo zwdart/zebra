@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/cleanup_provider.dart';
+import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 
 class CleanupScreen extends StatefulWidget {
@@ -24,7 +25,7 @@ class _CleanupScreenState extends State<CleanupScreen> {
     final loc = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CustomTitleBar.isDesktop ? null : AppBar(
         title: Text(loc.diskCleanup),
         actions: [
           Consumer<CleanupProvider>(
@@ -44,7 +45,24 @@ class _CleanupScreenState extends State<CleanupScreen> {
           ),
         ],
       ),
-      body: Consumer<CleanupProvider>(
+      body: Column(
+        children: [
+          if (CustomTitleBar.isDesktop)
+            CustomTitleBar(
+              title: loc.diskCleanup,
+              showBackButton: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 18),
+                  tooltip: loc.refresh,
+                  onPressed: () => context.read<CleanupProvider>().init(),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+              ],
+            ),
+          Expanded(
+            child: Consumer<CleanupProvider>(
         builder: (_, provider, __) {
           if (provider.isLoading) return const Center(child: CircularProgressIndicator());
           if (provider.error != null && provider.tasks.isEmpty) {
@@ -77,6 +95,9 @@ class _CleanupScreenState extends State<CleanupScreen> {
             ],
           );
         },
+      ),
+          ),
+        ],
       ),
     );
   }

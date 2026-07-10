@@ -17,10 +17,15 @@ import 'screens/cleanup_screen.dart';
 import 'providers/monitor_provider.dart';
 import 'providers/process_provider.dart';
 import 'providers/cleanup_provider.dart';
+import 'services/window_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.init();
+
+  // Initialize desktop services
+  await WindowService.init();
+
   runApp(const ZebraApp());
 }
 

@@ -182,6 +182,42 @@ class AppLocalizations {
   String get systemIntegration => translate('systemIntegration');
   String get newTab => translate('newTab');
   String get noSessions => translate('noSessions');
+  String get closeTab => translate('closeTab');
+  String get closeOtherTabs => translate('closeOtherTabs');
+  String get closeAllTabs => translate('closeAllTabs');
+  String get showWindow => translate('showWindow');
+  String get hideWindow => translate('hideWindow');
+  String get quit => translate('quit');
+  String get uploading => translate('uploading');
+  String get batchUpload => translate('batchUpload');
+  String get uploadFiles => translate('uploadFiles');
+  String get uploadFolders => translate('uploadFolders');
+  String get filesReady => translate('filesReady');
+  String get uploadingFile => translate('uploadingFile');
+  String get uploadCompleted => translate('uploadCompleted');
+  String get uploadFailed => translate('uploadFailed');
+  String get skipFailed => translate('skipFailed');
+  String get retryFailed => translate('retryFailed');
+  String get creatingFolders => translate('creatingFolders');
+  String get dragFilesOrFoldersHere => translate('dragFilesOrFoldersHere');
+  String get transferSpeed => translate('transferSpeed');
+  String get estimatedTime => translate('estimatedTime');
+  String get fileProgress => translate('fileProgress');
+  String get totalProgress => translate('totalProgress');
+  String get waiting => translate('waiting');
+  String get shareDatabase => translate('shareDatabase');
+  String get about => translate('about');
+  String get featuresAndUsage => translate('featuresAndUsage');
+  String get aboutUs => translate('aboutUs');
+  String get version => translate('version');
+  String get developer => translate('developer');
+  String get contactUs => translate('contactUs');
+  String get openSourceLicenses => translate('openSourceLicenses');
+  String get website => translate('website');
+  String get shop => translate('shop');
+  String get uniqueId => translate('uniqueId');
+  String get uniqueIdCopied => translate('uniqueIdCopied');
+  String get buildTime => translate('buildTime');
 
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
@@ -328,6 +364,42 @@ class AppLocalizations {
     'systemIntegration': 'System Integration',
     'newTab': 'New Tab',
     'noSessions': 'No sessions',
+    'closeTab': 'Close Tab',
+    'closeOtherTabs': 'Close Other Tabs',
+    'closeAllTabs': 'Close All Tabs',
+    'showWindow': 'Show Window',
+    'hideWindow': 'Hide Window',
+    'quit': 'Quit',
+    'uploading': 'Uploading',
+    'batchUpload': 'Batch Upload',
+    'uploadFiles': 'Upload Files',
+    'uploadFolders': 'Upload Folders',
+    'filesReady': '{count} files ready',
+    'uploadingFile': 'Uploading: {file}',
+    'uploadCompleted': 'Upload completed',
+    'uploadFailed': 'Upload failed',
+    'skipFailed': 'Skip failed',
+    'retryFailed': 'Retry failed',
+    'creatingFolders': 'Creating folders...',
+    'dragFilesOrFoldersHere': 'Drag files or folders here to upload',
+    'transferSpeed': 'Speed',
+    'estimatedTime': 'ETA',
+    'fileProgress': 'File',
+    'totalProgress': 'Total',
+    'waiting': 'Waiting...',
+    'shareDatabase': 'Share Database',
+    'about': 'About',
+    'featuresAndUsage': 'Features & Usage',
+    'aboutUs': 'About Us',
+    'version': 'Version',
+    'developer': 'Developer',
+    'contactUs': 'Contact Us',
+    'openSourceLicenses': 'Open Source Licenses',
+    'website': 'Website',
+    'shop': 'My Shop',
+    'uniqueId': 'Unique ID',
+    'uniqueIdCopied': 'ID copied to clipboard',
+    'buildTime': 'Build Time',
   };
 
   static const Map<String, String> _zh = {
@@ -475,6 +547,42 @@ class AppLocalizations {
     'systemIntegration': '系统集成',
     'newTab': '新建标签页',
     'noSessions': '无会话',
+    'closeTab': '关闭标签页',
+    'closeOtherTabs': '关闭其他标签页',
+    'closeAllTabs': '关闭所有标签页',
+    'showWindow': '显示窗口',
+    'hideWindow': '隐藏窗口',
+    'quit': '退出',
+    'uploading': '上传中',
+    'batchUpload': '批量上传',
+    'uploadFiles': '上传文件',
+    'uploadFolders': '上传文件夹',
+    'filesReady': '{count} 个文件待上传',
+    'uploadingFile': '正在上传: {file}',
+    'uploadCompleted': '上传完成',
+    'uploadFailed': '上传失败',
+    'skipFailed': '跳过失败',
+    'retryFailed': '重试失败项',
+    'creatingFolders': '正在创建文件夹...',
+    'dragFilesOrFoldersHere': '拖拽文件或文件夹到此处上传',
+    'transferSpeed': '速度',
+    'estimatedTime': '剩余时间',
+    'fileProgress': '当前文件',
+    'totalProgress': '总进度',
+    'waiting': '等待中...',
+    'shareDatabase': '分享数据库',
+    'about': '关于',
+    'featuresAndUsage': '功能与使用说明',
+    'aboutUs': '关于我们',
+    'version': '版本',
+    'developer': '开发者',
+    'contactUs': '联系我们',
+    'openSourceLicenses': '开源许可',
+    'website': '官方网站',
+    'shop': '一个小店',
+    'uniqueId': '唯一 ID',
+    'uniqueIdCopied': 'ID 已复制到剪贴板',
+    'buildTime': '构建时间',
   };
 }
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:xterm/xterm.dart';
 import '../providers/ssh_provider.dart';
+import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'monitor_screen.dart';
 
@@ -15,12 +16,20 @@ class TerminalScreen extends StatefulWidget {
 }
 
 class _TerminalScreenState extends State<TerminalScreen> {
+  final ScrollController _tabScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initFirstTab();
     });
+  }
+
+  @override
+  void dispose() {
+    _tabScrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _initFirstTab() async {
@@ -40,13 +49,13 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final sessions = sshProvider.sessions;
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CustomTitleBar.isDesktop ? null : AppBar(
         title: Text('${conn?.name ?? "SSH"} - ${loc.terminal}'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            tooltip: 'New Tab',
-            onPressed: () => _addTab(),
+            tooltip: loc.newTab,
+            onPressed: _addTab,
           ),
           IconButton(
             icon: const Icon(Icons.monitor_heart),
@@ -61,7 +70,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
           IconButton(
             icon: const Icon(Icons.file_copy),
             tooltip: loc.sftp,
-            onPressed: () => _openSftp(),
+            onPressed: () => Navigator.pushNamed(context, '/sftp'),
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -70,7 +79,51 @@ class _TerminalScreenState extends State<TerminalScreen> {
           ),
         ],
       ),
-      body: _buildBody(sessions, sshProvider),
+      body: Column(
+        children: [
+          if (CustomTitleBar.isDesktop)
+            CustomTitleBar(
+              title: '${conn?.name ?? "SSH"} - ${loc.terminal}',
+              showBackButton: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.add, size: 18),
+                  tooltip: loc.newTab,
+                  onPressed: _addTab,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.monitor_heart, size: 18),
+                  tooltip: loc.serverMonitor,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const MonitorScreen()),
+                    );
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.file_copy, size: 18),
+                  tooltip: loc.sftp,
+                  onPressed: () => Navigator.pushNamed(context, '/sftp'),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 18),
+                  tooltip: 'Reconnect',
+                  onPressed: _reconnect,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+              ],
+            ),
+          _buildBody(sessions, sshProvider),
+        ],
+      ),
     );
   }
 
@@ -78,119 +131,296 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final loc = AppLocalizations.of(context);
 
     if (!sshProvider.isConnected) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 48),
-            const SizedBox(height: 16),
-            Text(loc.connectionError),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _reconnect,
-              child: Text(loc.connect),
-            ),
-          ],
+      return Expanded(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48),
+              const SizedBox(height: 16),
+              Text(loc.connectionError),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _reconnect,
+                child: Text(loc.connect),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     if (sessions.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Expanded(child: Center(child: CircularProgressIndicator()));
     }
 
-    return Column(
-      children: [
-        // Tab bar
-        _buildTabBar(sessions, sshProvider),
-        // Terminal content
-        Expanded(
-          child: _buildActiveTerminal(sshProvider),
-        ),
-      ],
+    return Expanded(
+      child: Column(
+        children: [
+          _buildTabBar(sessions, sshProvider),
+          Expanded(child: _buildActiveTerminal(sshProvider)),
+        ],
+      ),
     );
   }
 
   Widget _buildTabBar(List sessions, SshProvider sshProvider) {
+    final theme = Theme.of(context);
+
     return Container(
       height: 40,
-      color: Theme.of(context).colorScheme.surface,
+      color: theme.colorScheme.surface,
       child: Row(
         children: [
           Expanded(
             child: ListView.builder(
+              controller: _tabScrollController,
               scrollDirection: Axis.horizontal,
               itemCount: sessions.length,
               itemBuilder: (context, index) {
                 final session = sessions[index];
                 final isActive = index == sshProvider.activeSessionIndex;
 
-                return GestureDetector(
-                  onTap: () => sshProvider.switchSession(index),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? Theme.of(context).colorScheme.primaryContainer
-                          : Colors.transparent,
-                      border: Border(
-                        right: BorderSide(
-                          color: Theme.of(context).dividerColor,
-                          width: 0.5,
-                        ),
-                        bottom: BorderSide(
-                          color: isActive
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.terminal,
-                          size: 16,
-                          color: isActive
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          session.label,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: isActive
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        if (sessions.length > 1)
-                          GestureDetector(
-                            onTap: () {
-                              sshProvider.closeTerminalSession(index);
-                            },
-                            child: Icon(
-                              Icons.close,
-                              size: 16,
-                              color: isActive
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                );
+                return _buildTabItem(session, index, isActive, sshProvider);
               },
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildTabItem(
+    dynamic session,
+    int index,
+    bool isActive,
+    SshProvider sshProvider,
+  ) {
+    final theme = Theme.of(context);
+    final sessions = sshProvider.sessions;
+
+    final tabContent = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: isActive
+            ? theme.colorScheme.primaryContainer
+            : Colors.transparent,
+        border: Border(
+          right: BorderSide(color: theme.dividerColor, width: 0.5),
+          bottom: BorderSide(
+            color: isActive ? theme.colorScheme.primary : Colors.transparent,
+            width: 2,
+          ),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.terminal,
+            size: 16,
+            color: isActive
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            session.label,
+            style: TextStyle(
+              fontSize: 13,
+              color: isActive
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+          const SizedBox(width: 6),
+          if (sessions.length > 1)
+            GestureDetector(
+              onTap: () => sshProvider.closeTerminalSession(index),
+              child: Icon(
+                Icons.close,
+                size: 16,
+                color: isActive
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+        ],
+      ),
+    );
+
+    // Desktop: support right-click menu and middle-click close
+    if (CustomTitleBar.isDesktop) {
+      return GestureDetector(
+        onTap: () => sshProvider.switchSession(index),
+        onSecondaryTapUp: (details) => _showTabContextMenu(
+          details.globalPosition,
+          index,
+          sshProvider,
+        ),
+        onTertiaryTapUp: (details) {
+          sshProvider.closeTerminalSession(index);
+        },
+        child: tabContent,
+      );
+    }
+
+    // Mobile: support long-press menu
+    return GestureDetector(
+      onTap: () => sshProvider.switchSession(index),
+      onLongPress: () => _showTabContextMenu(
+        null,
+        index,
+        sshProvider,
+      ),
+      child: tabContent,
+    );
+  }
+
+  void _showTabContextMenu(Offset? position, int index, SshProvider sshProvider) {
+    final loc = AppLocalizations.of(context);
+    final sessions = sshProvider.sessions;
+
+    if (CustomTitleBar.isDesktop && position != null) {
+      // Desktop: show popup menu at position
+      showMenu(
+        context: context,
+        position: RelativeRect.fromLTRB(
+          position.dx,
+          position.dy,
+          position.dx + 1,
+          position.dy + 1,
+        ),
+        items: <PopupMenuEntry<String>>[
+          PopupMenuItem(
+            value: 'new',
+            child: Row(
+              children: [
+                const Icon(Icons.add, size: 18),
+                const SizedBox(width: 8),
+                Text(loc.newTab),
+              ],
+            ),
+          ),
+          if (sessions.length > 1) ...[
+            const PopupMenuDivider(),
+            PopupMenuItem(
+              value: 'close',
+              child: Row(
+                children: [
+                  const Icon(Icons.close, size: 18),
+                  const SizedBox(width: 8),
+                  Text(loc.closeTab),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'close_others',
+              child: Row(
+                children: [
+                  const Icon(Icons.close_fullscreen, size: 18),
+                  const SizedBox(width: 8),
+                  Text(loc.closeOtherTabs),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'close_all',
+              child: Row(
+                children: [
+                  const Icon(Icons.close_fullscreen, size: 18),
+                  const SizedBox(width: 8),
+                  Text(loc.closeAllTabs),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ).then((value) {
+        if (value == null) return;
+        _handleTabMenuAction(value, index, sshProvider);
+      });
+    } else {
+      // Mobile: show bottom sheet
+      showModalBottomSheet(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.add),
+                title: Text(loc.newTab),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _addTab();
+                },
+              ),
+              if (sessions.length > 1) ...[
+                ListTile(
+                  leading: const Icon(Icons.close),
+                  title: Text(loc.closeTab),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    sshProvider.closeTerminalSession(index);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.close_fullscreen),
+                  title: Text(loc.closeOtherTabs),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _closeOtherTabs(index, sshProvider);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.close_fullscreen),
+                  title: Text(loc.closeAllTabs),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _closeAllTabs(sshProvider);
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  void _handleTabMenuAction(String action, int index, SshProvider sshProvider) {
+    switch (action) {
+      case 'new':
+        _addTab();
+        break;
+      case 'close':
+        sshProvider.closeTerminalSession(index);
+        break;
+      case 'close_others':
+        _closeOtherTabs(index, sshProvider);
+        break;
+      case 'close_all':
+        _closeAllTabs(sshProvider);
+        break;
+    }
+  }
+
+  void _closeOtherTabs(int keepIndex, SshProvider sshProvider) {
+    final sessions = sshProvider.sessions;
+    // Close from highest index to lowest to avoid shifting issues
+    for (int i = sessions.length - 1; i >= 0; i--) {
+      if (i != keepIndex) {
+        sshProvider.closeTerminalSession(i);
+      }
+    }
+  }
+
+  void _closeAllTabs(SshProvider sshProvider) {
+    for (int i = sshProvider.sessions.length - 1; i >= 0; i--) {
+      sshProvider.closeTerminalSession(i);
+    }
   }
 
   Widget _buildActiveTerminal(SshProvider sshProvider) {
@@ -261,10 +491,6 @@ class _TerminalScreenState extends State<TerminalScreen> {
       }
     }
   }
-
-  void _openSftp() {
-    Navigator.pushNamed(context, '/sftp');
-  }
 }
 
 class _TerminalWidget extends StatefulWidget {
@@ -277,34 +503,39 @@ class _TerminalWidget extends StatefulWidget {
 }
 
 class _TerminalWidgetState extends State<_TerminalWidget> {
-  final _focusNode = FocusNode();
+  final _terminalFocusNode = FocusNode();
   final _terminalKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
+      _terminalFocusNode.requestFocus();
     });
   }
 
   @override
   void dispose() {
-    _focusNode.dispose();
+    _terminalFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = CustomTitleBar.isDesktop;
     return TerminalView(
       widget.terminal,
       key: _terminalKey,
-      focusNode: _focusNode,
+      focusNode: _terminalFocusNode,
       autofocus: true,
-      hardwareKeyboardOnly: true,
+      hardwareKeyboardOnly: isDesktop,
+      deleteDetection: !isDesktop,
+      keyboardType: TextInputType.text,
       textStyle: TerminalStyle(
         fontSize: 14,
-        fontFamily: Platform.isWindows ? 'Consolas' : 'monospace',
+        fontFamily: isDesktop
+            ? (Platform.isWindows ? 'Consolas' : 'monospace')
+            : 'monospace',
       ),
     );
   }

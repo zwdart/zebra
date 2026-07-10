@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/monitor_provider.dart';
+import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'process_screen.dart';
 import 'cleanup_screen.dart';
@@ -27,7 +28,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CustomTitleBar.isDesktop ? null : AppBar(
         title: Text(loc.serverMonitor),
         actions: [
           Consumer<MonitorProvider>(
@@ -64,7 +65,24 @@ class _MonitorScreenState extends State<MonitorScreen> {
           ),
         ],
       ),
-      body: Consumer<MonitorProvider>(
+      body: Column(
+        children: [
+          if (CustomTitleBar.isDesktop)
+            CustomTitleBar(
+              title: loc.serverMonitor,
+              showBackButton: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 18),
+                  tooltip: loc.refresh,
+                  onPressed: () => context.read<MonitorProvider>().fetchMetrics(),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+              ],
+            ),
+          Expanded(
+            child: Consumer<MonitorProvider>(
         builder: (_, provider, __) {
           if (provider.isLoading) return const Center(child: CircularProgressIndicator());
           if (provider.error != null) {
@@ -120,6 +138,9 @@ class _MonitorScreenState extends State<MonitorScreen> {
             ),
           );
         },
+      ),
+          ),
+        ],
       ),
     );
   }

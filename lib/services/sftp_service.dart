@@ -265,18 +265,18 @@ class SftpService {
     await _sftpClient!.rename(oldPath, newPath);
   }
 
-  Future<String?> readFileContent(String remotePath) async {
+  Future<String?> readFileContent(String remotePath, {int maxSize = 5 * 1024 * 1024}) async {
     if (_sftpClient == null) throw Exception('SFTP not initialized');
     try {
       final remoteFile = await _sftpClient!.open(remotePath, mode: SftpFileOpenMode.read);
       final stat = await _sftpClient!.stat(remotePath);
       final size = stat.size ?? 0;
-      
-      if (size > 1024 * 1024) {
+
+      if (size > maxSize) {
         await remoteFile.close();
         return null;
       }
-      
+
       final data = await remoteFile.readBytes(length: size);
       await remoteFile.close();
       return utf8.decode(data.toList(), allowMalformed: true);

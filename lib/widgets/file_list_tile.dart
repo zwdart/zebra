@@ -23,6 +23,8 @@ class FileListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textColor = theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isMobile = screenWidth < 600;
 
     return Material(
       color: isSelected
@@ -54,7 +56,7 @@ class FileListTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              _buildLsRow(theme, textColor),
+              _buildMetaInfo(theme, textColor, isMobile),
               ?trailing,
             ],
           ),
@@ -151,9 +153,31 @@ class FileListTile extends StatelessWidget {
     return Icon(iconData, color: color, size: 20);
   }
 
-  Widget _buildLsRow(ThemeData theme, Color textColor) {
+  Widget _buildMetaInfo(ThemeData theme, Color textColor, bool isMobile) {
     final dimColor = textColor.withAlpha(153);
     final sizeText = showRawValues ? '${file.size}' : file.sizeAligned;
+
+    if (isMobile) {
+      // Mobile: compact layout with size and date only
+      final dateText = _formatDateCompact(file.modifiedAt);
+      return DefaultTextStyle(
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 11,
+          color: dimColor,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(sizeText, textAlign: TextAlign.right),
+            Text(dateText, style: TextStyle(fontSize: 10, color: dimColor.withAlpha(180))),
+          ],
+        ),
+      );
+    }
+
+    // Desktop: full layout with all columns
     final dateText = showRawValues
         ? '${file.modifiedAt.year}-${file.modifiedAt.month.toString().padLeft(2, '0')}-${file.modifiedAt.day.toString().padLeft(2, '0')} ${file.modifiedAt.hour.toString().padLeft(2, '0')}:${file.modifiedAt.minute.toString().padLeft(2, '0')}'
         : file.dateText;
@@ -204,5 +228,20 @@ class FileListTile extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatDateCompact(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inDays == 0) {
+      return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays}d ago';
+    } else if (date.year == now.year) {
+      return '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    } else {
+      return '${date.year}-${date.month.toString().padLeft(2, '0')}';
+    }
   }
 }

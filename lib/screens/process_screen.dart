@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/process_provider.dart';
+import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 
 class ProcessScreen extends StatefulWidget {
@@ -35,7 +36,7 @@ class _ProcessScreenState extends State<ProcessScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CustomTitleBar.isDesktop ? null : AppBar(
         title: Text(loc.processList),
         actions: [
           Consumer<ProcessProvider>(
@@ -77,7 +78,24 @@ class _ProcessScreenState extends State<ProcessScreen> {
           ),
         ],
       ),
-      body: Consumer<ProcessProvider>(
+      body: Column(
+        children: [
+          if (CustomTitleBar.isDesktop)
+            CustomTitleBar(
+              title: loc.processList,
+              showBackButton: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 18),
+                  tooltip: loc.refresh,
+                  onPressed: () => context.read<ProcessProvider>().fetchProcesses(),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+              ],
+            ),
+          Expanded(
+            child: Consumer<ProcessProvider>(
         builder: (_, provider, __) {
           if (provider.isLoading) return const Center(child: CircularProgressIndicator());
           if (provider.error != null) {
@@ -165,6 +183,9 @@ class _ProcessScreenState extends State<ProcessScreen> {
             ],
           );
         },
+      ),
+          ),
+        ],
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/connection_provider.dart';
 import '../providers/ssh_provider.dart';
+import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'connection_form_screen.dart';
 import 'terminal_screen.dart';
@@ -30,11 +31,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(
+      appBar: CustomTitleBar.isDesktop ? null : AppBar(
         title: Text(loc.appTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
+            tooltip: loc.settings,
             onPressed: () {
               Navigator.push(
                 context,
@@ -46,6 +48,24 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
+          if (CustomTitleBar.isDesktop)
+            CustomTitleBar(
+              title: loc.appTitle,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.settings, size: 18),
+                  tooltip: loc.settings,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    );
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+              ],
+            ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: TextField(
@@ -84,7 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemCount: connections.length,
                   itemBuilder: (ctx, i) {
                     final conn = connections[i];
-                      return ConnectionCard(
+                    return ConnectionCard(
                       connection: conn,
                       onConnect: () => _connectToServer(context, conn),
                       onEdit: () => _editConnection(context, conn),
