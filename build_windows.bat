@@ -2,7 +2,8 @@
 setlocal
 title Zebra SSH - Build Tools
 
-for /f "tokens=*" %%i in ('powershell -Command "Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ' -AsUTC"') do set BUILD_TIME=%%i
+for /f "tokens=*" %%i in ('powershell -Command "(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')"') do set BUILD_TIME=%%i
+if "%BUILD_TIME%"=="" set BUILD_TIME=%date% %time%
 set DART_DEFINE=--dart-define=BUILD_TIME=%BUILD_TIME%
 
 :: 闁告帒娲﹀畷鏌ュ礆閹峰苯澹栭柡鍫墯婢у秹宕烽妸褎绐楃憸?cd /d "%~dp0"

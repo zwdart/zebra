@@ -10,8 +10,16 @@ class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   final String strEmail = 'zebra@dart.xin';
-  final String strWebUrl = 'http://zebra.dart.xin'; 
-  final String strShop = 'https://fone.taobao.com/'; 
+  final String strWebUrl = 'http://zebra.dart.xin';
+  final String strShop = 'https://fone.taobao.com/';
+
+  static String _getBuildTime() {
+    final env = Platform.environment["BUILD_TIME"];
+    if (env != null && env.isNotEmpty) return env;
+    final define = String.fromEnvironment("BUILD_TIME", defaultValue: "");
+    if (define.isNotEmpty) return define;
+    return "unknown";
+  }
 
 
   @override
@@ -64,7 +72,7 @@ class AboutScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${loc.buildTime}: ${Platform.environment["BUILD_TIME"] ?? const String.fromEnvironment("BUILD_TIME", defaultValue: "unknown")}',
+                  '${loc.buildTime}: ${_getBuildTime()}',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
