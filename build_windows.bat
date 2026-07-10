@@ -2,6 +2,9 @@
 setlocal
 title Zebra SSH - Build Tools
 
+for /f "tokens=*" %%i in ('powershell -Command "Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ' -AsUTC"') do set BUILD_TIME=%%i
+set DART_DEFINE=--dart-define=BUILD_TIME=%BUILD_TIME%
+
 :: 闁告帒娲﹀畷鏌ュ礆閹峰苯澹栭柡鍫墯婢у秹宕烽妸褎绐楃憸?cd /d "%~dp0"
 
 :menu
@@ -63,7 +66,7 @@ if errorlevel 1 goto :build_error
 
 echo.
 echo [2/6] Building Flutter Windows release...
-call flutter build windows --release
+call flutter build windows --release %DART_DEFINE%
 if errorlevel 1 goto :build_error
 
 echo.
