@@ -2,7 +2,6 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-DART_DEFINE="--dart-define=BUILD_TIME=$BUILD_TIME"
 
 show_menu() {
     clear
@@ -66,7 +65,11 @@ do_build() {
 
     echo
     echo "[2/5] Building Flutter Linux release..."
-    flutter build linux --release $DART_DEFINE
+    cat > "$SCRIPT_DIR/lib/build_info.dart" << EOF
+// Auto-generated build info - overwritten by build scripts
+const String buildTime = '$BUILD_TIME';
+EOF
+    flutter build linux --release
     if [ $? -ne 0 ]; then
         echo "[ERROR] Flutter build failed!"
         return 1

@@ -2,7 +2,6 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-DART_DEFINE="--dart-define=BUILD_TIME=$BUILD_TIME"
 
 show_menu() {
     clear
@@ -59,7 +58,11 @@ do_build_ios() {
 
     echo
     echo "[3/3] Building Flutter iOS release..."
-    flutter build ios --release --no-codesign $DART_DEFINE
+    cat > "$SCRIPT_DIR/lib/build_info.dart" << EOF
+// Auto-generated build info - overwritten by build scripts
+const String buildTime = '$BUILD_TIME';
+EOF
+    flutter build ios --release --no-codesign
     if [ $? -ne 0 ]; then
         echo "[ERROR] Flutter build failed!"
         return 1
@@ -98,7 +101,11 @@ do_build_ipa() {
 
     echo
     echo "[3/3] Building Flutter iOS IPA..."
-    flutter build ipa --release $DART_DEFINE
+    cat > "$SCRIPT_DIR/lib/build_info.dart" << EOF
+// Auto-generated build info - overwritten by build scripts
+const String buildTime = '$BUILD_TIME';
+EOF
+    flutter build ipa --release
     if [ $? -ne 0 ]; then
         echo "[ERROR] Flutter build failed!"
         return 1
@@ -138,7 +145,11 @@ do_build_run_sim() {
 
     echo
     echo "[3/3] Building and running on simulator..."
-    flutter run --release $DART_DEFINE
+    cat > "$SCRIPT_DIR/lib/build_info.dart" << EOF
+// Auto-generated build info - overwritten by build scripts
+const String buildTime = '$BUILD_TIME';
+EOF
+    flutter run --release
     if [ $? -ne 0 ]; then
         echo "[ERROR] Build/run failed!"
         return 1

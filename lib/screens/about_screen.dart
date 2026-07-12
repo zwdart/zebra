@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
+import '../build_info.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -14,10 +13,7 @@ class AboutScreen extends StatelessWidget {
   final String strShop = 'https://fone.taobao.com/';
 
   static String _getBuildTime() {
-    final env = Platform.environment["BUILD_TIME"];
-    if (env != null && env.isNotEmpty) return env;
-    final define = String.fromEnvironment("BUILD_TIME", defaultValue: "");
-    if (define.isNotEmpty) return define;
+    if (buildTime.isNotEmpty) return buildTime;
     return "unknown";
   }
 

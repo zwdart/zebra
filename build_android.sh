@@ -2,7 +2,6 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-DART_DEFINE="--dart-define=BUILD_TIME=$BUILD_TIME"
 
 show_menu() {
     clear
@@ -48,7 +47,11 @@ do_build_apk() {
 
     echo
     echo "[2/2] Building Flutter Android APK (release)..."
-    flutter build apk --release $DART_DEFINE
+    cat > "$SCRIPT_DIR/lib/build_info.dart" << EOF
+// Auto-generated build info - overwritten by build scripts
+const String buildTime = '$BUILD_TIME';
+EOF
+    flutter build apk --release
     if [ $? -ne 0 ]; then
         echo "[ERROR] Flutter build failed!"
         return 1
@@ -78,7 +81,11 @@ do_build_apk_split() {
 
     echo
     echo "[2/2] Building Flutter Android APK (split per ABI)..."
-    flutter build apk --split-per-abi --release $DART_DEFINE
+    cat > "$SCRIPT_DIR/lib/build_info.dart" << EOF
+// Auto-generated build info - overwritten by build scripts
+const String buildTime = '$BUILD_TIME';
+EOF
+    flutter build apk --split-per-abi --release
     if [ $? -ne 0 ]; then
         echo "[ERROR] Flutter build failed!"
         return 1
@@ -107,7 +114,11 @@ do_build_aab() {
 
     echo
     echo "[2/2] Building Flutter Android App Bundle (release)..."
-    flutter build appbundle --release $DART_DEFINE
+    cat > "$SCRIPT_DIR/lib/build_info.dart" << EOF
+// Auto-generated build info - overwritten by build scripts
+const String buildTime = '$BUILD_TIME';
+EOF
+    flutter build appbundle --release
     if [ $? -ne 0 ]; then
         echo "[ERROR] Flutter build failed!"
         return 1
@@ -136,7 +147,11 @@ do_build_install() {
 
     echo
     echo "[2/2] Building and installing to device..."
-    flutter install --release $DART_DEFINE
+    cat > "$SCRIPT_DIR/lib/build_info.dart" << EOF
+// Auto-generated build info - overwritten by build scripts
+const String buildTime = '$BUILD_TIME';
+EOF
+    flutter install --release
     if [ $? -ne 0 ]; then
         echo "[ERROR] Build/install failed!"
         return 1

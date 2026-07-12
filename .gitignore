@@ -49,3 +49,6 @@ app.*.map.json
 zebra.desktop
 
 /.mimocode/
+
+# Auto-generated
+lib/build_info.dart

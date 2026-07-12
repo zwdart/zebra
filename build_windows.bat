@@ -1,10 +1,9 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 title Zebra SSH - Build Tools
 
-for /f "tokens=*" %%i in ('powershell -Command "(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')"') do set BUILD_TIME=%%i
-if "%BUILD_TIME%"=="" set BUILD_TIME=%date% %time%
-set DART_DEFINE=--dart-define=BUILD_TIME=%BUILD_TIME%
+for /f "tokens=*" %%i in ('powershell -NoProfile -Command "Write-Host -NoNewline (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')"') do set "BUILD_TIME=%%i"
+if "!BUILD_TIME!"=="" set "BUILD_TIME=%date% %time%"
 
 :: 闁告帒娲﹀畷鏌ュ礆閹峰苯澹栭柡鍫墯婢у秹宕烽妸褎绐楃憸?cd /d "%~dp0"
 
@@ -67,7 +66,9 @@ if errorlevel 1 goto :build_error
 
 echo.
 echo [2/6] Building Flutter Windows release...
-call flutter build windows --release %DART_DEFINE%
+echo // Auto-generated build info > lib\build_info.dart
+echo const String buildTime = '!BUILD_TIME!'; >> lib\build_info.dart
+call flutter build windows --release
 if errorlevel 1 goto :build_error
 
 echo.
