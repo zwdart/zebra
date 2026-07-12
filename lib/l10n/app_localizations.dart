@@ -227,6 +227,16 @@ class AppLocalizations {
   String get uniqueId => translate('uniqueId');
   String get uniqueIdCopied => translate('uniqueIdCopied');
   String get buildTime => translate('buildTime');
+  String get fileConflictTitleCopy => translate('fileConflictTitleCopy');
+  String get fileConflictTitleMove => translate('fileConflictTitleMove');
+  String get fileConflictTitleUpload => translate('fileConflictTitleUpload');
+  String get fileConflictMessageCopy => translate('fileConflictMessageCopy');
+  String get fileConflictMessageMove => translate('fileConflictMessageMove');
+  String get fileConflictMessageUpload => translate('fileConflictMessageUpload');
+  String get overwriteAll => translate('overwriteAll');
+  String get renameAll => translate('renameAll');
+  String get skipAll => translate('skipAll');
+  String get directory => translate('directory');
 
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
@@ -418,6 +428,16 @@ class AppLocalizations {
     'uniqueId': 'Unique ID',
     'uniqueIdCopied': 'ID copied to clipboard',
     'buildTime': 'Build Time',
+    'fileConflictTitleCopy': 'File Conflict',
+    'fileConflictTitleMove': 'File Conflict',
+    'fileConflictTitleUpload': 'File Conflict',
+    'fileConflictMessageCopy': 'The following files already exist in the destination. How would you like to proceed?',
+    'fileConflictMessageMove': 'The following files already exist in the destination. How would you like to proceed?',
+    'fileConflictMessageUpload': 'The following files already exist on the server. How would you like to proceed?',
+    'overwriteAll': 'Overwrite All',
+    'renameAll': 'Rename All',
+    'skipAll': 'Skip All',
+    'directory': 'Directory',
   };
 
   static const Map<String, String> _zh = {
@@ -610,6 +630,16 @@ class AppLocalizations {
     'uniqueId': '唯一 ID',
     'uniqueIdCopied': 'ID 已复制到剪贴板',
     'buildTime': '构建时间',
+    'fileConflictTitleCopy': '文件冲突',
+    'fileConflictTitleMove': '文件冲突',
+    'fileConflictTitleUpload': '文件冲突',
+    'fileConflictMessageCopy': '目标位置已存在同名文件，如何处理？',
+    'fileConflictMessageMove': '目标位置已存在同名文件，如何处理？',
+    'fileConflictMessageUpload': '服务器上已存在同名文件，如何处理？',
+    'overwriteAll': '全部覆盖',
+    'renameAll': '全部重命名',
+    'skipAll': '全部跳过',
+    'directory': '文件夹',
   };
 }
 

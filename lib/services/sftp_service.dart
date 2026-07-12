@@ -302,6 +302,16 @@ class SftpService {
     return stat.size ?? 0;
   }
 
+  Future<bool> fileExists(String remotePath) async {
+    if (_sftpClient == null) throw Exception('SFTP not initialized');
+    try {
+      await _sftpClient!.stat(remotePath);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void dispose() {
     cancelAllTransfers();
     _progressController.close();

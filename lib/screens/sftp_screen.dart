@@ -15,6 +15,7 @@ import '../widgets/batch_upload_dialog.dart';
 import '../models/sftp_file_item.dart';
 import '../services/sftp_service.dart';
 import '../widgets/custom_title_bar.dart';
+import '../widgets/file_conflict_dialog.dart';
 
 class SftpScreen extends StatefulWidget {
   const SftpScreen({super.key});
@@ -582,9 +583,67 @@ class _SftpScreenState extends State<SftpScreen> {
     }
 
     final destDir = sftpProvider.currentPath;
+    final conflicts = <ConflictFileInfo>[];
+
+    // 检查所有文件是否有冲突
     for (final srcPath in _clipboardPaths) {
       final fileName = srcPath.split('/').last;
       final destPath = '$destDir/$fileName';
+
+      try {
+        final stat = await sshService.execute('stat "$destPath" 2>/dev/null && echo "EXISTS" || echo "NOT_EXISTS"');
+        if (stat.contains('EXISTS')) {
+          // 获取文件大小
+          int size = 0;
+          try {
+            final sizeResult = await sshService.execute('stat -c %s "$destPath" 2>/dev/null');
+            size = int.tryParse(sizeResult.trim()) ?? 0;
+          } catch (_) {}
+
+          conflicts.add(ConflictFileInfo(
+            fileName: fileName,
+            sourcePath: srcPath,
+            destPath: destPath,
+            size: size,
+          ));
+        }
+      } catch (e) {
+        // 如果检查失败，继续
+      }
+    }
+
+    // 如果有冲突，显示对话框
+    ConflictAction action = ConflictAction.rename;
+    if (conflicts.isNotEmpty) {
+      final result = await FileConflictDialog.show(
+        context,
+        conflicts: conflicts,
+        isCut: _clipboardIsCut,
+      );
+      if (result == null) return; // 用户取消
+      action = result;
+    }
+
+    // 执行粘贴操作
+    for (final srcPath in _clipboardPaths) {
+      final fileName = srcPath.split('/').last;
+      var destPath = '$destDir/$fileName';
+      final hasConflict = conflicts.any((c) => c.sourcePath == srcPath);
+
+      if (hasConflict) {
+        switch (action) {
+          case ConflictAction.skip:
+            continue;
+          case ConflictAction.overwrite:
+            // 直接覆盖，不做任何处理
+            break;
+          case ConflictAction.rename:
+            // 生成新文件名
+            destPath = await _generateUniqueFileName(sshService, destDir, fileName);
+            break;
+        }
+      }
+
       try {
         if (_clipboardIsCut) {
           await sshService.execute('mv "$srcPath" "$destPath"');
@@ -611,6 +670,34 @@ class _SftpScreenState extends State<SftpScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(wasCut ? loc.fileMoved : loc.filesCopied)),
       );
+    }
+  }
+
+  Future<String> _generateUniqueFileName(
+    dynamic sshService,
+    String destDir,
+    String originalName,
+  ) async {
+    final extension = originalName.contains('.')
+        ? '.${originalName.split('.').last}'
+        : '';
+    final baseName = originalName.contains('.')
+        ? originalName.substring(0, originalName.lastIndexOf('.'))
+        : originalName;
+
+    int counter = 1;
+    while (true) {
+      final newFileName = '$baseName ($counter)$extension';
+      final newPath = '$destDir/$newFileName';
+      try {
+        final result = await sshService.execute('stat "$newPath" 2>/dev/null && echo "EXISTS" || echo "NOT_EXISTS"');
+        if (!result.contains('EXISTS')) {
+          return newPath;
+        }
+      } catch (_) {
+        return newPath;
+      }
+      counter++;
     }
   }
 
@@ -868,13 +955,16 @@ class _SftpScreenState extends State<SftpScreen> {
 
     if (items.isEmpty) return;
 
+    final filteredItems = await _checkConflictsAndFilter(items);
+    if (filteredItems == null || filteredItems.isEmpty) return;
+
     if (mounted) {
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => BatchUploadProgressDialog(
           sftpService: sftpProvider.sftpService,
-          items: items,
+          items: filteredItems,
           onComplete: () {
             sftpProvider.listDirectory();
           },
@@ -911,6 +1001,105 @@ class _SftpScreenState extends State<SftpScreen> {
       }
     } catch (e) {
       // Skip inaccessible directories
+    }
+  }
+
+  Future<List<BatchUploadItem>?> _checkConflictsAndFilter(List<BatchUploadItem> items) async {
+    final sftpProvider = context.read<SftpProvider>();
+    final sftpService = sftpProvider.sftpService;
+
+    final fileItems = items.where((i) => !i.isDirectory).toList();
+    if (fileItems.isEmpty) return items;
+
+    final conflicts = <ConflictFileInfo>[];
+    for (final item in fileItems) {
+      try {
+        final exists = await sftpService.fileExists(item.remotePath);
+        if (exists) {
+          final localFile = File(item.localPath);
+          final size = localFile.existsSync() ? localFile.lengthSync() : 0;
+          conflicts.add(ConflictFileInfo(
+            fileName: p.basename(item.localPath),
+            sourcePath: item.localPath,
+            destPath: item.remotePath,
+            size: size,
+          ));
+        }
+      } catch (_) {
+        // If check fails, assume no conflict
+      }
+    }
+
+    if (conflicts.isEmpty) return items;
+
+    final action = await FileConflictDialog.show(
+      context,
+      conflicts: conflicts,
+      isCut: false,
+      isUpload: true,
+    );
+    if (action == null) return null;
+
+    final filteredItems = <BatchUploadItem>[];
+    for (final item in items) {
+      if (item.isDirectory) {
+        filteredItems.add(item);
+        continue;
+      }
+
+      final hasConflict = conflicts.any((c) => c.sourcePath == item.localPath);
+      if (!hasConflict) {
+        filteredItems.add(item);
+        continue;
+      }
+
+      switch (action) {
+        case ConflictAction.skip:
+          break;
+        case ConflictAction.overwrite:
+          filteredItems.add(item);
+          break;
+        case ConflictAction.rename:
+          final fileName = p.basename(item.localPath);
+          final dir = p.dirname(item.remotePath);
+          final newName = await _generateUniqueFileNameForUpload(sftpService, dir, fileName);
+          filteredItems.add(BatchUploadItem(
+            localPath: item.localPath,
+            remotePath: newName,
+            size: item.size,
+          ));
+          break;
+      }
+    }
+
+    return filteredItems;
+  }
+
+  Future<String> _generateUniqueFileNameForUpload(
+    SftpService sftpService,
+    String destDir,
+    String originalName,
+  ) async {
+    final extension = originalName.contains('.')
+        ? '.${originalName.split('.').last}'
+        : '';
+    final baseName = originalName.contains('.')
+        ? originalName.substring(0, originalName.lastIndexOf('.'))
+        : originalName;
+
+    int counter = 1;
+    while (true) {
+      final newFileName = '$baseName ($counter)$extension';
+      final newPath = '$destDir/$newFileName';
+      try {
+        final exists = await sftpService.fileExists(newPath);
+        if (!exists) {
+          return newPath;
+        }
+      } catch (_) {
+        return newPath;
+      }
+      counter++;
     }
   }
 
@@ -1000,13 +1189,16 @@ class _SftpScreenState extends State<SftpScreen> {
 
     if (items.isEmpty) return;
 
+    final filteredItems = await _checkConflictsAndFilter(items);
+    if (filteredItems == null || filteredItems.isEmpty) return;
+
     if (mounted) {
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => BatchUploadProgressDialog(
           sftpService: sftpProvider.sftpService,
-          items: items,
+          items: filteredItems,
           onComplete: () {
             sftpProvider.listDirectory();
           },
