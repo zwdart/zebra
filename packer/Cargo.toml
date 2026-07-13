@@ -16,6 +16,11 @@ path = "src/main.rs"
 name = "icon-gen"
 path = "src/icon_gen.rs"
 
+[[bin]]
+name = "zebra-api"
+path = "src/api_server.rs"
+required-features = ["api-server"]
+
 [dependencies]
 brotli = "7.0"
 md-5 = "0.10"
@@ -25,6 +30,21 @@ clap = { version = "4", features = ["derive"] }
 resvg = { version = "0.44", features = ["text"] }
 usvg = "0.44"
 tiny-skia = "0.11"
+
+# API server dependencies
+axum = { version = "0.8", features = ["multipart"], optional = true }
+tokio = { version = "1", features = ["full"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+tower-http = { version = "0.6", features = ["cors", "fs", "limit"], optional = true }
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+sha2 = { version = "0.10", optional = true }
+hex = { version = "0.4", optional = true }
+chrono = { version = "0.4", optional = true }
+
+[features]
+default = []
+api-server = ["axum", "tokio", "serde", "serde_json", "tower-http", "rusqlite", "sha2", "hex", "chrono"]
 
 [build-dependencies]
 winres = "0.1"

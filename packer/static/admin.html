@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zebra SSH - 版本管理</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+.header { background: #1a1a2e; color: white; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 20px; }
+.header .badge { background: #e94560; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+.container { max-width: 1400px; margin: 24px auto; padding: 0 24px; }
+.card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px; overflow: hidden; }
+.card-header { padding: 16px 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; }
+.card-header h2 { font-size: 16px; }
+.card-body { padding: 20px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #eee; }
+th { background: #fafafa; font-weight: 600; font-size: 13px; color: #666; text-transform: uppercase; }
+td { font-size: 14px; }
+.platform-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+.platform-windows { background: #e3f2fd; color: #1565c0; }
+.platform-linux { background: #fff3e0; color: #e65100; }
+.platform-macos { background: #f3e5f5; color: #7b1fa2; }
+.platform-android { background: #e8f5e9; color: #2e7d32; }
+.platform-ios { background: #e8eaf6; color: #283593; }
+.force-badge { background: #ffebee; color: #c62828; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+.btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; }
+.btn-primary { background: #1a73e8; color: white; }
+.btn-primary:hover { background: #1557b0; }
+.btn-danger { background: #dc3545; color: white; }
+.btn-danger:hover { background: #c82333; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-ghost { background: transparent; color: #666; border: 1px solid #ddd; }
+.btn-ghost:hover { background: #f5f5f5; }
+.btn-filter { background: transparent; color: #666; border: 1px solid #ddd; padding: 6px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+.btn-filter:hover { background: #f5f5f5; }
+.btn-filter.active { background: #1a73e8; color: white; border-color: #1a73e8; }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: white; border-radius: 12px; width: 520px; max-height: 90vh; overflow-y: auto; }
+.modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.modal-header h3 { font-size: 18px; }
+.modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
+.modal-body { padding: 20px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: #555; }
+.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+.form-group textarea { min-height: 80px; resize: vertical; }
+.form-group .hint { font-size: 12px; color: #999; margin-top: 4px; }
+.form-row { display: flex; gap: 16px; }
+.form-row .form-group { flex: 1; }
+.file-drop { border: 2px dashed #ddd; border-radius: 8px; padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s; }
+.file-drop:hover, .file-drop.dragover { border-color: #1a73e8; background: #e8f0fe; }
+.file-drop .icon { font-size: 32px; margin-bottom: 8px; }
+.file-drop p { color: #666; font-size: 14px; }
+.toast { position: fixed; bottom: 24px; right: 24px; background: #333; color: white; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 2000; transform: translateY(100px); opacity: 0; transition: all 0.3s; }
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { background: #2e7d32; }
+.toast.error { background: #c62828; }
+.changelog-preview { max-height: 60px; overflow-y: auto; font-size: 12px; color: #666; white-space: pre-wrap; background: #fafafa; padding: 6px 8px; border-radius: 4px; line-height: 1.4; }
+.empty-state { text-align: center; padding: 48px; color: #999; }
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+.file-hash { font-family: monospace; font-size: 11px; color: #999; word-break: break-all; max-width: 120px; display: block; }
+.file-name { font-family: monospace; font-size: 12px; color: #555; }
+.stats-bar { display: flex; gap: 24px; padding: 12px 20px; background: #fafafa; border-bottom: 1px solid #eee; font-size: 13px; color: #666; }
+.stats-bar span { display: flex; align-items: center; gap: 4px; }
+.stats-bar .count { font-weight: 600; color: #333; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Zebra SSH - 版本管理</h1>
+  <span class="badge">Admin</span>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="card-header">
+      <h2>版本列表</h2>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <div class="filter-bar" id="filter-bar">
+          <button class="btn-filter active" data-platform="all" onclick="filterPlatform('all')">全部</button>
+          <button class="btn-filter" data-platform="windows" onclick="filterPlatform('windows')">Windows</button>
+          <button class="btn-filter" data-platform="linux" onclick="filterPlatform('linux')">Linux</button>
+          <button class="btn-filter" data-platform="macos" onclick="filterPlatform('macos')">macOS</button>
+          <button class="btn-filter" data-platform="android" onclick="filterPlatform('android')">Android</button>
+          <button class="btn-filter" data-platform="ios" onclick="filterPlatform('ios')">iOS</button>
+        </div>
+        <button class="btn btn-primary" onclick="openUploadModal()">+ 上传新版本</button>
+      </div>
+    </div>
+    <div class="stats-bar" id="stats-bar"></div>
+    <div class="card-body">
+      <div id="versions-table"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 上传弹窗 -->
+<div class="modal-overlay" id="upload-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>上传新版本</h3>
+      <button class="modal-close" onclick="closeModal('upload-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="upload-form" onsubmit="return handleUpload(event)">
+        <div class="form-row">
+          <div class="form-group">
+            <label>类型 *</label>
+            <select id="upload-type" onchange="toggleUploadType()">
+              <option value="file">上传文件</option>
+              <option value="url">外部链接</option>
+            </select>
+          </div>
+        </div>
+        <div id="file-upload-section">
+          <div class="form-group">
+            <label>应用文件</label>
+            <div class="file-drop" id="file-drop" onclick="document.getElementById('file-input').click()">
+              <div class="icon">📦</div>
+              <p id="file-drop-text">点击或拖拽文件到此处</p>
+            </div>
+            <input type="file" id="file-input" style="display:none" onchange="handleFileSelect(this)">
+          </div>
+        </div>
+        <div id="url-upload-section" style="display:none;">
+          <div class="form-group">
+            <label>下载链接 *</label>
+            <input type="url" id="upload-external-url" placeholder="https://example.com/app.exe">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>平台 *</label>
+            <select id="upload-platform" required>
+              <option value="windows">Windows</option>
+              <option value="linux">Linux</option>
+              <option value="macos">macOS</option>
+              <option value="android">Android</option>
+              <option value="ios">iOS</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>版本号 *</label>
+            <input type="text" id="upload-version" placeholder="如 1.2.0（可从文件名自动识别）">
+            <div class="hint">如果未从文件名自动识别到，需手动添加</div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>版本码 (version_code)</label>
+            <input type="number" id="upload-version-code" placeholder="留空则自动使用数据库ID">
+            <div class="hint">用于版本比较，留空则使用自增ID</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>更新日志</label>
+          <textarea id="upload-changelog" placeholder="支持多行，如：&#10;- 新增功能&#10;- 修复问题"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>最低支持版本</label>
+            <input type="text" id="upload-min-version" placeholder="如 1.0.0（可为空）">
+          </div>
+          <div class="form-group">
+            <label>强制更新</label>
+            <select id="upload-force-update">
+              <option value="false">否</option>
+              <option value="true">是</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('upload-modal')">取消</button>
+          <button type="submit" class="btn btn-primary" id="upload-btn">上传</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑弹窗 -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>编辑版本信息</h3>
+      <button class="modal-close" onclick="closeModal('edit-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="edit-form" onsubmit="return handleEdit(event)">
+        <input type="hidden" id="edit-id">
+        <div class="form-group">
+          <label>版本号</label>
+          <input type="text" id="edit-version" required>
+        </div>
+        <div class="form-group">
+          <label>版本码 (version_code)</label>
+          <input type="number" id="edit-version-code" placeholder="留空则使用自增ID">
+        </div>
+        <div class="form-group">
+          <label>更新日志</label>
+          <textarea id="edit-changelog"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>最低支持版本</label>
+            <input type="text" id="edit-min-version">
+          </div>
+          <div class="form-group">
+            <label>强制更新</label>
+            <select id="edit-force-update">
+              <option value="false">否</option>
+              <option value="true">是</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('edit-modal')">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API_BASE = '/admin/api';
+let selectedFile = null;
+let allVersions = [];
+let currentFilter = 'all';
+
+async function loadVersions() {
+  try {
+    const res = await fetch(`${API_BASE}/versions`);
+    const json = await res.json();
+    allVersions = json.data || [];
+    renderTable(allVersions);
+  } catch (e) {
+    showToast('加载失败: ' + e.message, 'error');
+  }
+}
+
+function filterPlatform(platform) {
+  currentFilter = platform;
+  document.querySelectorAll('.btn-filter').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.platform === platform);
+  });
+  const filtered = platform === 'all' ? allVersions : allVersions.filter(v => v.platform === platform);
+  renderTable(filtered);
+}
+
+function renderTable(versions) {
+  const container = document.getElementById('versions-table');
+  const statsBar = document.getElementById('stats-bar');
+
+  const stats = { total: allVersions.length };
+  ['windows', 'linux', 'macos', 'android', 'ios'].forEach(p => {
+    stats[p] = allVersions.filter(v => v.platform === p).length;
+  });
+  statsBar.innerHTML = `
+    <span>共 <span class="count">${stats.total}</span> 个版本</span>
+    <span>Windows: <span class="count">${stats.windows}</span></span>
+    <span>Linux: <span class="count">${stats.linux}</span></span>
+    <span>macOS: <span class="count">${stats.macos}</span></span>
+    <span>Android: <span class="count">${stats.android}</span></span>
+    <span>iOS: <span class="count">${stats.ios}</span></span>
+  `;
+
+  if (versions.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无版本数据，请上传第一个版本</p></div>';
+    return;
+  }
+
+  // 找出每个平台的最新版本 (version_code 最大)
+  const latestPerPlatform = {};
+  for (const v of allVersions) {
+    if (!latestPerPlatform[v.platform] || v.version_code > latestPerPlatform[v.platform].version_code) {
+      latestPerPlatform[v.platform] = v;
+    }
+  }
+
+  let html = `<table>
+    <thead><tr>
+      <th>ID</th><th>平台</th><th>版本</th><th>版本码</th><th>类型</th><th>文件名/链接</th><th>文件大小</th><th>更新日志</th><th>最低版本</th><th>强制</th><th>发布日期</th><th>操作</th>
+    </tr></thead><tbody>`;
+
+  for (const v of versions) {
+    const pClass = `platform-${v.platform}`;
+    const logPreview = v.changelog ? v.changelog.substring(0, 60) + (v.changelog.length > 60 ? '...' : '') : '-';
+    const size = formatSize(v.file_size);
+    const minVer = v.min_supported_version || '-';
+    const date = v.release_date || '-';
+    const isLatest = latestPerPlatform[v.platform] && latestPerPlatform[v.platform].id === v.id;
+    const latestBadge = isLatest ? ' <span style="color:#2e7d32;font-size:11px;font-weight:500;">[最新]</span>' : '';
+    const typeLabel = v.type === 'url' ? '<span style="color:#1a73e8;">链接</span>' : '文件';
+    const nameOrUrl = v.type === 'url' ? (v.download_url || '-') : (v.file_name || '-');
+    const nameTitle = v.type === 'url' ? v.download_url : v.file_name;
+    html += `<tr>
+      <td>${v.id}</td>
+      <td><span class="platform-badge ${pClass}">${v.platform}</span></td>
+      <td><strong>${v.version}</strong>${latestBadge}</td>
+      <td>${v.version_code}</td>
+      <td>${typeLabel}</td>
+      <td><span class="file-name" title="${nameTitle || ''}">${nameOrUrl}</span></td>
+      <td>${v.type === 'url' ? '-' : size}</td>
+      <td><div class="changelog-preview" title="${(v.changelog || '').replace(/"/g, '&quot;')}">${logPreview}</div></td>
+      <td>${minVer}</td>
+      <td>${v.force_update ? '<span class="force-badge">强制</span>' : '-'}</td>
+      <td>${date}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm btn-ghost" onclick="openEditModal(${v.id})">编辑</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteVersion(${v.id})">删除</button>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function formatSize(bytes) {
+  if (bytes === 0) return '-';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  if (bytes < 1024*1024*1024) return (bytes/(1024*1024)).toFixed(1) + ' MB';
+  return (bytes/(1024*1024*1024)).toFixed(1) + ' GB';
+}
+
+function toggleUploadType() {
+  const type = document.getElementById('upload-type').value;
+  document.getElementById('file-upload-section').style.display = type === 'file' ? '' : 'none';
+  document.getElementById('url-upload-section').style.display = type === 'url' ? '' : 'none';
+}
+
+function openUploadModal() {
+  selectedFile = null;
+  document.getElementById('upload-form').reset();
+  document.getElementById('file-drop-text').textContent = '点击或拖拽文件到此处';
+  toggleUploadType();
+  document.getElementById('upload-modal').classList.add('active');
+}
+
+function openEditModal(id) {
+  const v = allVersions.find(x => x.id === id);
+  if (!v) return;
+  document.getElementById('edit-id').value = v.id;
+  document.getElementById('edit-version').value = v.version;
+  document.getElementById('edit-version-code').value = v.version_code || '';
+  document.getElementById('edit-changelog').value = v.changelog;
+  document.getElementById('edit-min-version').value = v.min_supported_version || '';
+  document.getElementById('edit-force-update').value = v.force_update ? 'true' : 'false';
+  document.getElementById('edit-modal').classList.add('active');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+function handleFileSelect(input) {
+  if (input.files.length > 0) {
+    selectedFile = input.files[0];
+    const sizeText = ' (' + formatSize(selectedFile.size) + ')';
+    document.getElementById('file-drop-text').textContent = selectedFile.name + sizeText;
+    console.log(`[Upload] Selected file: ${selectedFile.name}, size: ${selectedFile.size} bytes`);
+    if (selectedFile.size > 100 * 1024 * 1024) {
+      showToast('文件超过 100MB，上传可能较慢', 'error');
+    }
+  }
+}
+
+const drop = document.getElementById('file-drop');
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('dragover');
+  if (e.dataTransfer.files.length > 0) {
+    selectedFile = e.dataTransfer.files[0];
+    const sizeText = ' (' + formatSize(selectedFile.size) + ')';
+    document.getElementById('file-drop-text').textContent = selectedFile.name + sizeText;
+    console.log(`[Upload] Dropped file: ${selectedFile.name}, size: ${selectedFile.size} bytes`);
+    if (selectedFile.size > 100 * 1024 * 1024) {
+      showToast('文件超过 100MB，上传可能较慢', 'error');
+    }
+  }
+});
+
+async function handleUpload(e) {
+  e.preventDefault();
+  const uploadType = document.getElementById('upload-type').value;
+
+  if (uploadType === 'file' && !selectedFile) {
+    showToast('请选择文件', 'error');
+    return false;
+  }
+  if (uploadType === 'url' && !document.getElementById('upload-external-url').value) {
+    showToast('请输入下载链接', 'error');
+    return false;
+  }
+
+  const btn = document.getElementById('upload-btn');
+  btn.disabled = true;
+  btn.textContent = '上传中...';
+
+  const fd = new FormData();
+  if (uploadType === 'file') {
+    fd.append('file', selectedFile);
+  }
+  fd.append('type', uploadType);
+  fd.append('platform', document.getElementById('upload-platform').value);
+  fd.append('version', document.getElementById('upload-version').value);
+  fd.append('version_code', document.getElementById('upload-version-code').value);
+  fd.append('changelog', document.getElementById('upload-changelog').value);
+  fd.append('force_update', document.getElementById('upload-force-update').value);
+  fd.append('min_supported_version', document.getElementById('upload-min-version').value);
+  if (uploadType === 'url') {
+    fd.append('external_url', document.getElementById('upload-external-url').value);
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000);
+    const res = await fetch(`${API_BASE}/upload`, { method: 'POST', body: fd, signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({ error: `HTTP ${res.status}: ${res.statusText}` }));
+      showToast('上传失败: ' + (json.error || `HTTP ${res.status}`), 'error');
+    } else {
+      const json = await res.json();
+      if (json.success) {
+        showToast('上传成功');
+        closeModal('upload-modal');
+        loadVersions();
+      } else {
+        showToast('上传失败: ' + (json.error || '未知错误'), 'error');
+      }
+    }
+  } catch (err) {
+    let msg = err.message || '未知错误';
+    if (err.name === 'AbortError') msg = '上传超时（超过5分钟）';
+    else if (err.message.includes('Failed to fetch')) msg = '网络错误: 无法连接到服务器，请检查服务是否运行';
+    showToast('上传失败: ' + msg, 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '上传';
+  return false;
+}
+
+async function handleEdit(e) {
+  e.preventDefault();
+  const id = document.getElementById('edit-id').value;
+  const versionCode = document.getElementById('edit-version-code').value;
+  const body = {
+    version: document.getElementById('edit-version').value,
+    changelog: document.getElementById('edit-changelog').value,
+    force_update: document.getElementById('edit-force-update').value === 'true',
+    min_supported_version: document.getElementById('edit-min-version').value,
+  };
+  if (versionCode !== '') {
+    body.version_code = parseInt(versionCode, 10);
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/versions/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (json.success) {
+      showToast('保存成功');
+      closeModal('edit-modal');
+      loadVersions();
+    } else {
+      showToast('保存失败: ' + (json.error || ''), 'error');
+    }
+  } catch (err) {
+    showToast('保存失败: ' + err.message, 'error');
+  }
+  return false;
+}
+
+async function deleteVersion(id) {
+  if (!confirm('确定要删除这个版本吗？')) return;
+  try {
+    const res = await fetch(`${API_BASE}/versions/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) {
+      showToast('已删除');
+      loadVersions();
+    } else {
+      showToast('删除失败', 'error');
+    }
+  } catch (err) {
+    showToast('删除失败: ' + err.message, 'error');
+  }
+}
+
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+loadVersions();
+</script>
+</body>
+</html>

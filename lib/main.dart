@@ -17,6 +17,7 @@ import 'screens/cleanup_screen.dart';
 import 'providers/monitor_provider.dart';
 import 'providers/process_provider.dart';
 import 'providers/cleanup_provider.dart';
+import 'providers/update_provider.dart';
 import 'services/window_service.dart';
 
 void main() async {
@@ -53,6 +54,7 @@ class ZebraApp extends StatelessWidget {
           create: (_) => CleanupProvider(),
           update: (_, ssh, provider) => provider!..updateSsh(ssh),
         ),
+        ChangeNotifierProvider(create: (_) => UpdateProvider()),
       ],
       child: Consumer2<ThemeProvider, LocaleProvider>(
         builder: (ctx, themeProvider, localeProvider, _) {

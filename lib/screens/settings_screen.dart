@@ -8,10 +8,11 @@ import '../database/database_service.dart';
 import '../utils/unique_id.dart';
 import '../providers/theme_provider.dart';
 import '../providers/locale_provider.dart';
+import '../providers/update_provider.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
-import '../theme/app_theme.dart';
 import 'about_screen.dart';
+import 'update_dialog.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -67,6 +68,37 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const Divider(),
                 _buildSectionHeader(context, loc.about),
+                Consumer<UpdateProvider>(
+                  builder: (context, updateProvider, _) {
+                    return ListTile(
+                      leading: Icon(
+                        updateProvider.state == UpdateState.hasUpdate
+                            ? Icons.system_update
+                            : Icons.update,
+                        color: updateProvider.state == UpdateState.hasUpdate
+                            ? Theme.of(context).colorScheme.error
+                            : null,
+                      ),
+                      title: Text(loc.checkForUpdates),
+                      subtitle: updateProvider.state == UpdateState.hasUpdate
+                          ? Text(
+                              '${loc.newVersionAvailable}: ${updateProvider.versionInfo?.version ?? ""}',
+                              style: TextStyle(color: Theme.of(context).colorScheme.error),
+                            )
+                          : null,
+                      trailing: updateProvider.state == UpdateState.checking
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.chevron_right),
+                      onTap: updateProvider.state == UpdateState.checking
+                          ? null
+                          : () => _checkForUpdates(context),
+                    );
+                  },
+                ),
                 ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: Text(loc.featuresAndUsage),
@@ -356,6 +388,14 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _checkForUpdates(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const UpdateDialog(isManualCheck: true),
     );
   }
 

@@ -237,6 +237,26 @@ class AppLocalizations {
   String get renameAll => translate('renameAll');
   String get skipAll => translate('skipAll');
   String get directory => translate('directory');
+  String get checkForUpdates => translate('checkForUpdates');
+  String get checkingForUpdate => translate('checkingForUpdate');
+  String get newVersionAvailable => translate('newVersionAvailable');
+  String get noUpdatesAvailable => translate('noUpdatesAvailable');
+  String get currentVersionIsLatest => translate('currentVersionIsLatest');
+  String get updateCheckFailed => translate('updateCheckFailed');
+  String get unknownError => translate('unknownError');
+  String get downloadNow => translate('downloadNow');
+  String get updateNow => translate('updateNow');
+  String get openLink => translate('openLink');
+  String get downloadingUpdate => translate('downloadingUpdate');
+  String get downloadComplete => translate('downloadComplete');
+  String get downloadCompleteMsg => translate('downloadCompleteMsg');
+  String get installNow => translate('installNow');
+  String get skip => translate('skip');
+  String get forceUpdateRequired => translate('forceUpdateRequired');
+  String get forceUpdateMessage => translate('forceUpdateMessage');
+  String get changelog => translate('changelog');
+  String get releaseDate => translate('releaseDate');
+  String get fileSize => translate('fileSize');
 
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
@@ -438,6 +458,26 @@ class AppLocalizations {
     'renameAll': 'Rename All',
     'skipAll': 'Skip All',
     'directory': 'Directory',
+    'checkForUpdates': 'Check for Updates',
+    'checkingForUpdate': 'Checking for updates...',
+    'newVersionAvailable': 'New Version Available',
+    'noUpdatesAvailable': 'No Updates Available',
+    'currentVersionIsLatest': 'Your current version is up to date.',
+    'updateCheckFailed': 'Update Check Failed',
+    'unknownError': 'An unknown error occurred.',
+    'downloadNow': 'Download',
+    'updateNow': 'Update',
+    'openLink': 'Open Link',
+    'downloadingUpdate': 'Downloading Update...',
+    'downloadComplete': 'Download Complete',
+    'downloadCompleteMsg': 'The update has been downloaded. Click "Install" to start the installation.',
+    'installNow': 'Install',
+    'skip': 'Skip',
+    'forceUpdateRequired': 'Force Update Required',
+    'forceUpdateMessage': 'This update is required. You must update to continue using the app.',
+    'changelog': 'Changelog',
+    'releaseDate': 'Release Date',
+    'fileSize': 'File Size',
   };
 
   static const Map<String, String> _zh = {
@@ -640,6 +680,26 @@ class AppLocalizations {
     'renameAll': '全部重命名',
     'skipAll': '全部跳过',
     'directory': '文件夹',
+    'checkForUpdates': '检查更新',
+    'checkingForUpdate': '正在检查更新...',
+    'newVersionAvailable': '发现新版本',
+    'noUpdatesAvailable': '暂无更新',
+    'currentVersionIsLatest': '当前已是最新版本。',
+    'updateCheckFailed': '检查更新失败',
+    'unknownError': '发生未知错误。',
+    'downloadNow': '下载',
+    'updateNow': '更新',
+    'openLink': '打开链接',
+    'downloadingUpdate': '正在下载更新...',
+    'downloadComplete': '下载完成',
+    'downloadCompleteMsg': '更新已下载完成，点击「安装」开始安装。',
+    'installNow': '安装',
+    'skip': '跳过',
+    'forceUpdateRequired': '需要强制更新',
+    'forceUpdateMessage': '此更新为强制更新，必须更新后才能继续使用。',
+    'changelog': '更新日志',
+    'releaseDate': '发布日期',
+    'fileSize': '文件大小',
   };
 }
 

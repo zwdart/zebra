@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/connection_provider.dart';
 import '../providers/ssh_provider.dart';
+import '../providers/update_provider.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'connection_form_screen.dart';
@@ -9,6 +10,7 @@ import 'terminal_screen.dart';
 import 'sftp_screen.dart';
 import 'settings_screen.dart';
 import 'monitor_screen.dart';
+import 'update_dialog.dart';
 import '../widgets/connection_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -24,7 +26,21 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ConnectionProvider>().loadConnections();
+      // 静默检查更新
+      _silentCheckUpdate(context);
     });
+  }
+
+  void _silentCheckUpdate(BuildContext context) async {
+    final provider = context.read<UpdateProvider>();
+    await provider.silentCheck();
+    if (provider.state == UpdateState.hasUpdate && context.mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: !provider.forceUpdate,
+        builder: (_) => const UpdateDialog(showSkip: true),
+      );
+    }
   }
 
   @override
