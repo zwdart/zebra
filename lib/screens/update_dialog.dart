@@ -228,7 +228,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
             if (info.isUrlType)
               FilledButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  // Navigator.pop(context);
                   provider.openExternalUrl();
                 },
                 child: Text(loc.openLink),
@@ -236,7 +236,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
             else if (Platform.isAndroid || Platform.isIOS)
               FilledButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  // Navigator.pop(context);
                   provider.openStore();
                 },
                 child: Text(loc.updateNow),
@@ -244,7 +244,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
             else
               FilledButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  // Navigator.pop(context);
                   provider.downloadUpdate();
                 },
                 child: Text(loc.downloadNow),

@@ -86,7 +86,7 @@ class DownloadProgress {
 /// 版本更新服务
 class UpdateService {
   /// API 基础地址（可在设置中修改）
-  static String apiBaseUrl = 'https://api.zebra.dart.xin';
+  static String apiBaseUrl = 'http://localhost:8686';
 
   /// 获取当前平台标识
   static String get _platform {
@@ -104,20 +104,31 @@ class UpdateService {
     return info.version;
   }
 
+  /// 获取当前应用版本序列号（build number）
+  static Future<int> getCurrentVersionCode() async {
+    final info = await PackageInfo.fromPlatform();
+    return int.parse(info.buildNumber);
+  }
+
   /// 检查是否有新版本
   /// 返回 null 表示已是最新或检查失败
   static Future<UpdateVersionInfo?> checkForUpdate({String? baseUrl}) async {
     final url = baseUrl ?? apiBaseUrl;
     final currentVersion = await getCurrentVersion();
+    final currentVersionCode = await getCurrentVersionCode();
 
     try {
-      final uri = Uri.parse('$url/api/version')
-          .replace(queryParameters: {
-        'current_version': currentVersion,
-        'platform': _platform,
-      });
+      final uri = Uri.parse('$url/api/version');
 
-      final response = await http.get(uri).timeout(
+      final response = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'current_version': currentVersion,
+          'version_code': currentVersionCode,
+          'platform': _platform,
+        }),
+      ).timeout(
         const Duration(seconds: 10),
       );
 

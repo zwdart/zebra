@@ -3,19 +3,26 @@
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Multipart, State},
-    http::StatusCode,
-    response::Html,
+    http::{Request, StatusCode},
+    response::{Html, Response},
     routing::{get, post},
+    body::Body,
 };
+use http_body_util::BodyExt;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use chrono::Local;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
+use tower::{Layer, Service};
+use std::task::{Context, Poll};
+use std::pin::Pin;
+use std::future::Future;
 
 // ============================================================
 // 数据结构
@@ -42,6 +49,7 @@ pub struct VersionInfo {
 #[derive(Deserialize)]
 pub struct VersionQuery {
     pub current_version: String,
+    pub version_code: Option<i64>,
     pub platform: String,
 }
 
@@ -68,6 +76,181 @@ struct AppState {
     start_time: Instant,
     started_at: String,
     pid: u32,
+}
+
+// ============================================================
+// 日志系统
+// ============================================================
+
+/// 日志文件路径
+fn log_file_path() -> PathBuf {
+    let log_dir = PathBuf::from("runtimes").join("logs");
+    std::fs::create_dir_all(&log_dir).ok();
+    let date = Local::now().format("%Y-%m-%d").to_string();
+    log_dir.join(format!("api-{}.log", date))
+}
+
+/// 写入日志
+fn write_log(entry: &str) {
+    use std::io::Write;
+    let path = log_file_path();
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .unwrap();
+    writeln!(file, "{}", entry).ok();
+}
+
+/// 格式化请求头
+fn format_headers(headers: &http::HeaderMap) -> String {
+    let mut result = String::new();
+    for (key, value) in headers.iter() {
+        if let Ok(v) = value.to_str() {
+            result.push_str(&format!("    {}: {}\n", key, v));
+        }
+    }
+    result
+}
+
+/// 日志中间件 - 记录完整的请求和响应
+#[derive(Clone)]
+struct LoggingLayer;
+
+impl<S> Layer<S> for LoggingLayer {
+    type Service = LoggingService<S>;
+    fn layer(&self, inner: S) -> Self::Service {
+        LoggingService { inner }
+    }
+}
+
+#[derive(Clone)]
+struct LoggingService<S> {
+    inner: S,
+}
+
+impl<S> Service<Request<Body>> for LoggingService<S>
+where
+    S: Service<Request<Body>, Response = Response<Body>> + Send + Clone + 'static,
+    S::Future: Send + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        let method = req.method().clone();
+        let uri = req.uri().clone();
+        let headers = req.headers().clone();
+        let start = Instant::now();
+        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+
+        // 提取请求信息
+        let remote_addr = headers
+            .get("x-forwarded-for")
+            .or_else(|| headers.get("x-real-ip"))
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("-")
+            .to_string();
+
+        let user_agent = headers
+            .get("user-agent")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("-")
+            .to_string();
+
+        let content_type = headers
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("-")
+            .to_string();
+
+        let content_length = headers
+            .get("content-length")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("0")
+            .to_string();
+
+        // 记录请求头
+        let mut request_log = format!(
+            "[{}] ===== REQUEST =====\n\
+             {} {} HTTP/1.1\n\
+             Host: {}\n\
+             Remote: {}\n\
+             User-Agent: {}\n\
+             Content-Type: {}\n\
+             Content-Length: {}\n\
+             Headers:\n{}",
+            timestamp,
+            method, uri,
+            headers.get("host").and_then(|v| v.to_str().ok()).unwrap_or("-"),
+            remote_addr,
+            user_agent,
+            content_type,
+            content_length,
+            format_headers(&headers)
+        );
+
+        let mut inner = self.inner.clone();
+        Box::pin(async move {
+            // 读取请求体
+            let (parts, body) = req.into_parts();
+            let body_bytes = body.collect().await.map(|c| c.to_bytes()).unwrap_or_default();
+            let body_str = String::from_utf8_lossy(&body_bytes).to_string();
+
+            // 记录请求体
+            if !body_str.is_empty() {
+                request_log.push_str(&format!("Body:\n{}\n", body_str));
+            }
+            request_log.push_str("======================\n");
+            write_log(&request_log);
+            eprintln!("{}", request_log);
+
+            // 重建请求
+            let req = Request::from_parts(parts, Body::from(body_bytes));
+
+            // 调用下游服务
+            let response = inner.call(req).await?;
+            let elapsed = start.elapsed().as_millis();
+            let status = response.status();
+            let resp_headers = response.headers().clone();
+
+            // 读取响应体
+            let (resp_parts, resp_body) = response.into_parts();
+            let resp_body_bytes = resp_body.collect().await.map(|c| c.to_bytes()).unwrap_or_default();
+            let resp_body_str = String::from_utf8_lossy(&resp_body_bytes).to_string();
+
+            // 记录响应
+            let mut response_log = format!(
+                "[{}] ===== RESPONSE =====\n\
+                 {} {} {} ({}ms)\n\
+                 Headers:\n{}",
+                Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
+                method, uri, status.as_u16(), elapsed,
+                format_headers(&resp_headers)
+            );
+
+            if !resp_body_str.is_empty() {
+                // 截断过长的响应体
+                let display_body = if resp_body_str.len() > 2000 {
+                    format!("{}...(truncated, {} bytes total)", &resp_body_str[..2000], resp_body_str.len())
+                } else {
+                    resp_body_str.clone()
+                };
+                response_log.push_str(&format!("Body:\n{}\n", display_body));
+            }
+            response_log.push_str("=======================\n");
+            write_log(&response_log);
+            eprintln!("{}", response_log);
+
+            // 重建响应
+            Ok(Response::from_parts(resp_parts, Body::from(resp_body_bytes)))
+        })
+    }
 }
 
 // ============================================================
@@ -233,10 +416,11 @@ fn guess_version_from_filename(name: &str) -> Option<String> {
 // API Handlers - 版本查询
 // ============================================================
 
-/// GET /api/version?current_version=1.0.0&platform=windows
+/// POST /api/version
+/// Body: { "current_version": "1.0.0", "version_code": 100, "platform": "windows" }
 async fn check_version(
     State(state): State<Arc<AppState>>,
-    axum::extract::Query(query): axum::extract::Query<VersionQuery>,
+    Json(query): Json<VersionQuery>,
 ) -> Result<Json<VersionInfo>, (StatusCode, Json<ApiResponse<()>>)> {
     let valid_platforms = ["windows", "linux", "macos", "android", "ios"];
     if !valid_platforms.contains(&query.platform.as_str()) {
@@ -253,7 +437,14 @@ async fn check_version(
     let db = state.db.lock().unwrap();
     match db_get_latest(&db, &query.platform) {
         Some(info) => {
-            if version_greater(&info.version, &query.current_version) {
+            // 优先使用 version_code 比较，否则使用版本号字符串比较
+            let has_update = if let Some(client_version_code) = query.version_code {
+                info.version_code > client_version_code
+            } else {
+                version_greater(&info.version, &query.current_version)
+            };
+
+            if has_update {
                 Ok(Json(info))
             } else {
                 // 已是最新
@@ -665,20 +856,16 @@ async fn main() {
         .and_then(|w| w[1].parse().ok())
         .unwrap_or(8686);
 
-    let data_dir = args.windows(2)
-        .find(|w| w[0] == "--data-dir")
-        .map(|w| w[1].clone())
-        .unwrap_or_else(|| "data".to_string());
-
     let static_dir = args.windows(2)
         .find(|w| w[0] == "--static-dir")
         .map(|w| w[1].clone())
         .unwrap_or_else(|| "static".to_string());
 
-    // 创建数据目录
-    std::fs::create_dir_all(&data_dir).ok();
-    let db_path = format!("{}/versions.db", data_dir);
-    let uploads_dir = format!("{}/uploads", data_dir);
+    // 使用 runtimes 目录存放数据库和上传文件
+    let runtimes_dir = "runtimes";
+    std::fs::create_dir_all(runtimes_dir).ok();
+    let db_path = format!("{}/versions.db", runtimes_dir);
+    let uploads_dir = format!("{}/uploads", runtimes_dir);
     std::fs::create_dir_all(&uploads_dir).ok();
 
     // 初始化数据库
@@ -704,7 +891,7 @@ async fn main() {
 
     let app = Router::new()
         // 公开 API
-        .route("/api/version", get(check_version))
+        .route("/api/version", post(check_version))
         .route("/api/version/latest", get(get_latest))
         .route("/api/health", get(health_check))
         // 管理后台
@@ -716,6 +903,7 @@ async fn main() {
         // 静态文件服务（上传的文件 + static 目录）
         .nest_service("/uploads", ServeDir::new(&uploads_dir))
         .nest_service("/static", ServeDir::new(&static_dir))
+        .layer(LoggingLayer)
         .layer(cors)
         .with_state(state);
 
@@ -723,11 +911,14 @@ async fn main() {
     println!();
     println!("  Admin Panel:  http://{}/admin", addr);
     println!("  API Health:   http://{}/api/health", addr);
-    println!("  Version API:  http://{}/api/version?current_version=1.0.0&platform=windows", addr);
+    println!("  Version API:  POST http://{}/api/version", addr);
+    println!();
+    println!("  Data:         runtimes/versions.db");
+    println!("  Uploads:      runtimes/uploads/");
+    println!("  Logs:         runtimes/logs/api-*.log");
     println!();
     println!("  Options:");
     println!("    --port <PORT>       Server port (default: 8686)");
-    println!("    --data-dir <DIR>    Data directory (default: data)");
     println!("    --static-dir <DIR>  Static files directory (default: static)");
     println!();
 

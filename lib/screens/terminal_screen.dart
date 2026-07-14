@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:xterm/xterm.dart';
 import '../providers/ssh_provider.dart';
@@ -505,10 +506,13 @@ class _TerminalWidget extends StatefulWidget {
 class _TerminalWidgetState extends State<_TerminalWidget> {
   final _terminalFocusNode = FocusNode();
   final _terminalKey = GlobalKey();
+  final _controller = TerminalController();
+  OverlayEntry? _selectionOverlay;
 
   @override
   void initState() {
     super.initState();
+    _controller.addListener(_onSelectionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _terminalFocusNode.requestFocus();
     });
@@ -516,27 +520,231 @@ class _TerminalWidgetState extends State<_TerminalWidget> {
 
   @override
   void dispose() {
+    _removeSelectionOverlay();
+    _controller.removeListener(_onSelectionChanged);
     _terminalFocusNode.dispose();
+    _controller.dispose();
     super.dispose();
+  }
+
+  void _onSelectionChanged() {
+    final hasSelection = _controller.selection != null;
+    if (hasSelection && !CustomTitleBar.isDesktop) {
+      // 移动端：选中文本后显示菜单
+      _showSelectionOverlay();
+    } else {
+      _removeSelectionOverlay();
+    }
+  }
+
+  void _showSelectionOverlay() {
+    _removeSelectionOverlay();
+
+    final renderObject = _terminalKey.currentContext?.findRenderObject();
+    if (renderObject == null) return;
+
+    final RenderBox renderBox = renderObject as RenderBox;
+    final size = renderBox.size;
+
+    _selectionOverlay = OverlayEntry(
+      builder: (context) => Positioned(
+        bottom: MediaQuery.of(context).padding.bottom + 16,
+        left: size.width / 2 - 120,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildOverlayButton(
+                  icon: Icons.copy,
+                  tooltip: AppLocalizations.of(context).copy,
+                  onPressed: () {
+                    _copySelection();
+                    _removeSelectionOverlay();
+                  },
+                ),
+                Container(width: 1, height: 24, color: Theme.of(context).dividerColor),
+                _buildOverlayButton(
+                  icon: Icons.paste,
+                  tooltip: AppLocalizations.of(context).paste,
+                  onPressed: () {
+                    _pasteFromClipboard();
+                    _removeSelectionOverlay();
+                  },
+                ),
+                Container(width: 1, height: 24, color: Theme.of(context).dividerColor),
+                _buildOverlayButton(
+                  icon: Icons.select_all,
+                  tooltip: AppLocalizations.of(context).selectAll,
+                  onPressed: () {
+                    _selectAll();
+                    _removeSelectionOverlay();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_selectionOverlay!);
+  }
+
+  void _removeSelectionOverlay() {
+    _selectionOverlay?.remove();
+    _selectionOverlay = null;
+  }
+
+  Widget _buildOverlayButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return IconButton(
+      icon: Icon(icon, size: 20),
+      tooltip: tooltip,
+      onPressed: onPressed,
+      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final isDesktop = CustomTitleBar.isDesktop;
+
     return TerminalView(
       widget.terminal,
       key: _terminalKey,
+      controller: _controller,
       focusNode: _terminalFocusNode,
       autofocus: true,
       hardwareKeyboardOnly: isDesktop,
       deleteDetection: !isDesktop,
       keyboardType: TextInputType.text,
+      onSecondaryTapUp: isDesktop ? _onRightClick : null,
       textStyle: TerminalStyle(
         fontSize: 14,
         fontFamily: isDesktop
             ? (Platform.isWindows ? 'Consolas' : 'monospace')
             : 'monospace',
       ),
+    );
+  }
+
+  void _onRightClick(TapUpDetails details, CellOffset offset) {
+    final hasSelection = _controller.selection != null;
+    final renderObject = _terminalKey.currentContext?.findRenderObject();
+    if (renderObject == null) return;
+
+    final RenderBox renderBox = renderObject as RenderBox;
+    final globalPosition = renderBox.localToGlobal(details.localPosition);
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        globalPosition.dx + 1,
+        globalPosition.dy + 1,
+      ),
+      items: [
+        PopupMenuItem<String>(
+          value: 'copy',
+          enabled: hasSelection,
+          child: Row(
+            children: [
+              const Icon(Icons.copy, size: 18),
+              const SizedBox(width: 8),
+              Text('${AppLocalizations.of(context).copy} (Ctrl+Shift+C)'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'paste',
+          child: Row(
+            children: [
+              const Icon(Icons.paste, size: 18),
+              const SizedBox(width: 8),
+              Text('${AppLocalizations.of(context).paste} (Ctrl+V)'),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: 'select_all',
+          child: Row(
+            children: [
+              const Icon(Icons.select_all, size: 18),
+              const SizedBox(width: 8),
+              Text('${AppLocalizations.of(context).selectAll} (Ctrl+A)'),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == null) return;
+      _handleContextMenuAction(value);
+    });
+  }
+
+  void _handleContextMenuAction(String action) {
+    switch (action) {
+      case 'copy':
+        _copySelection();
+        break;
+      case 'paste':
+        _pasteFromClipboard();
+        break;
+      case 'select_all':
+        _selectAll();
+        break;
+    }
+  }
+
+  void _copySelection() {
+    final selection = _controller.selection;
+    if (selection == null) return;
+
+    final text = widget.terminal.buffer.getText(selection);
+    if (text.isNotEmpty) {
+      Clipboard.setData(ClipboardData(text: text));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Copied to clipboard'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
+  }
+
+  void _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text != null && text.isNotEmpty) {
+      widget.terminal.paste(text);
+      _controller.clearSelection();
+    }
+  }
+
+  void _selectAll() {
+    _controller.setSelection(
+      widget.terminal.buffer.createAnchor(
+        0,
+        widget.terminal.buffer.height - widget.terminal.viewHeight,
+      ),
+      widget.terminal.buffer.createAnchor(
+        widget.terminal.viewWidth,
+        widget.terminal.buffer.height - 1,
+      ),
+      mode: SelectionMode.line,
     );
   }
 }
