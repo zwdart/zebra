@@ -774,6 +774,12 @@ async fn admin_update_version(
     if let Some(v) = body.get("min_supported_version").and_then(|v| v.as_str()) {
         updates.push("min_supported_version = ?"); param_values.push(Box::new(v.to_string()));
     }
+    if let Some(v) = body.get("file_name").and_then(|v| v.as_str()) {
+        updates.push("file_name = ?"); param_values.push(Box::new(v.to_string()));
+    }
+    if let Some(v) = body.get("download_url").and_then(|v| v.as_str()) {
+        updates.push("download_url = ?"); param_values.push(Box::new(v.to_string()));
+    }
 
     if updates.is_empty() {
         let info = db_get_by_id(&db, id).unwrap();

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/update_provider.dart';
 import '../services/update_service.dart';
@@ -126,14 +127,72 @@ class _UpdateDialogState extends State<UpdateDialog> {
 
         // 下载完成
         if (provider.state == UpdateState.downloadComplete) {
+          final filePath = provider.downloadedFilePath ?? '';
           return AlertDialog(
             icon: Icon(Icons.download_done, color: colorScheme.primary, size: 48),
             title: Text(loc.downloadComplete),
-            content: Text(loc.downloadCompleteMsg),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(loc.downloadCompleteMsg),
+                const SizedBox(height: 16),
+                Text(
+                  loc.downloadPathLabel,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          filePath,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontFamily: 'monospace',
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.copy, size: 20),
+                        tooltip: loc.copyPath,
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: filePath));
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(loc.pathCopied),
+                                duration: const Duration(seconds: 1),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: Text(loc.cancel),
+              ),
+              TextButton(
+                onPressed: () {
+                  provider.openDownloadFolder();
+                },
+                child: Text(loc.openFolder),
               ),
               FilledButton(
                 onPressed: () {

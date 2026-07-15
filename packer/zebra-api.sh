@@ -18,8 +18,16 @@ NC='\033[0m'
 build() {
     echo -e "${YELLOW}编译 $BIN_NAME ...${NC}"
     cd "$SCRIPT_DIR"
-    cargo build --release --features api-server --bin "$BIN_NAME"
-    if [ $? -eq 0 ]; then
+    
+    # 使用 musl 静态编译，不依赖系统 glibc
+    cargo build --release --features api-server --bin "$BIN_NAME" --target x86_64-unknown-linux-musl
+    
+    # 将 musl 目标产物复制到 target/release/ 下
+    if [ -f "target/x86_64-unknown-linux-musl/release/$BIN_NAME" ]; then
+        cp "target/x86_64-unknown-linux-musl/release/$BIN_NAME" "$BIN_PATH"
+    fi
+    
+    if [ -f "$BIN_PATH" ]; then
         echo -e "${GREEN}编译成功: $BIN_PATH${NC}"
     else
         echo -e "${RED}编译失败${NC}"

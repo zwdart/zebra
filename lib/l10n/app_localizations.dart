@@ -250,6 +250,8 @@ class AppLocalizations {
   String get downloadingUpdate => translate('downloadingUpdate');
   String get downloadComplete => translate('downloadComplete');
   String get downloadCompleteMsg => translate('downloadCompleteMsg');
+  String get downloadPathLabel => translate('downloadPathLabel');
+  String get openFolder => translate('openFolder');
   String get installNow => translate('installNow');
   String get skip => translate('skip');
   String get forceUpdateRequired => translate('forceUpdateRequired');
@@ -471,6 +473,8 @@ class AppLocalizations {
     'downloadingUpdate': 'Downloading Update...',
     'downloadComplete': 'Download Complete',
     'downloadCompleteMsg': 'The update has been downloaded. Click "Install" to start the installation.',
+    'downloadPathLabel': 'Saved to:',
+    'openFolder': 'Open Folder',
     'installNow': 'Install',
     'skip': 'Skip',
     'forceUpdateRequired': 'Force Update Required',
@@ -693,6 +697,8 @@ class AppLocalizations {
     'downloadingUpdate': '正在下载更新...',
     'downloadComplete': '下载完成',
     'downloadCompleteMsg': '更新已下载完成，点击「安装」开始安装。',
+    'downloadPathLabel': '保存路径：',
+    'openFolder': '打开文件夹',
     'installNow': '安装',
     'skip': '跳过',
     'forceUpdateRequired': '需要更新',

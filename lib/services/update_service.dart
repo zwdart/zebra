@@ -86,7 +86,8 @@ class DownloadProgress {
 /// 版本更新服务
 class UpdateService {
   /// API 基础地址（可在设置中修改）
-  static String apiBaseUrl = 'http://localhost:8686';
+  // static String apiBaseUrl = 'http://localhost:8686';
+  static String apiBaseUrl = 'https://zebra.dart.xin';
 
   /// 获取当前平台标识
   static String get _platform {
@@ -213,6 +214,28 @@ class UpdateService {
     final downloads = Directory('$home/Downloads');
     if (await downloads.exists()) return downloads;
     return await getApplicationDocumentsDirectory();
+  }
+
+  /// 获取下载文件的完整路径
+  static Future<String> getDownloadPath(String fileName) async {
+    final dir = await _getDownloadDirectory();
+    return '${dir.path}/$fileName';
+  }
+
+  /// 打开包含文件的文件夹
+  static Future<void> openContainingFolder(String filePath) async {
+    final dir = Directory(filePath).parent.path;
+    try {
+      if (Platform.isLinux) {
+        await Process.run('xdg-open', [dir]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [dir]);
+      } else if (Platform.isWindows) {
+        await Process.run('explorer', [dir]);
+      }
+    } catch (e) {
+      debugPrint('Failed to open folder: $e');
+    }
   }
 
   /// 打开下载的文件（桌面平台）或启动安装

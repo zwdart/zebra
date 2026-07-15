@@ -199,6 +199,16 @@ td { font-size: 14px; }
           <input type="text" id="edit-version" required>
         </div>
         <div class="form-group">
+          <label>文件名</label>
+          <input type="text" id="edit-file-name" placeholder="如 zebra-ssh-1.2.0.exe">
+          <div class="hint">仅文件类型有效，URL类型请修改下载链接</div>
+        </div>
+        <div class="form-group">
+          <label>下载链接</label>
+          <input type="text" id="edit-download-url" placeholder="本地路径或外部URL">
+          <div class="hint">文件类型显示 /uploads/文件名，URL类型可填完整链接</div>
+        </div>
+        <div class="form-group">
           <label>版本码 (version_code)</label>
           <input type="number" id="edit-version-code" placeholder="留空则使用自增ID">
         </div>
@@ -351,6 +361,8 @@ function openEditModal(id) {
   if (!v) return;
   document.getElementById('edit-id').value = v.id;
   document.getElementById('edit-version').value = v.version;
+  document.getElementById('edit-file-name').value = v.file_name || '';
+  document.getElementById('edit-download-url').value = v.download_url || '';
   document.getElementById('edit-version-code').value = v.version_code || '';
   document.getElementById('edit-changelog').value = v.changelog;
   document.getElementById('edit-min-version').value = v.min_supported_version || '';
@@ -456,13 +468,17 @@ async function handleUpload(e) {
 async function handleEdit(e) {
   e.preventDefault();
   const id = document.getElementById('edit-id').value;
-  const versionCode = document.getElementById('edit-version-code').value;
   const body = {
     version: document.getElementById('edit-version').value,
     changelog: document.getElementById('edit-changelog').value,
     force_update: document.getElementById('edit-force-update').value === 'true',
     min_supported_version: document.getElementById('edit-min-version').value,
   };
+  const fileName = document.getElementById('edit-file-name').value;
+  const downloadUrl = document.getElementById('edit-download-url').value;
+  if (fileName) body.file_name = fileName;
+  if (downloadUrl) body.download_url = downloadUrl;
+  const versionCode = document.getElementById('edit-version-code').value;
   if (versionCode !== '') {
     body.version_code = parseInt(versionCode, 10);
   }

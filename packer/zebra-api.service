@@ -1,0 +1,16 @@
+[Unit]
+Description=Zebra API Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/zebraapi
+ExecStart=/opt/zebraapi/zebra-api --port 8686
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/zebraapi/runtimes/logs/service.log
+StandardError=append:/opt/zebraapi/runtimes/logs/service.log
+
+[Install]
+WantedBy=multi-user.target

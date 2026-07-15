@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/sftp_service.dart';
 import '../services/compression_service.dart';
 import '../l10n/app_localizations.dart';
@@ -130,6 +132,7 @@ class DownloadProgressDialog extends StatefulWidget {
 class _DownloadProgressDialogState extends State<DownloadProgressDialog> {
   SftpProgress? _progress;
   bool _isDone = false;
+  bool _showPath = false;
 
   @override
   void initState() {
@@ -145,7 +148,10 @@ class _DownloadProgressDialogState extends State<DownloadProgressDialog> {
         if (mounted) {
           setState(() => _progress = p);
           if (p.completed) {
-            setState(() => _isDone = true);
+            setState(() {
+              _isDone = true;
+              _showPath = true;
+            });
           }
         }
       },
@@ -155,11 +161,37 @@ class _DownloadProgressDialogState extends State<DownloadProgressDialog> {
     }
   }
 
+  Future<void> _copyPath(BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: widget.localPath));
+    if (context.mounted) {
+      final loc = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.pathCopied)),
+      );
+    }
+  }
+
+  Future<void> _openFolder() async {
+    final dir = Directory(widget.localPath).parent.path;
+    try {
+      if (Platform.isLinux) {
+        await Process.run('xdg-open', [dir]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [dir]);
+      } else if (Platform.isWindows) {
+        await Process.run('explorer', [dir]);
+      }
+    } catch (e) {
+      debugPrint('Failed to open folder: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
     final progress = _progress;
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return AlertDialog(
       title: Text(_isDone ? loc.confirm : loc.downloadProgress),
@@ -189,6 +221,22 @@ class _DownloadProgressDialogState extends State<DownloadProgressDialog> {
               style: TextStyle(color: theme.colorScheme.error),
             ),
           ],
+          if (_showPath) ...[
+            const SizedBox(height: 16),
+            Text(
+              loc.downloadPathLabel,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 4),
+            SelectableText(
+              widget.localPath,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
         ],
       ),
       actions: [
@@ -205,6 +253,16 @@ class _DownloadProgressDialogState extends State<DownloadProgressDialog> {
             onPressed: () => Navigator.pop(context),
             child: Text(loc.confirm),
           ),
+        if (_isDone) ...[
+          TextButton(
+            onPressed: () => _copyPath(context),
+            child: const Icon(Icons.copy, size: 18),
+          ),
+          TextButton(
+            onPressed: () => _openFolder(),
+            child: Text(loc.openFolder),
+          ),
+        ],
       ],
     );
   }

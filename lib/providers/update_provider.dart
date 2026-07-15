@@ -83,6 +83,7 @@ class UpdateProvider extends ChangeNotifier {
 
     _state = UpdateState.downloading;
     _progress = DownloadProgress(received: 0, total: 0);
+    _downloadedFilePath = null;
     notifyListeners();
 
     final fileName = _getFileName(_versionInfo!.downloadUrl);
@@ -95,6 +96,8 @@ class UpdateProvider extends ChangeNotifier {
       notifyListeners();
 
       if (p.isComplete) {
+        final path = await UpdateService.getDownloadPath(fileName);
+        _downloadedFilePath = path;
         _state = UpdateState.downloadComplete;
         notifyListeners();
       } else if (p.error != null) {
@@ -109,6 +112,13 @@ class UpdateProvider extends ChangeNotifier {
   Future<void> openDownloadedFile() async {
     if (_downloadedFilePath != null) {
       await UpdateService.openDownloadedFile(_downloadedFilePath!);
+    }
+  }
+
+  /// 打开下载文件所在文件夹
+  Future<void> openDownloadFolder() async {
+    if (_downloadedFilePath != null) {
+      await UpdateService.openContainingFolder(_downloadedFilePath!);
     }
   }
 
