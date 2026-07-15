@@ -1,0 +1,17 @@
+# Zebra API Server 配置文件
+# 修改后重启服务生效
+
+# 监听端口，默认 8686
+port = 8686
+
+# 下载 URL 前缀域名，normalize_download_url 时使用
+domain = "zebra.dart.xin"
+
+# 数据存储根目录（包含 versions.db、uploads、logs）
+data_dir = "runtimes"
+
+# 静态文件目录（admin.html 所在目录）
+static_dir = "static"
+
+# HTTP 日志单条最大字节数（headers/body），超出截断。0 = 不限制，默认 2048
+log_max_bytes = 2048

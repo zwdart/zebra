@@ -206,7 +206,7 @@ td { font-size: 14px; }
         <div class="form-group">
           <label>下载链接</label>
           <input type="text" id="edit-download-url" placeholder="本地路径或外部URL">
-          <div class="hint">文件类型显示 /uploads/文件名，URL类型可填完整链接</div>
+          <div class="hint">文件类型显示 /api/uploads/文件名，URL类型可填完整链接</div>
         </div>
         <div class="form-group">
           <label>版本码 (version_code)</label>
@@ -241,7 +241,8 @@ td { font-size: 14px; }
 <div class="toast" id="toast"></div>
 
 <script>
-const API_BASE = '/admin/api';
+// 自动检测 API 基础路径：管理面板在 /admin.html 时，API 在 /api/admin
+const API_BASE = '/api/admin';
 let selectedFile = null;
 let allVersions = [];
 let currentFilter = 'all';
@@ -310,7 +311,7 @@ function renderTable(versions) {
     const isLatest = latestPerPlatform[v.platform] && latestPerPlatform[v.platform].id === v.id;
     const latestBadge = isLatest ? ' <span style="color:#2e7d32;font-size:11px;font-weight:500;">[最新]</span>' : '';
     const typeLabel = v.type === 'url' ? '<span style="color:#1a73e8;">链接</span>' : '文件';
-    const nameOrUrl = v.type === 'url' ? (v.download_url || '-') : (v.file_name || '-');
+    const displayUrl = v.type === 'url' ? (v.download_url || '-') : (v.file_name || '-');
     const nameTitle = v.type === 'url' ? v.download_url : v.file_name;
     html += `<tr>
       <td>${v.id}</td>
@@ -318,7 +319,7 @@ function renderTable(versions) {
       <td><strong>${v.version}</strong>${latestBadge}</td>
       <td>${v.version_code}</td>
       <td>${typeLabel}</td>
-      <td><span class="file-name" title="${nameTitle || ''}">${nameOrUrl}</span></td>
+      <td><span class="file-name" title="${nameTitle || ''}" style="cursor:pointer;" onclick="copyToClipboard('${(nameTitle || '').replace(/'/g, "\\'")}')" >${displayUrl}</span></td>
       <td>${v.type === 'url' ? '-' : size}</td>
       <td><div class="changelog-preview" title="${(v.changelog || '').replace(/"/g, '&quot;')}">${logPreview}</div></td>
       <td>${minVer}</td>
@@ -524,6 +525,14 @@ function showToast(msg, type = 'success') {
   t.textContent = msg;
   t.className = 'toast show ' + type;
   setTimeout(() => t.className = 'toast', 3000);
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('已复制: ' + text, 'success');
+  }).catch(() => {
+    showToast('复制失败', 'error');
+  });
 }
 
 loadVersions();

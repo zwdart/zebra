@@ -25,6 +25,78 @@ use std::pin::Pin;
 use std::future::Future;
 
 // ============================================================
+// 配置
+// ============================================================
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Config {
+    pub port: Option<u16>,
+    pub domain: Option<String>,
+    pub data_dir: Option<String>,
+    pub static_dir: Option<String>,
+    /// HTTP log max bytes per field (headers/body). 0 = unlimited. Default 2048.
+    pub log_max_bytes: Option<usize>,
+}
+
+impl Config {
+    pub fn load() -> Self {
+        let config_path = PathBuf::from("config.toml");
+        if config_path.exists() {
+            match std::fs::read_to_string(&config_path) {
+                Ok(content) => match toml::from_str(&content) {
+                    Ok(config) => {
+                        eprintln!("[config] Loaded config.toml");
+                        return config;
+                    }
+                    Err(e) => {
+                        eprintln!("[config] Failed to parse config.toml: {}", e);
+                    }
+                },
+                Err(e) => {
+                    eprintln!("[config] Failed to read config.toml: {}", e);
+                }
+            }
+        }
+        eprintln!("[config] No config.toml found, using defaults");
+        Config {
+            port: None,
+            domain: None,
+            data_dir: None,
+            static_dir: None,
+            log_max_bytes: None,
+        }
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port.unwrap_or(8686)
+    }
+
+    pub fn domain(&self) -> &str {
+        self.domain.as_deref().unwrap_or("zebra.dart.xin")
+    }
+
+    pub fn data_dir(&self) -> &str {
+        self.data_dir.as_deref().unwrap_or("runtimes")
+    }
+
+    pub fn static_dir(&self) -> &str {
+        self.static_dir.as_deref().unwrap_or("static")
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            port: None,
+            domain: None,
+            data_dir: None,
+            static_dir: None,
+            log_max_bytes: None,
+        }
+    }
+}
+
+// ============================================================
 // 数据结构
 // ============================================================
 
@@ -73,6 +145,7 @@ pub struct HealthResponse {
 struct AppState {
     db: Mutex<Connection>,
     uploads_dir: String,
+    domain: String,
     start_time: Instant,
     started_at: String,
     pid: u32,
@@ -84,7 +157,8 @@ struct AppState {
 
 /// 日志文件路径
 fn log_file_path() -> PathBuf {
-    let log_dir = PathBuf::from("runtimes").join("logs");
+    let data_dir = std::env::var("ZEBRA_DATA_DIR").unwrap_or_else(|_| "runtimes".to_string());
+    let log_dir = PathBuf::from(data_dir).join("logs");
     std::fs::create_dir_all(&log_dir).ok();
     let date = Local::now().format("%Y-%m-%d").to_string();
     log_dir.join(format!("api-{}.log", date))
@@ -102,12 +176,19 @@ fn write_log(entry: &str) {
     writeln!(file, "{}", entry).ok();
 }
 
-/// 格式化请求头
-fn format_headers(headers: &http::HeaderMap) -> String {
+/// 格式化请求头（总长度限制，超出截断）
+fn format_headers(headers: &http::HeaderMap, max_bytes: usize) -> String {
     let mut result = String::new();
+    let mut total = 0;
     for (key, value) in headers.iter() {
         if let Ok(v) = value.to_str() {
-            result.push_str(&format!("    {}: {}\n", key, v));
+            let line = format!("    {}: {}\n", key, v);
+            if max_bytes > 0 && total + line.len() > max_bytes {
+                result.push_str(&format!("    ... (truncated, {} bytes total)\n", total));
+                break;
+            }
+            result.push_str(&line);
+            total += line.len();
         }
     }
     result
@@ -115,18 +196,21 @@ fn format_headers(headers: &http::HeaderMap) -> String {
 
 /// 日志中间件 - 记录完整的请求和响应
 #[derive(Clone)]
-struct LoggingLayer;
+struct LoggingLayer {
+    log_max_bytes: usize,
+}
 
 impl<S> Layer<S> for LoggingLayer {
     type Service = LoggingService<S>;
     fn layer(&self, inner: S) -> Self::Service {
-        LoggingService { inner }
+        LoggingService { inner, log_max_bytes: self.log_max_bytes }
     }
 }
 
 #[derive(Clone)]
 struct LoggingService<S> {
     inner: S,
+    log_max_bytes: usize,
 }
 
 impl<S> Service<Request<Body>> for LoggingService<S>
@@ -149,7 +233,7 @@ where
         let start = Instant::now();
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
 
-        // 提取请求信息
+        // 提取请求头
         let remote_addr = headers
             .get("x-forwarded-for")
             .or_else(|| headers.get("x-real-ip"))
@@ -157,6 +241,7 @@ where
             .unwrap_or("-")
             .to_string();
 
+        let log_max = self.log_max_bytes;
         let user_agent = headers
             .get("user-agent")
             .and_then(|v| v.to_str().ok())
@@ -192,19 +277,39 @@ where
             user_agent,
             content_type,
             content_length,
-            format_headers(&headers)
+            format_headers(&headers, log_max)
         );
 
         let mut inner = self.inner.clone();
         Box::pin(async move {
             // 读取请求体
             let (parts, body) = req.into_parts();
+            let uri_path = parts.uri.path().to_string();
             let body_bytes = body.collect().await.map(|c| c.to_bytes()).unwrap_or_default();
-            let body_str = String::from_utf8_lossy(&body_bytes).to_string();
+            let body_len = body_bytes.len();
 
-            // 记录请求体
-            if !body_str.is_empty() {
-                request_log.push_str(&format!("Body:\n{}\n", body_str));
+            // 记录请求体（multipart 上传跳过 body 日志，避免大文件撑爆日志）
+            let is_multipart = content_type.contains("multipart/form-data");
+
+            if !is_multipart {
+                // 截断过长的请求体
+                let body_str = if log_max > 0 && body_len > log_max {
+                    let truncated = String::from_utf8_lossy(&body_bytes[..log_max]);
+                    format!("{}...(truncated, {} bytes total)", truncated, body_len)
+                } else {
+                    String::from_utf8_lossy(&body_bytes).to_string()
+                };
+
+                // 记录请求体
+                if !body_str.contains("truncated") || body_len <= log_max {
+                    if !body_str.is_empty() {
+                        request_log.push_str(&format!("Body:\n{}\n", body_str));
+                    }
+                } else {
+                    request_log.push_str(&format!("Body: (truncated, {} bytes total)\n", body_len));
+                }
+            } else {
+                request_log.push_str(&format!("Body: (multipart, {} bytes total, skipped)\n", body_len));
             }
             request_log.push_str("======================\n");
             write_log(&request_log);
@@ -231,17 +336,23 @@ where
                  Headers:\n{}",
                 Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 method, uri, status.as_u16(), elapsed,
-                format_headers(&resp_headers)
+                format_headers(&resp_headers, log_max)
             );
 
-            if !resp_body_str.is_empty() {
+            // 跳过静态文件/上传文件的 body 日志（二进制内容无价值）
+            let skip_body = uri_path.starts_with("/api/uploads/") || uri_path.starts_with("/static/");
+
+            if !resp_body_str.is_empty() && !skip_body {
                 // 截断过长的响应体
-                let display_body = if resp_body_str.len() > 2000 {
-                    format!("{}...(truncated, {} bytes total)", &resp_body_str[..2000], resp_body_str.len())
+                if log_max > 0 && resp_body_str.len() > log_max {
+                    let truncated = &resp_body_str[..log_max];
+                    response_log.push_str(&format!("Body: (truncated, {} bytes total)\n", resp_body_str.len()));
+                    response_log.push_str(&format!("{}\n", truncated));
                 } else {
-                    resp_body_str.clone()
-                };
-                response_log.push_str(&format!("Body:\n{}\n", display_body));
+                    response_log.push_str(&format!("Body:\n{}\n", resp_body_str));
+                }
+            } else if !resp_body_str.is_empty() && skip_body {
+                response_log.push_str(&format!("Body: (binary, {} bytes total, skipped)\n", resp_body_bytes.len()));
             }
             response_log.push_str("=======================\n");
             write_log(&response_log);
@@ -397,6 +508,16 @@ fn compute_hash(data: &[u8]) -> String {
     format!("sha256:{}", hex::encode(hasher.finalize()))
 }
 
+/// 规范化下载 URL：相对路径补上域名和 /api/ 前缀，绝对路径原样返回
+fn normalize_download_url(url: &str, domain: &str) -> String {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        return url.to_string();
+    }
+    // 数据库存的是 /uploads/xxx，补上 /api/ 前缀和域名
+    let path = url.strip_prefix('/').unwrap_or(url);
+    format!("https://{}{}/{}", domain, "/api", path)
+}
+
 /// 从文件名猜测版本号，如 zebra-ssh-1.2.0.exe -> Some("1.2.0")
 fn guess_version_from_filename(name: &str) -> Option<String> {
     let name = name.split('.').next().unwrap_or(name);
@@ -445,7 +566,11 @@ async fn check_version(
             };
 
             if has_update {
-                Ok(Json(info))
+                let normalized = VersionInfo {
+                    download_url: normalize_download_url(&info.download_url, &state.domain),
+                    ..info
+                };
+                Ok(Json(normalized))
             } else {
                 // 已是最新
                 Ok(Json(VersionInfo {
@@ -484,7 +609,13 @@ async fn get_latest(
     let platform = query.get("platform").map(|s| s.as_str()).unwrap_or("windows");
     let db = state.db.lock().unwrap();
     match db_get_latest(&db, platform) {
-        Some(info) => Ok(Json(info)),
+        Some(info) => {
+            let normalized = VersionInfo {
+                download_url: normalize_download_url(&info.download_url, &state.domain),
+                ..info
+            };
+            Ok(Json(normalized))
+        }
         None => Err((
             StatusCode::NOT_FOUND,
             Json(ApiResponse {
@@ -857,18 +988,22 @@ fn admin_html(static_dir: &str) -> String {
 async fn main() {
     let args: Vec<String> = std::env::args().collect();
 
-    let port: u16 = args.windows(2)
+    // 加载配置（config.toml > 命令行参数 > 默认值）
+    let config = Config::load();
+
+    let port = args.windows(2)
         .find(|w| w[0] == "--port")
         .and_then(|w| w[1].parse().ok())
-        .unwrap_or(8686);
+        .or(config.port);
 
     let static_dir = args.windows(2)
         .find(|w| w[0] == "--static-dir")
         .map(|w| w[1].clone())
-        .unwrap_or_else(|| "static".to_string());
+        .unwrap_or_else(|| config.static_dir().to_string());
 
-    // 使用 runtimes 目录存放数据库和上传文件
-    let runtimes_dir = "runtimes";
+    // 使用配置的数据目录存放数据库和上传文件
+    let runtimes_dir = config.data_dir();
+    std::env::set_var("ZEBRA_DATA_DIR", runtimes_dir);
     std::fs::create_dir_all(runtimes_dir).ok();
     let db_path = format!("{}/versions.db", runtimes_dir);
     let uploads_dir = format!("{}/uploads", runtimes_dir);
@@ -881,12 +1016,13 @@ async fn main() {
     let state = Arc::new(AppState {
         db: Mutex::new(conn),
         uploads_dir: uploads_dir.clone(),
+        domain: config.domain().to_string(),
         start_time: Instant::now(),
         started_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         pid: std::process::id(),
     });
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], port.unwrap_or(8686)));
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -901,31 +1037,38 @@ async fn main() {
         .route("/api/version/latest", get(get_latest))
         .route("/api/health", get(health_check))
         // 管理后台
-        .route("/admin", get(move || async move { Html(admin_html(&static_dir_clone)) }))
-        .route("/admin/api/versions", get(admin_list_versions))
-        .route("/admin/api/upload", post(admin_upload).layer(DefaultBodyLimit::max(100 * 1024 * 1024)))
-        .route("/admin/api/versions/{id}", axum::routing::put(admin_update_version))
-        .route("/admin/api/versions/{id}", axum::routing::delete(admin_delete_version))
+        .route("/api/admin", get(move || async move { Html(admin_html(&static_dir_clone)) }))
+        .route("/api/admin/versions", get(admin_list_versions))
+        .route("/api/admin/upload", post(admin_upload).layer(DefaultBodyLimit::max(100 * 1024 * 1024)))
+        .route("/api/admin/versions/{id}", axum::routing::put(admin_update_version))
+        .route("/api/admin/versions/{id}", axum::routing::delete(admin_delete_version))
         // 静态文件服务（上传的文件 + static 目录）
-        .nest_service("/uploads", ServeDir::new(&uploads_dir))
+        .nest_service("/api/uploads", ServeDir::new(&uploads_dir))
         .nest_service("/static", ServeDir::new(&static_dir))
-        .layer(LoggingLayer)
+        .layer(LoggingLayer { log_max_bytes: config.log_max_bytes.unwrap_or(2048) })
         .layer(cors)
         .with_state(state);
 
     println!("Zebra Update Server running on http://{}", addr);
     println!();
-    println!("  Admin Panel:  http://{}/admin", addr);
+    println!("  Admin Panel:  http://{}/api/admin", addr);
     println!("  API Health:   http://{}/api/health", addr);
     println!("  Version API:  POST http://{}/api/version", addr);
     println!();
-    println!("  Data:         runtimes/versions.db");
-    println!("  Uploads:      runtimes/uploads/");
-    println!("  Logs:         runtimes/logs/api-*.log");
+    println!("  Config:       config.toml");
+    println!("  Data:         {}/versions.db", runtimes_dir);
+    println!("  Uploads:      {}/uploads/", runtimes_dir);
+    println!("  Logs:         {}/logs/api-*.log", runtimes_dir);
     println!();
     println!("  Options:");
-    println!("    --port <PORT>       Server port (default: 8686)");
-    println!("    --static-dir <DIR>  Static files directory (default: static)");
+    println!("    --port <PORT>       Server port (overrides config.toml)");
+    println!("    --static-dir <DIR>  Static files directory (overrides config.toml)");
+    println!();
+    println!("  config.toml 示例:");
+    println!("    port = 8686");
+    println!("    domain = \"zebra.dart.xin\"");
+    println!("    data_dir = \"runtimes\"");
+    println!("    static_dir = \"static\"");
     println!();
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

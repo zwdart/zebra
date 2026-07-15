@@ -1,3 +1,24 @@
+# 启动运行zebra-api服务
+```
+# 3. 上传服务文件
+scp packer/zebra-api.service root@your-server:/etc/systemd/system/zebra-api.service
+# 4. 启动并设置开机自启
+sudo systemctl daemon-reload
+sudo systemctl enable --now zebra-api
+# 5. 查看状态
+sudo systemctl status zebra-api
+# 6. 查看日志
+sudo journalctl -u zebra-api -f
+服务文件路径 /etc/systemd/system/zebra-api.service，服务名 zebra-api。
+
+# 7. 停止服务
+sudo systemctl stop zebra-api
+# 8. 禁用开机自启
+sudo systemctl disable zebra-api
+# 9. 重启服务  
+sudo systemctl restart zebra-api
+```
+
 # Icon Generator
 
 从 SVG 文件生成各平台标准应用图标。
@@ -123,19 +144,3 @@ A: 直接再次运行命令即可覆盖旧文件。
 
 **Q: 图标边缘有锯齿?**
 A: 确保 SVG 源文件足够大 (1024x1024)，工具会从高分辨率渲染后缩放。
-
-
-
----启动运行zebra-api服务---
-```
-# 3. 上传服务文件
-scp packer/zebra-api.service root@your-server:/etc/systemd/system/zebra-api.service
-# 4. 启动并设置开机自启
-sudo systemctl daemon-reload
-sudo systemctl enable --now zebra-api
-# 5. 查看状态
-sudo systemctl status zebra-api
-# 6. 查看日志
-sudo journalctl -u zebra-api -f
-服务文件路径 /etc/systemd/system/zebra-api.service，服务名 zebra-api。
-```
