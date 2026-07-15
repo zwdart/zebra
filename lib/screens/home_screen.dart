@@ -9,6 +9,7 @@ import 'connection_form_screen.dart';
 import 'terminal_screen.dart';
 import 'sftp_screen.dart';
 import 'settings_screen.dart';
+import 'discovery_screen.dart';
 import 'monitor_screen.dart';
 import 'update_dialog.dart';
 import '../widgets/connection_card.dart';
@@ -51,6 +52,16 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(loc.appTitle),
         actions: [
           IconButton(
+            icon: const Icon(Icons.explore),
+            tooltip: loc.discover,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DiscoveryScreen()),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             tooltip: loc.settings,
             onPressed: () {
@@ -68,6 +79,18 @@ class _HomeScreenState extends State<HomeScreen> {
             CustomTitleBar(
               title: loc.appTitle,
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.explore, size: 18),
+                  tooltip: loc.discover,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DiscoveryScreen()),
+                    );
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
                 IconButton(
                   icon: const Icon(Icons.settings, size: 18),
                   tooltip: loc.settings,

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zebra SSH - 版本管理</title>
+<title>Zebra SSH - 管理后台</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
@@ -62,45 +62,99 @@ td { font-size: 14px; }
 .changelog-preview { max-height: 60px; overflow-y: auto; font-size: 12px; color: #666; white-space: pre-wrap; background: #fafafa; padding: 6px 8px; border-radius: 4px; line-height: 1.4; }
 .empty-state { text-align: center; padding: 48px; color: #999; }
 .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
-.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; }
-.file-hash { font-family: monospace; font-size: 11px; color: #999; word-break: break-all; max-width: 120px; display: block; }
+.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .file-name { font-family: monospace; font-size: 12px; color: #555; }
 .stats-bar { display: flex; gap: 24px; padding: 12px 20px; background: #fafafa; border-bottom: 1px solid #eee; font-size: 13px; color: #666; }
 .stats-bar span { display: flex; align-items: center; gap: 4px; }
 .stats-bar .count { font-weight: 600; color: #333; }
+.tab-nav { display: flex; gap: 0; border-bottom: 2px solid #eee; }
+.tab-btn { padding: 12px 24px; border: none; background: transparent; font-size: 15px; font-weight: 500; color: #666; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+.tab-btn:hover { color: #333; }
+.tab-btn.active { color: #1a73e8; border-bottom-color: #1a73e8; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.type-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.type-badge-0 { background: #e3f2fd; color: #1565c0; }
+.type-badge-1 { background: #fff3e0; color: #e65100; }
+.type-badge-2 { background: #fce4ec; color: #c62828; }
+.enabled-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+.enabled-true { background: #e8f5e9; color: #2e7d32; }
+.enabled-false { background: #fafafa; color: #999; }
+/* Pagination */
+.pagination { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 16px 20px; border-top: 1px solid #eee; }
+.pagination button { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+.pagination button:hover:not(:disabled) { background: #f5f5f5; border-color: #999; }
+.pagination button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
+.pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+.pagination .page-info { font-size: 13px; color: #666; margin: 0 8px; }
+.page-size-select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>Zebra SSH - 版本管理</h1>
+  <h1>Zebra SSH - 管理后台</h1>
   <span class="badge">Admin</span>
 </div>
 
 <div class="container">
-  <div class="card">
-    <div class="card-header">
-      <h2>版本列表</h2>
-      <div style="display:flex;gap:12px;align-items:center;">
-        <div class="filter-bar" id="filter-bar">
-          <button class="btn-filter active" data-platform="all" onclick="filterPlatform('all')">全部</button>
-          <button class="btn-filter" data-platform="windows" onclick="filterPlatform('windows')">Windows</button>
-          <button class="btn-filter" data-platform="linux" onclick="filterPlatform('linux')">Linux</button>
-          <button class="btn-filter" data-platform="macos" onclick="filterPlatform('macos')">macOS</button>
-          <button class="btn-filter" data-platform="android" onclick="filterPlatform('android')">Android</button>
-          <button class="btn-filter" data-platform="ios" onclick="filterPlatform('ios')">iOS</button>
-        </div>
-        <button class="btn btn-primary" onclick="openUploadModal()">+ 上传新版本</button>
-      </div>
+  <div class="card" style="margin-bottom:0;border-radius:8px 8px 0 0;">
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab('versions')">版本管理</button>
+      <button class="tab-btn" onclick="switchTab('discoveries')">发现管理</button>
     </div>
-    <div class="stats-bar" id="stats-bar"></div>
-    <div class="card-body">
-      <div id="versions-table"></div>
+  </div>
+
+  <!-- 版本管理 Tab -->
+  <div class="tab-panel active" id="tab-versions">
+    <div class="card">
+      <div class="card-header">
+        <h2>版本列表</h2>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <div class="filter-bar" id="filter-bar">
+            <button class="btn-filter active" data-platform="all" onclick="filterPlatform('all')">全部</button>
+            <button class="btn-filter" data-platform="windows" onclick="filterPlatform('windows')">Windows</button>
+            <button class="btn-filter" data-platform="linux" onclick="filterPlatform('linux')">Linux</button>
+            <button class="btn-filter" data-platform="macos" onclick="filterPlatform('macos')">macOS</button>
+            <button class="btn-filter" data-platform="android" onclick="filterPlatform('android')">Android</button>
+            <button class="btn-filter" data-platform="ios" onclick="filterPlatform('ios')">iOS</button>
+          </div>
+          <button class="btn btn-primary" onclick="openUploadModal()">+ 上传新版本</button>
+        </div>
+      </div>
+      <div class="stats-bar" id="stats-bar"></div>
+      <div class="card-body" style="padding-bottom:0;">
+        <div id="versions-table"></div>
+      </div>
+      <div class="pagination" id="versions-pagination"></div>
+    </div>
+  </div>
+
+  <!-- 发现管理 Tab -->
+  <div class="tab-panel" id="tab-discoveries">
+    <div class="card">
+      <div class="card-header">
+        <h2>发现列表</h2>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <div class="filter-bar" id="discovery-filter-bar">
+            <button class="btn-filter active" data-type="all" onclick="filterDiscoveryType('all')">全部</button>
+            <button class="btn-filter" data-type="0" onclick="filterDiscoveryType(0)">官方</button>
+            <button class="btn-filter" data-type="1" onclick="filterDiscoveryType(1)">推荐</button>
+            <button class="btn-filter" data-type="2" onclick="filterDiscoveryType(2)">广告</button>
+          </div>
+          <button class="btn btn-primary" onclick="openDiscoveryCreateModal()">+ 新增发现</button>
+        </div>
+      </div>
+      <div class="stats-bar" id="discovery-stats-bar"></div>
+      <div class="card-body" style="padding-bottom:0;">
+        <div id="discoveries-table"></div>
+      </div>
+      <div class="pagination" id="discoveries-pagination"></div>
     </div>
   </div>
 </div>
 
-<!-- 上传弹窗 -->
+<!-- 上传版本弹窗 -->
 <div class="modal-overlay" id="upload-modal">
   <div class="modal">
     <div class="modal-header">
@@ -147,25 +201,23 @@ td { font-size: 14px; }
           </div>
           <div class="form-group">
             <label>版本号 *</label>
-            <input type="text" id="upload-version" placeholder="如 1.2.0（可从文件名自动识别）">
-            <div class="hint">如果未从文件名自动识别到，需手动添加</div>
+            <input type="text" id="upload-version" placeholder="如 1.2.0">
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>版本码 (version_code)</label>
+            <label>版本码</label>
             <input type="number" id="upload-version-code" placeholder="留空则自动使用数据库ID">
-            <div class="hint">用于版本比较，留空则使用自增ID</div>
           </div>
         </div>
         <div class="form-group">
           <label>更新日志</label>
-          <textarea id="upload-changelog" placeholder="支持多行，如：&#10;- 新增功能&#10;- 修复问题"></textarea>
+          <textarea id="upload-changelog" placeholder="支持多行"></textarea>
         </div>
         <div class="form-row">
           <div class="form-group">
             <label>最低支持版本</label>
-            <input type="text" id="upload-min-version" placeholder="如 1.0.0（可为空）">
+            <input type="text" id="upload-min-version">
           </div>
           <div class="form-group">
             <label>强制更新</label>
@@ -184,7 +236,7 @@ td { font-size: 14px; }
   </div>
 </div>
 
-<!-- 编辑弹窗 -->
+<!-- 编辑版本弹窗 -->
 <div class="modal-overlay" id="edit-modal">
   <div class="modal">
     <div class="modal-header">
@@ -200,17 +252,15 @@ td { font-size: 14px; }
         </div>
         <div class="form-group">
           <label>文件名</label>
-          <input type="text" id="edit-file-name" placeholder="如 zebra-ssh-1.2.0.exe">
-          <div class="hint">仅文件类型有效，URL类型请修改下载链接</div>
+          <input type="text" id="edit-file-name">
         </div>
         <div class="form-group">
           <label>下载链接</label>
-          <input type="text" id="edit-download-url" placeholder="本地路径或外部URL">
-          <div class="hint">文件类型显示 /api/uploads/文件名，URL类型可填完整链接</div>
+          <input type="text" id="edit-download-url">
         </div>
         <div class="form-group">
-          <label>版本码 (version_code)</label>
-          <input type="number" id="edit-version-code" placeholder="留空则使用自增ID">
+          <label>版本码</label>
+          <input type="number" id="edit-version-code">
         </div>
         <div class="form-group">
           <label>更新日志</label>
@@ -238,93 +288,185 @@ td { font-size: 14px; }
   </div>
 </div>
 
+<!-- 新增/编辑发现弹窗 -->
+<div class="modal-overlay" id="discovery-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="discovery-modal-title">新增发现</h3>
+      <button class="modal-close" onclick="closeModal('discovery-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="discovery-form" onsubmit="return handleDiscoverySave(event)">
+        <input type="hidden" id="discovery-edit-id">
+        <div class="form-row">
+          <div class="form-group">
+            <label>类型 *</label>
+            <select id="discovery-type" required>
+              <option value="0">官方</option>
+              <option value="1">推荐</option>
+              <option value="2">广告</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>排序</label>
+            <input type="number" id="discovery-sort" value="0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>名称 *</label>
+          <input type="text" id="discovery-name" required>
+        </div>
+        <div class="form-group">
+          <label>简介</label>
+          <textarea id="discovery-desc"></textarea>
+        </div>
+        <div class="form-group">
+          <label>链接 URL *</label>
+          <input type="url" id="discovery-url" required>
+        </div>
+        <div class="form-group">
+          <label>图标 URL</label>
+          <input type="url" id="discovery-icon">
+        </div>
+        <div class="form-group">
+          <label>启用</label>
+          <select id="discovery-enabled">
+            <option value="true">是</option>
+            <option value="false">否</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('discovery-modal')">取消</button>
+          <button type="submit" class="btn btn-primary" id="discovery-save-btn">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-// 自动检测 API 基础路径：管理面板在 /admin.html 时，API 在 /api/admin
+// ===================== Common =====================
 const API_BASE = '/api/admin';
-let selectedFile = null;
-let allVersions = [];
-let currentFilter = 'all';
+const PAGE_SIZES = [10, 20, 50, 100];
 
-async function loadVersions() {
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+  if (tab === 'versions') {
+    document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+    document.getElementById('tab-versions').classList.add('active');
+    loadVersions();
+  } else {
+    document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+    document.getElementById('tab-discoveries').classList.add('active');
+    loadDiscoveries();
+  }
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ===================== 版本管理 (分页) =====================
+let selectedFile = null;
+let currentFilter = 'all';
+let versionPage = 1;
+let versionPageSize = 20;
+let versionTotal = 0;
+let versionData = [];
+
+async function loadVersions(page) {
+  if (page !== undefined) versionPage = page;
   try {
-    const res = await fetch(`${API_BASE}/versions`);
+    let url = `${API_BASE}/versions?page=${versionPage}&size=${versionPageSize}`;
+    if (currentFilter !== 'all') url += `&platform=${currentFilter}`;
+    const res = await fetch(url);
     const json = await res.json();
-    allVersions = json.data || [];
-    renderTable(allVersions);
+    versionData = json.data || [];
+    versionTotal = json.total || 0;
+    renderVersionTable(versionData);
+    renderVersionPagination();
+    // stats bar (uses total for all platforms)
+    updateVersionStats();
   } catch (e) {
     showToast('加载失败: ' + e.message, 'error');
   }
 }
 
-function filterPlatform(platform) {
-  currentFilter = platform;
-  document.querySelectorAll('.btn-filter').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.platform === platform);
-  });
-  const filtered = platform === 'all' ? allVersions : allVersions.filter(v => v.platform === platform);
-  renderTable(filtered);
+async function updateVersionStats() {
+  // Fetch counts per platform (small requests, could be optimized with a dedicated endpoint)
+  const platforms = ['windows', 'linux', 'macos', 'android', 'ios'];
+  const counts = { total: versionTotal };
+  for (const p of platforms) {
+    try {
+      const res = await fetch(`${API_BASE}/versions?page=1&size=1&platform=${p}`);
+      const json = await res.json();
+      counts[p] = json.total || 0;
+    } catch { counts[p] = 0; }
+  }
+  document.getElementById('stats-bar').innerHTML = `
+    <span>共 <span class="count">${counts.total}</span> 个版本</span>
+    <span>Windows: <span class="count">${counts.windows}</span></span>
+    <span>Linux: <span class="count">${counts.linux}</span></span>
+    <span>macOS: <span class="count">${counts.macos}</span></span>
+    <span>Android: <span class="count">${counts.android}</span></span>
+    <span>iOS: <span class="count">${counts.ios}</span></span>
+  `;
 }
 
-function renderTable(versions) {
-  const container = document.getElementById('versions-table');
-  const statsBar = document.getElementById('stats-bar');
-
-  const stats = { total: allVersions.length };
-  ['windows', 'linux', 'macos', 'android', 'ios'].forEach(p => {
-    stats[p] = allVersions.filter(v => v.platform === p).length;
+function filterPlatform(platform) {
+  currentFilter = platform;
+  document.querySelectorAll('#filter-bar .btn-filter').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.platform === platform);
   });
-  statsBar.innerHTML = `
-    <span>共 <span class="count">${stats.total}</span> 个版本</span>
-    <span>Windows: <span class="count">${stats.windows}</span></span>
-    <span>Linux: <span class="count">${stats.linux}</span></span>
-    <span>macOS: <span class="count">${stats.macos}</span></span>
-    <span>Android: <span class="count">${stats.android}</span></span>
-    <span>iOS: <span class="count">${stats.ios}</span></span>
-  `;
+  versionPage = 1;
+  loadVersions();
+}
 
+function renderVersionTable(versions) {
+  const container = document.getElementById('versions-table');
   if (versions.length === 0) {
-    container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无版本数据，请上传第一个版本</p></div>';
+    container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无版本数据</p></div>';
     return;
   }
-
-  // 找出每个平台的最新版本 (version_code 最大)
-  const latestPerPlatform = {};
-  for (const v of allVersions) {
-    if (!latestPerPlatform[v.platform] || v.version_code > latestPerPlatform[v.platform].version_code) {
-      latestPerPlatform[v.platform] = v;
-    }
-  }
-
-  let html = `<table>
-    <thead><tr>
-      <th>ID</th><th>平台</th><th>版本</th><th>版本码</th><th>类型</th><th>文件名/链接</th><th>文件大小</th><th>更新日志</th><th>最低版本</th><th>强制</th><th>发布日期</th><th>操作</th>
-    </tr></thead><tbody>`;
-
+  let html = `<table><thead><tr>
+    <th>ID</th><th>平台</th><th>版本</th><th>版本码</th><th>类型</th><th>文件名/链接</th><th>大小</th><th>更新日志</th><th>最低版本</th><th>强制</th><th>发布日期</th><th>操作</th>
+  </tr></thead><tbody>`;
   for (const v of versions) {
     const pClass = `platform-${v.platform}`;
-    const logPreview = v.changelog ? v.changelog.substring(0, 60) + (v.changelog.length > 60 ? '...' : '') : '-';
+    const log = v.changelog ? (v.changelog.length > 60 ? v.changelog.substring(0, 60) + '...' : v.changelog) : '-';
     const size = formatSize(v.file_size);
-    const minVer = v.min_supported_version || '-';
-    const date = v.release_date || '-';
-    const isLatest = latestPerPlatform[v.platform] && latestPerPlatform[v.platform].id === v.id;
-    const latestBadge = isLatest ? ' <span style="color:#2e7d32;font-size:11px;font-weight:500;">[最新]</span>' : '';
     const typeLabel = v.type === 'url' ? '<span style="color:#1a73e8;">链接</span>' : '文件';
     const displayUrl = v.type === 'url' ? (v.download_url || '-') : (v.file_name || '-');
     const nameTitle = v.type === 'url' ? v.download_url : v.file_name;
     html += `<tr>
       <td>${v.id}</td>
       <td><span class="platform-badge ${pClass}">${v.platform}</span></td>
-      <td><strong>${v.version}</strong>${latestBadge}</td>
+      <td><strong>${escHtml(v.version)}</strong></td>
       <td>${v.version_code}</td>
       <td>${typeLabel}</td>
-      <td><span class="file-name" title="${nameTitle || ''}" style="cursor:pointer;" onclick="copyToClipboard('${(nameTitle || '').replace(/'/g, "\\'")}')" >${displayUrl}</span></td>
+      <td><span class="file-name" title="${escHtml(nameTitle)}" style="cursor:pointer;" onclick="copyToClipboard('${escHtml(nameTitle||'').replace(/'/g, "\\'")}')">${escHtml(displayUrl)}</span></td>
       <td>${v.type === 'url' ? '-' : size}</td>
-      <td><div class="changelog-preview" title="${(v.changelog || '').replace(/"/g, '&quot;')}">${logPreview}</div></td>
-      <td>${minVer}</td>
+      <td><div class="changelog-preview" title="${escHtml(v.changelog)}">${escHtml(log)}</div></td>
+      <td>${v.min_supported_version || '-'}</td>
       <td>${v.force_update ? '<span class="force-badge">强制</span>' : '-'}</td>
-      <td>${date}</td>
+      <td>${v.release_date || '-'}</td>
       <td style="white-space:nowrap;">
         <button class="btn btn-sm btn-ghost" onclick="openEditModal(${v.id})">编辑</button>
         <button class="btn btn-sm btn-danger" onclick="deleteVersion(${v.id})">删除</button>
@@ -335,12 +477,31 @@ function renderTable(versions) {
   container.innerHTML = html;
 }
 
+function renderVersionPagination() {
+  const totalPages = Math.max(1, Math.ceil(versionTotal / versionPageSize));
+  const container = document.getElementById('versions-pagination');
+
+  let html = '';
+  html += `<select class="page-size-select" onchange="versionPageSize=+this.value;versionPage=1;loadVersions()">${PAGE_SIZES.map(s => `<option value="${s}" ${s===versionPageSize?'selected':''}>${s} 条/页</option>`).join('')}</select>`;
+  html += `<button ${versionPage<=1?'disabled':''} onclick="loadVersions(1)">首页</button>`;
+  html += `<button ${versionPage<=1?'disabled':''} onclick="loadVersions(${versionPage-1})">上一页</button>`;
+  const start = Math.max(1, versionPage - 2);
+  const end = Math.min(totalPages, versionPage + 2);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="${i===versionPage?'active':''}" onclick="loadVersions(${i})">${i}</button>`;
+  }
+  html += `<button ${versionPage>=totalPages?'disabled':''} onclick="loadVersions(${versionPage+1})">下一页</button>`;
+  html += `<button ${versionPage>=totalPages?'disabled':''} onclick="loadVersions(${totalPages})">末页</button>`;
+  html += `<span class="page-info">第 ${versionPage}/${totalPages} 页，共 ${versionTotal} 条</span>`;
+  container.innerHTML = html;
+}
+
 function formatSize(bytes) {
   if (bytes === 0) return '-';
   if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
-  if (bytes < 1024*1024*1024) return (bytes/(1024*1024)).toFixed(1) + ' MB';
-  return (bytes/(1024*1024*1024)).toFixed(1) + ' GB';
+  if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+  if (bytes < 1073741824) return (bytes/1048576).toFixed(1) + ' MB';
+  return (bytes/1073741824).toFixed(1) + ' GB';
 }
 
 function toggleUploadType() {
@@ -358,7 +519,7 @@ function openUploadModal() {
 }
 
 function openEditModal(id) {
-  const v = allVersions.find(x => x.id === id);
+  const v = versionData.find(x => x.id === id);
   if (!v) return;
   document.getElementById('edit-id').value = v.id;
   document.getElementById('edit-version').value = v.version;
@@ -371,19 +532,10 @@ function openEditModal(id) {
   document.getElementById('edit-modal').classList.add('active');
 }
 
-function closeModal(id) {
-  document.getElementById(id).classList.remove('active');
-}
-
 function handleFileSelect(input) {
   if (input.files.length > 0) {
     selectedFile = input.files[0];
-    const sizeText = ' (' + formatSize(selectedFile.size) + ')';
-    document.getElementById('file-drop-text').textContent = selectedFile.name + sizeText;
-    console.log(`[Upload] Selected file: ${selectedFile.name}, size: ${selectedFile.size} bytes`);
-    if (selectedFile.size > 100 * 1024 * 1024) {
-      showToast('文件超过 100MB，上传可能较慢', 'error');
-    }
+    document.getElementById('file-drop-text').textContent = selectedFile.name + ' (' + formatSize(selectedFile.size) + ')';
   }
 }
 
@@ -391,40 +543,22 @@ const drop = document.getElementById('file-drop');
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
 drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
 drop.addEventListener('drop', e => {
-  e.preventDefault();
-  drop.classList.remove('dragover');
+  e.preventDefault(); drop.classList.remove('dragover');
   if (e.dataTransfer.files.length > 0) {
     selectedFile = e.dataTransfer.files[0];
-    const sizeText = ' (' + formatSize(selectedFile.size) + ')';
-    document.getElementById('file-drop-text').textContent = selectedFile.name + sizeText;
-    console.log(`[Upload] Dropped file: ${selectedFile.name}, size: ${selectedFile.size} bytes`);
-    if (selectedFile.size > 100 * 1024 * 1024) {
-      showToast('文件超过 100MB，上传可能较慢', 'error');
-    }
+    document.getElementById('file-drop-text').textContent = selectedFile.name + ' (' + formatSize(selectedFile.size) + ')';
   }
 });
 
 async function handleUpload(e) {
   e.preventDefault();
   const uploadType = document.getElementById('upload-type').value;
-
-  if (uploadType === 'file' && !selectedFile) {
-    showToast('请选择文件', 'error');
-    return false;
-  }
-  if (uploadType === 'url' && !document.getElementById('upload-external-url').value) {
-    showToast('请输入下载链接', 'error');
-    return false;
-  }
-
+  if (uploadType === 'file' && !selectedFile) { showToast('请选择文件', 'error'); return false; }
+  if (uploadType === 'url' && !document.getElementById('upload-external-url').value) { showToast('请输入下载链接', 'error'); return false; }
   const btn = document.getElementById('upload-btn');
-  btn.disabled = true;
-  btn.textContent = '上传中...';
-
+  btn.disabled = true; btn.textContent = '上传中...';
   const fd = new FormData();
-  if (uploadType === 'file') {
-    fd.append('file', selectedFile);
-  }
+  if (uploadType === 'file') fd.append('file', selectedFile);
   fd.append('type', uploadType);
   fd.append('platform', document.getElementById('upload-platform').value);
   fd.append('version', document.getElementById('upload-version').value);
@@ -432,37 +566,14 @@ async function handleUpload(e) {
   fd.append('changelog', document.getElementById('upload-changelog').value);
   fd.append('force_update', document.getElementById('upload-force-update').value);
   fd.append('min_supported_version', document.getElementById('upload-min-version').value);
-  if (uploadType === 'url') {
-    fd.append('external_url', document.getElementById('upload-external-url').value);
-  }
-
+  if (uploadType === 'url') fd.append('external_url', document.getElementById('upload-external-url').value);
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 300000);
-    const res = await fetch(`${API_BASE}/upload`, { method: 'POST', body: fd, signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({ error: `HTTP ${res.status}: ${res.statusText}` }));
-      showToast('上传失败: ' + (json.error || `HTTP ${res.status}`), 'error');
-    } else {
-      const json = await res.json();
-      if (json.success) {
-        showToast('上传成功');
-        closeModal('upload-modal');
-        loadVersions();
-      } else {
-        showToast('上传失败: ' + (json.error || '未知错误'), 'error');
-      }
-    }
-  } catch (err) {
-    let msg = err.message || '未知错误';
-    if (err.name === 'AbortError') msg = '上传超时（超过5分钟）';
-    else if (err.message.includes('Failed to fetch')) msg = '网络错误: 无法连接到服务器，请检查服务是否运行';
-    showToast('上传失败: ' + msg, 'error');
-  }
-
-  btn.disabled = false;
-  btn.textContent = '上传';
+    const res = await fetch(`${API_BASE}/upload`, { method: 'POST', body: fd });
+    const json = await res.json();
+    if (json.success) { showToast('上传成功'); closeModal('upload-modal'); loadVersions(); }
+    else showToast('上传失败: ' + (json.error || ''), 'error');
+  } catch (err) { showToast('上传失败: ' + err.message, 'error'); }
+  btn.disabled = false; btn.textContent = '上传';
   return false;
 }
 
@@ -475,32 +586,18 @@ async function handleEdit(e) {
     force_update: document.getElementById('edit-force-update').value === 'true',
     min_supported_version: document.getElementById('edit-min-version').value,
   };
-  const fileName = document.getElementById('edit-file-name').value;
-  const downloadUrl = document.getElementById('edit-download-url').value;
-  if (fileName) body.file_name = fileName;
-  if (downloadUrl) body.download_url = downloadUrl;
-  const versionCode = document.getElementById('edit-version-code').value;
-  if (versionCode !== '') {
-    body.version_code = parseInt(versionCode, 10);
-  }
-
+  const fn = document.getElementById('edit-file-name').value;
+  const du = document.getElementById('edit-download-url').value;
+  if (fn) body.file_name = fn;
+  if (du) body.download_url = du;
+  const vc = document.getElementById('edit-version-code').value;
+  if (vc !== '') body.version_code = parseInt(vc, 10);
   try {
-    const res = await fetch(`${API_BASE}/versions/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const res = await fetch(`${API_BASE}/versions/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const json = await res.json();
-    if (json.success) {
-      showToast('保存成功');
-      closeModal('edit-modal');
-      loadVersions();
-    } else {
-      showToast('保存失败: ' + (json.error || ''), 'error');
-    }
-  } catch (err) {
-    showToast('保存失败: ' + err.message, 'error');
-  }
+    if (json.success) { showToast('保存成功'); closeModal('edit-modal'); loadVersions(); }
+    else showToast('保存失败: ' + (json.error || ''), 'error');
+  } catch (err) { showToast('保存失败: ' + err.message, 'error'); }
   return false;
 }
 
@@ -509,32 +606,171 @@ async function deleteVersion(id) {
   try {
     const res = await fetch(`${API_BASE}/versions/${id}`, { method: 'DELETE' });
     const json = await res.json();
-    if (json.success) {
-      showToast('已删除');
-      loadVersions();
-    } else {
-      showToast('删除失败', 'error');
-    }
-  } catch (err) {
-    showToast('删除失败: ' + err.message, 'error');
-  }
-}
-
-function showToast(msg, type = 'success') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show ' + type;
-  setTimeout(() => t.className = 'toast', 3000);
+    if (json.success) { showToast('已删除'); loadVersions(); }
+    else showToast('删除失败', 'error');
+  } catch (err) { showToast('删除失败: ' + err.message, 'error'); }
 }
 
 function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('已复制: ' + text, 'success');
-  }).catch(() => {
-    showToast('复制失败', 'error');
-  });
+  navigator.clipboard.writeText(text).then(() => showToast('已复制', 'success')).catch(() => showToast('复制失败', 'error'));
 }
 
+// ===================== 发现管理 (分页) =====================
+let discoveryPage = 1;
+let discoveryPageSize = 20;
+let discoveryTotal = 0;
+let discoveryData = [];
+let currentDiscoveryFilter = 'all';
+const TYPE_NAMES = { 0: '官方', 1: '推荐', 2: '广告' };
+
+async function loadDiscoveries(page) {
+  if (page !== undefined) discoveryPage = page;
+  try {
+    let url = `${API_BASE}/discoveries?page=${discoveryPage}&size=${discoveryPageSize}`;
+    if (currentDiscoveryFilter !== 'all') url += `&type=${currentDiscoveryFilter}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    discoveryData = json.data || [];
+    discoveryTotal = json.total || 0;
+    renderDiscoveryTable(discoveryData);
+    renderDiscoveryPagination();
+    updateDiscoveryStats();
+  } catch (e) {
+    showToast('加载发现列表失败: ' + e.message, 'error');
+  }
+}
+
+function updateDiscoveryStats() {
+  document.getElementById('discovery-stats-bar').innerHTML = `
+    <span>共 <span class="count">${discoveryTotal}</span> 条</span>
+  `;
+}
+
+function filterDiscoveryType(type) {
+  currentDiscoveryFilter = type;
+  document.querySelectorAll('#discovery-filter-bar .btn-filter').forEach(btn => {
+    const btnType = btn.dataset.type === 'all' ? 'all' : parseInt(btn.dataset.type);
+    btn.classList.toggle('active', btnType === type);
+  });
+  discoveryPage = 1;
+  loadDiscoveries();
+}
+
+function renderDiscoveryTable(items) {
+  const container = document.getElementById('discoveries-table');
+  if (items.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无发现数据</p></div>';
+    return;
+  }
+  let html = `<table><thead><tr>
+    <th>ID</th><th>类型</th><th>名称</th><th>简介</th><th>链接</th><th>点击数</th><th>排序</th><th>状态</th><th>创建时间</th><th>操作</th>
+  </tr></thead><tbody>`;
+  for (const d of items) {
+    const typeName = TYPE_NAMES[d.type] || '未知';
+    const desc = d.description ? (d.description.length > 50 ? d.description.substring(0, 50) + '...' : d.description) : '-';
+    const url = d.url ? (d.url.length > 40 ? d.url.substring(0, 40) + '...' : d.url) : '-';
+    const enabledHtml = d.enabled ? '<span class="enabled-badge enabled-true">启用</span>' : '<span class="enabled-badge enabled-false">禁用</span>';
+    html += `<tr>
+      <td>${d.id}</td>
+      <td><span class="type-badge type-badge-${d.type}">${typeName}</span></td>
+      <td><strong>${escHtml(d.name)}</strong></td>
+      <td title="${escHtml(d.description)}">${escHtml(desc)}</td>
+      <td><span class="file-name" title="${escHtml(d.url)}" style="cursor:pointer;" onclick="copyToClipboard('${escHtml(d.url).replace(/'/g, "\\'")}')">${escHtml(url)}</span></td>
+      <td>${d.clicks}</td>
+      <td>${d.sort_order}</td>
+      <td>${enabledHtml}</td>
+      <td>${d.created_at || '-'}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm btn-ghost" onclick="openDiscoveryEditModal(${d.id})">编辑</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteDiscovery(${d.id})">删除</button>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function renderDiscoveryPagination() {
+  const totalPages = Math.max(1, Math.ceil(discoveryTotal / discoveryPageSize));
+  const container = document.getElementById('discoveries-pagination');
+
+  let html = '';
+  html += `<select class="page-size-select" onchange="discoveryPageSize=+this.value;discoveryPage=1;loadDiscoveries()">${PAGE_SIZES.map(s => `<option value="${s}" ${s===discoveryPageSize?'selected':''}>${s} 条/页</option>`).join('')}</select>`;
+  html += `<button ${discoveryPage<=1?'disabled':''} onclick="loadDiscoveries(1)">首页</button>`;
+  html += `<button ${discoveryPage<=1?'disabled':''} onclick="loadDiscoveries(${discoveryPage-1})">上一页</button>`;
+  const start = Math.max(1, discoveryPage - 2);
+  const end = Math.min(totalPages, discoveryPage + 2);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="${i===discoveryPage?'active':''}" onclick="loadDiscoveries(${i})">${i}</button>`;
+  }
+  html += `<button ${discoveryPage>=totalPages?'disabled':''} onclick="loadDiscoveries(${discoveryPage+1})">下一页</button>`;
+  html += `<button ${discoveryPage>=totalPages?'disabled':''} onclick="loadDiscoveries(${totalPages})">末页</button>`;
+  html += `<span class="page-info">第 ${discoveryPage}/${totalPages} 页，共 ${discoveryTotal} 条</span>`;
+  container.innerHTML = html;
+}
+
+function openDiscoveryCreateModal() {
+  document.getElementById('discovery-modal-title').textContent = '新增发现';
+  document.getElementById('discovery-edit-id').value = '';
+  document.getElementById('discovery-form').reset();
+  document.getElementById('discovery-sort').value = '0';
+  document.getElementById('discovery-enabled').value = 'true';
+  document.getElementById('discovery-save-btn').textContent = '创建';
+  document.getElementById('discovery-modal').classList.add('active');
+}
+
+function openDiscoveryEditModal(id) {
+  const d = discoveryData.find(x => x.id === id);
+  if (!d) return;
+  document.getElementById('discovery-modal-title').textContent = '编辑发现';
+  document.getElementById('discovery-edit-id').value = d.id;
+  document.getElementById('discovery-type').value = d.type;
+  document.getElementById('discovery-name').value = d.name;
+  document.getElementById('discovery-desc').value = d.description || '';
+  document.getElementById('discovery-url').value = d.url || '';
+  document.getElementById('discovery-icon').value = d.icon_url || '';
+  document.getElementById('discovery-sort').value = d.sort_order || 0;
+  document.getElementById('discovery-enabled').value = d.enabled ? 'true' : 'false';
+  document.getElementById('discovery-save-btn').textContent = '保存';
+  document.getElementById('discovery-modal').classList.add('active');
+}
+
+async function handleDiscoverySave(e) {
+  e.preventDefault();
+  const id = document.getElementById('discovery-edit-id').value;
+  const isEdit = id !== '';
+  const body = {
+    type: parseInt(document.getElementById('discovery-type').value),
+    name: document.getElementById('discovery-name').value,
+    description: document.getElementById('discovery-desc').value,
+    url: document.getElementById('discovery-url').value,
+    icon_url: document.getElementById('discovery-icon').value,
+    sort_order: parseInt(document.getElementById('discovery-sort').value) || 0,
+    enabled: document.getElementById('discovery-enabled').value === 'true',
+  };
+  try {
+    const url = isEdit ? `${API_BASE}/discoveries/${id}` : `${API_BASE}/discoveries`;
+    const method = isEdit ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const json = await res.json();
+    if (json.success) { showToast(isEdit ? '保存成功' : '创建成功'); closeModal('discovery-modal'); loadDiscoveries(); }
+    else showToast('操作失败: ' + (json.error || ''), 'error');
+  } catch (err) { showToast('操作失败: ' + err.message, 'error'); }
+  return false;
+}
+
+async function deleteDiscovery(id) {
+  const d = discoveryData.find(x => x.id === id);
+  if (!confirm(`确定要删除「${d ? d.name : id}」吗？`)) return;
+  try {
+    const res = await fetch(`${API_BASE}/discoveries/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) { showToast('已删除'); loadDiscoveries(); }
+    else showToast('删除失败', 'error');
+  } catch (err) { showToast('删除失败: ' + err.message, 'error'); }
+}
+
+// ===================== Init =====================
 loadVersions();
 </script>
 </body>

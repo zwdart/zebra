@@ -9,6 +9,7 @@ import '../utils/unique_id.dart';
 import '../providers/theme_provider.dart';
 import '../providers/locale_provider.dart';
 import '../providers/update_provider.dart';
+import '../services/update_service.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'about_screen.dart';
@@ -65,6 +66,18 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   trailing: _buildDatabaseTrailing(context),
                   onTap: () => _onDatabaseTap(context),
+                ),
+                const Divider(),
+                _buildSectionHeader(context, 'API'),
+                ListTile(
+                  leading: const Icon(Icons.cloud),
+                  title: const Text('API Server'),
+                  subtitle: Text(
+                    UpdateService.apiBaseUrl,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showApiUrlDialog(context),
                 ),
                 const Divider(),
                 _buildSectionHeader(context, loc.about),
@@ -396,6 +409,46 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (_) => const UpdateDialog(isManualCheck: true),
+    );
+  }
+
+  void _showApiUrlDialog(BuildContext context) {
+    final controller = TextEditingController(text: UpdateService.apiBaseUrl);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('API Server'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'API Base URL',
+            hintText: 'https://zebra.dart.xin',
+            border: OutlineInputBorder(),
+          ),
+          keyboardType: TextInputType.url,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(AppLocalizations.of(context).cancel),
+          ),
+          TextButton(
+            onPressed: () async {
+              final url = controller.text.trim();
+              if (url.isNotEmpty) {
+                await UpdateService.setApiBaseUrl(url);
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('API URL updated: $url')),
+                  );
+                }
+              }
+            },
+            child: Text(AppLocalizations.of(context).save),
+          ),
+        ],
+      ),
     );
   }
 

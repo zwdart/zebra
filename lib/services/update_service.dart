@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// 版本信息
@@ -85,9 +86,24 @@ class DownloadProgress {
 
 /// 版本更新服务
 class UpdateService {
-  /// API 基础地址（可在设置中修改）
-  // static String apiBaseUrl = 'http://localhost:8686';
-  static String apiBaseUrl = 'https://zebra.dart.xin';
+  static const String _defaultApiBaseUrl = 'https://zebra.dart.xin';
+  static const String _prefKeyApiBaseUrl = 'api_base_url';
+
+  /// API 基础地址
+  static String apiBaseUrl = _defaultApiBaseUrl;
+
+  /// 初始化：从 SharedPreferences 加载保存的 API 地址
+  static Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    apiBaseUrl = prefs.getString(_prefKeyApiBaseUrl) ?? _defaultApiBaseUrl;
+  }
+
+  /// 设置并持久化 API 基础地址
+  static Future<void> setApiBaseUrl(String url) async {
+    apiBaseUrl = url;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefKeyApiBaseUrl, url);
+  }
 
   /// 获取当前平台标识
   static String get _platform {

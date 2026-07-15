@@ -142,6 +142,70 @@ pub struct HealthResponse {
     pub pid: u32,
 }
 
+// ============================================================
+// 发现数据结构
+// ============================================================
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DiscoveryItem {
+    pub id: i64,
+    #[serde(rename = "type")]
+    pub item_type: i32,       // 0=官方, 1=推荐, 2=广告
+    pub name: String,
+    pub description: String,
+    pub url: String,
+    pub icon_url: Option<String>,
+    pub clicks: i64,
+    pub sort_order: i32,
+    pub enabled: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct DiscoveryQuery {
+    pub page: Option<u32>,
+    pub size: Option<u32>,
+    pub sort: Option<String>,    // "time" or "hot"
+    #[serde(rename = "type")]
+    pub item_type: Option<i32>,  // filter by type
+}
+
+#[derive(Deserialize)]
+pub struct DiscoveryCreateRequest {
+    #[serde(rename = "type")]
+    pub item_type: i32,
+    pub name: String,
+    pub description: String,
+    pub url: String,
+    pub icon_url: Option<String>,
+    pub sort_order: Option<i32>,
+    pub enabled: Option<bool>,
+}
+
+#[derive(Deserialize)]
+pub struct DiscoveryUpdateRequest {
+    #[serde(rename = "type")]
+    pub item_type: Option<i32>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub url: Option<String>,
+    pub icon_url: Option<String>,
+    pub clicks: Option<i64>,
+    pub sort_order: Option<i32>,
+    pub enabled: Option<bool>,
+}
+
+#[derive(Serialize)]
+pub struct PaginatedResponse<T: Serialize> {
+    pub success: bool,
+    pub data: Option<T>,
+    pub total: u64,
+    pub page: u32,
+    pub size: u32,
+    pub error: Option<String>,
+}
+
 struct AppState {
     db: Mutex<Connection>,
     uploads_dir: String,
@@ -389,6 +453,23 @@ fn init_db(db: &Connection) {
         );
         CREATE INDEX IF NOT EXISTS idx_versions_platform ON versions(platform);
         CREATE INDEX IF NOT EXISTS idx_versions_platform_version ON versions(platform, version_code DESC);
+
+        CREATE TABLE IF NOT EXISTS discoveries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type INTEGER NOT NULL DEFAULT 0,
+            name TEXT NOT NULL DEFAULT '',
+            description TEXT NOT NULL DEFAULT '',
+            url TEXT NOT NULL DEFAULT '',
+            icon_url TEXT DEFAULT '',
+            clicks INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_discoveries_type ON discoveries(type);
+        CREATE INDEX IF NOT EXISTS idx_discoveries_enabled ON discoveries(enabled);
+        CREATE INDEX IF NOT EXISTS idx_discoveries_sort_order ON discoveries(sort_order);
         "
     ).expect("Failed to create table");
 
@@ -534,6 +615,261 @@ fn guess_version_from_filename(name: &str) -> Option<String> {
 }
 
 // ============================================================
+// 发现数据 - 数据库操作
+// ============================================================
+
+fn db_discovery_get_paginated(
+    db: &Connection,
+    page: u32,
+    size: u32,
+    sort: &str,
+    item_type: Option<i32>,
+) -> (Vec<DiscoveryItem>, u64) {
+    let offset = (page.saturating_sub(1)) * size;
+    let (order_clause, count_params, list_params) = match sort {
+        "hot" => {
+            let mut cp: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+            let mut lp: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+            if let Some(t) = item_type {
+                cp.push(Box::new(t));
+                lp.push(Box::new(t));
+                (
+                    "WHERE enabled = 1 AND type = ?".to_string(),
+                    cp,
+                    lp,
+                )
+            } else {
+                ("".to_string(), cp, lp)
+            }
+        }
+        _ => {
+            // "time" or default
+            let mut cp: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+            let mut lp: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+            if let Some(t) = item_type {
+                cp.push(Box::new(t));
+                lp.push(Box::new(t));
+                (
+                    "WHERE enabled = 1 AND type = ?".to_string(),
+                    cp,
+                    lp,
+                )
+            } else {
+                ("".to_string(), cp, lp)
+            }
+        }
+    };
+
+    let where_enabled = if order_clause.is_empty() {
+        "WHERE enabled = 1"
+    } else {
+        &order_clause
+    };
+
+    // Count total
+    let count_sql = format!("SELECT COUNT(*) FROM discoveries {}", where_enabled);
+    let total: u64 = {
+        let mut count_params_iter = count_params.iter();
+        db.query_row(&count_sql, rusqlite::params_from_iter(count_params_iter.by_ref()), |row| row.get(0)).unwrap_or(0)
+    };
+
+    // Fetch page
+    let order = if sort == "hot" {
+        "ORDER BY clicks DESC, sort_order ASC, id DESC"
+    } else {
+        "ORDER BY created_at DESC, sort_order ASC, id DESC"
+    };
+    let list_sql = format!(
+        "SELECT id, type, name, description, url, icon_url, clicks, sort_order, enabled, created_at, updated_at
+         FROM discoveries {} {} LIMIT ? OFFSET ?",
+        where_enabled, order
+    );
+
+    let mut all_params: Vec<Box<dyn rusqlite::types::ToSql>> = list_params;
+    all_params.push(Box::new(size as i64));
+    all_params.push(Box::new(offset as i64));
+
+    let mut stmt = match db.prepare(&list_sql) {
+        Ok(s) => s,
+        Err(_) => return (vec![], total),
+    };
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
+    let rows = stmt.query_map(params_ref.as_slice(), |row| {
+        Ok(DiscoveryItem {
+            id: row.get(0)?,
+            item_type: row.get(1)?,
+            name: row.get(2)?,
+            description: row.get(3)?,
+            url: row.get(4)?,
+            icon_url: row.get(5)?,
+            clicks: row.get(6)?,
+            sort_order: row.get(7)?,
+            enabled: row.get::<_, i64>(8)? != 0,
+            created_at: row.get(9)?,
+            updated_at: row.get(10)?,
+        })
+    }).unwrap();
+
+    let items: Vec<DiscoveryItem> = rows.filter_map(|r| r.ok()).collect();
+    (items, total)
+}
+
+fn db_discovery_get_random(db: &Connection) -> Option<DiscoveryItem> {
+    db.query_row(
+        "SELECT id, type, name, description, url, icon_url, clicks, sort_order, enabled, created_at, updated_at
+         FROM discoveries WHERE enabled = 1 ORDER BY RANDOM() LIMIT 1",
+        [],
+        |row| {
+            Ok(DiscoveryItem {
+                id: row.get(0)?,
+                item_type: row.get(1)?,
+                name: row.get(2)?,
+                description: row.get(3)?,
+                url: row.get(4)?,
+                icon_url: row.get(5)?,
+                clicks: row.get(6)?,
+                sort_order: row.get(7)?,
+                enabled: row.get::<_, i64>(8)? != 0,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+            })
+        },
+    ).ok()
+}
+
+fn db_discovery_get_by_id(db: &Connection, id: i64) -> Option<DiscoveryItem> {
+    db.query_row(
+        "SELECT id, type, name, description, url, icon_url, clicks, sort_order, enabled, created_at, updated_at
+         FROM discoveries WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(DiscoveryItem {
+                id: row.get(0)?,
+                item_type: row.get(1)?,
+                name: row.get(2)?,
+                description: row.get(3)?,
+                url: row.get(4)?,
+                icon_url: row.get(5)?,
+                clicks: row.get(6)?,
+                sort_order: row.get(7)?,
+                enabled: row.get::<_, i64>(8)? != 0,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+            })
+        },
+    ).ok()
+}
+
+fn db_discovery_increment_clicks(db: &Connection, id: i64) {
+    db.execute(
+        "UPDATE discoveries SET clicks = clicks + 1, updated_at = datetime('now') WHERE id = ?1",
+        params![id],
+    ).ok();
+}
+
+fn db_discovery_get_all(db: &Connection) -> Vec<DiscoveryItem> {
+    let mut stmt = db
+        .prepare(
+            "SELECT id, type, name, description, url, icon_url, clicks, sort_order, enabled, created_at, updated_at
+             FROM discoveries ORDER BY sort_order ASC, id DESC",
+        )
+        .unwrap();
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(DiscoveryItem {
+                id: row.get(0)?,
+                item_type: row.get(1)?,
+                name: row.get(2)?,
+                description: row.get(3)?,
+                url: row.get(4)?,
+                icon_url: row.get(5)?,
+                clicks: row.get(6)?,
+                sort_order: row.get(7)?,
+                enabled: row.get::<_, i64>(8)? != 0,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+            })
+        })
+        .unwrap();
+    rows.filter_map(|r| r.ok()).collect()
+}
+
+fn db_discovery_create(db: &Connection, req: &DiscoveryCreateRequest) -> Result<DiscoveryItem, String> {
+    let sort_order = req.sort_order.unwrap_or(0);
+    let enabled = req.enabled.unwrap_or(true);
+    db.execute(
+        "INSERT INTO discoveries (type, name, description, url, icon_url, clicks, sort_order, enabled)
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7)",
+        params![
+            req.item_type,
+            req.name,
+            req.description,
+            req.url,
+            req.icon_url.as_deref().unwrap_or(""),
+            sort_order,
+            enabled as i64,
+        ],
+    ).map_err(|e| e.to_string())?;
+    let id = db.last_insert_rowid();
+    db_discovery_get_by_id(db, id).ok_or_else(|| "Failed to retrieve created item".to_string())
+}
+
+fn db_discovery_update(db: &Connection, id: i64, req: &DiscoveryUpdateRequest) -> Result<DiscoveryItem, String> {
+    if db_discovery_get_by_id(db, id).is_none() {
+        return Err("Discovery item not found".to_string());
+    }
+
+    let mut updates = Vec::new();
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(v) = req.item_type {
+        updates.push("type = ?"); param_values.push(Box::new(v));
+    }
+    if let Some(ref v) = req.name {
+        updates.push("name = ?"); param_values.push(Box::new(v.clone()));
+    }
+    if let Some(ref v) = req.description {
+        updates.push("description = ?"); param_values.push(Box::new(v.clone()));
+    }
+    if let Some(ref v) = req.url {
+        updates.push("url = ?"); param_values.push(Box::new(v.clone()));
+    }
+    if let Some(ref v) = req.icon_url {
+        updates.push("icon_url = ?"); param_values.push(Box::new(v.clone()));
+    }
+    if let Some(v) = req.clicks {
+        updates.push("clicks = ?"); param_values.push(Box::new(v));
+    }
+    if let Some(v) = req.sort_order {
+        updates.push("sort_order = ?"); param_values.push(Box::new(v));
+    }
+    if let Some(v) = req.enabled {
+        updates.push("enabled = ?"); param_values.push(Box::new(v as i64));
+    }
+
+    if updates.is_empty() {
+        return db_discovery_get_by_id(db, id).ok_or_else(|| "Item not found".to_string());
+    }
+
+    updates.push("updated_at = datetime('now')");
+    let sql = format!("UPDATE discoveries SET {} WHERE id = ?", updates.join(", "));
+    let mut stmt = db.prepare(&sql).map_err(|e| e.to_string())?;
+    param_values.push(Box::new(id));
+    let params: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    stmt.execute(params.as_slice()).map_err(|e| e.to_string())?;
+
+    db_discovery_get_by_id(db, id).ok_or_else(|| "Failed to retrieve updated item".to_string())
+}
+
+fn db_discovery_delete(db: &Connection, id: i64) -> Result<(), String> {
+    if db_discovery_get_by_id(db, id).is_none() {
+        return Err("Discovery item not found".to_string());
+    }
+    db.execute("DELETE FROM discoveries WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ============================================================
 // API Handlers - 版本查询
 // ============================================================
 
@@ -649,14 +985,70 @@ async fn health_check(
 /// GET /admin/api/versions - 获取所有版本
 async fn admin_list_versions(
     State(state): State<Arc<AppState>>,
-) -> Json<ApiResponse<Vec<VersionInfo>>> {
+    axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<serde_json::Value> {
+    let page: u32 = query.get("page").and_then(|v| v.parse().ok()).unwrap_or(1).max(1);
+    let size: u32 = query.get("size").and_then(|v| v.parse().ok()).unwrap_or(20).min(100);
+    let platform = query.get("platform").map(|s| s.as_str());
+
     let db = state.db.lock().unwrap();
-    let versions = db_get_all(&db);
-    Json(ApiResponse {
-        success: true,
-        data: Some(versions),
-        error: None,
-    })
+    let offset = (page.saturating_sub(1)) * size;
+
+    // Count total
+    let (count_sql, mut count_params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(p) = platform {
+        ("SELECT COUNT(*) FROM versions WHERE platform = ?".to_string(), vec![Box::new(p.to_string())])
+    } else {
+        ("SELECT COUNT(*) FROM versions".to_string(), vec![])
+    };
+    let total: u64 = {
+        let mut iter = count_params.iter();
+        db.query_row(&count_sql, rusqlite::params_from_iter(iter.by_ref()), |row| row.get(0)).unwrap_or(0)
+    };
+
+    // Fetch page
+    let (where_clause, mut list_params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(p) = platform {
+        ("WHERE platform = ?".to_string(), vec![Box::new(p.to_string())])
+    } else {
+        ("".to_string(), vec![])
+    };
+    let sql = format!(
+        "SELECT id, platform, version, version_code, type, download_url, force_update,
+                changelog, file_size, file_hash, release_date, min_supported_version, file_name
+         FROM versions {} ORDER BY platform, version_code DESC LIMIT ? OFFSET ?",
+        where_clause
+    );
+    list_params.push(Box::new(size as i64));
+    list_params.push(Box::new(offset as i64));
+
+    let mut stmt = db.prepare(&sql).unwrap();
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> = list_params.iter().map(|p| p.as_ref()).collect();
+    let rows = stmt.query_map(params_ref.as_slice(), |row| {
+        Ok(VersionInfo {
+            id: row.get(0)?,
+            platform: row.get(1)?,
+            version: row.get(2)?,
+            version_code: row.get(3)?,
+            version_type: row.get(4)?,
+            download_url: row.get(5)?,
+            force_update: row.get::<_, i64>(6)? != 0,
+            changelog: row.get(7)?,
+            file_size: row.get(8)?,
+            file_hash: row.get(9)?,
+            release_date: row.get(10)?,
+            min_supported_version: row.get(11)?,
+            file_name: row.get(12)?,
+        })
+    }).unwrap();
+
+    let versions: Vec<VersionInfo> = rows.filter_map(|r| r.ok()).collect();
+    Json(serde_json::json!({
+        "success": true,
+        "data": versions,
+        "total": total,
+        "page": page,
+        "size": size,
+        "error": null
+    }))
 }
 
 /// POST /admin/api/upload - 上传文件或添加URL
@@ -963,6 +1355,188 @@ async fn admin_delete_version(
 }
 
 // ============================================================
+// API Handlers - 发现数据
+// ============================================================
+
+/// GET /api/discoveries?page=1&size=10&sort=time&type=0
+async fn list_discoveries(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(query): axum::extract::Query<DiscoveryQuery>,
+) -> Json<PaginatedResponse<Vec<DiscoveryItem>>> {
+    let page = query.page.unwrap_or(1).max(1);
+    let size = query.size.unwrap_or(10).min(50);
+    let sort = query.sort.as_deref().unwrap_or("time");
+    let item_type = query.item_type;
+
+    let db = state.db.lock().unwrap();
+    let (items, total) = db_discovery_get_paginated(&db, page, size, sort, item_type);
+
+    Json(PaginatedResponse {
+        success: true,
+        data: Some(items),
+        total,
+        page,
+        size,
+        error: None,
+    })
+}
+
+/// GET /api/discoveries/random
+async fn random_discovery(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<DiscoveryItem>, (StatusCode, Json<ApiResponse<()>>)> {
+    let db = state.db.lock().unwrap();
+    match db_discovery_get_random(&db) {
+        Some(item) => Ok(Json(item)),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some("No discovery items available".to_string()),
+            }),
+        )),
+    }
+}
+
+/// POST /api/discoveries/:id/click
+async fn click_discovery(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+) -> Result<Json<ApiResponse<DiscoveryItem>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let db = state.db.lock().unwrap();
+    if db_discovery_get_by_id(&db, id).is_none() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some("Discovery item not found".to_string()),
+            }),
+        ));
+    }
+    db_discovery_increment_clicks(&db, id);
+    let item = db_discovery_get_by_id(&db, id).unwrap();
+    Ok(Json(ApiResponse {
+        success: true,
+        data: Some(item),
+        error: None,
+    }))
+}
+
+/// GET /admin/api/discoveries - 管理后台获取所有发现数据
+async fn admin_list_discoveries(
+    State(state): State<Arc<AppState>>,
+) -> Json<ApiResponse<Vec<DiscoveryItem>>> {
+    let db = state.db.lock().unwrap();
+    let items = db_discovery_get_all(&db);
+    Json(ApiResponse {
+        success: true,
+        data: Some(items),
+        error: None,
+    })
+}
+
+/// POST /admin/api/discoveries - 创建发现数据
+async fn admin_create_discovery(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<DiscoveryCreateRequest>,
+) -> Result<Json<ApiResponse<DiscoveryItem>>, (StatusCode, Json<ApiResponse<()>>)> {
+    if body.name.is_empty() || body.url.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some("Name and URL are required".to_string()),
+            }),
+        ));
+    }
+    if body.item_type < 0 || body.item_type > 2 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some("Type must be 0 (official), 1 (recommended), or 2 (ad)".to_string()),
+            }),
+        ));
+    }
+
+    let db = state.db.lock().unwrap();
+    match db_discovery_create(&db, &body) {
+        Ok(item) => Ok(Json(ApiResponse {
+            success: true,
+            data: Some(item),
+            error: None,
+        })),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some(e),
+            }),
+        )),
+    }
+}
+
+/// PUT /admin/api/discoveries/:id - 更新发现数据
+async fn admin_update_discovery(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+    Json(body): Json<DiscoveryUpdateRequest>,
+) -> Result<Json<ApiResponse<DiscoveryItem>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let db = state.db.lock().unwrap();
+    match db_discovery_update(&db, id, &body) {
+        Ok(item) => Ok(Json(ApiResponse {
+            success: true,
+            data: Some(item),
+            error: None,
+        })),
+        Err(e) => {
+            let status = if e == "Discovery item not found" {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            Err((status, Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some(e),
+            })))
+        }
+    }
+}
+
+/// DELETE /admin/api/discoveries/:id - 删除发现数据
+async fn admin_delete_discovery(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+) -> Result<Json<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let db = state.db.lock().unwrap();
+    match db_discovery_delete(&db, id) {
+        Ok(()) => Ok(Json(ApiResponse {
+            success: true,
+            data: None,
+            error: None,
+        })),
+        Err(e) => {
+            let status = if e == "Discovery item not found" {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            Err((status, Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some(e),
+            })))
+        }
+    }
+}
+
+// ============================================================
 // HTML Admin Panel
 // ============================================================
 
@@ -1036,12 +1610,21 @@ async fn main() {
         .route("/api/version", post(check_version))
         .route("/api/version/latest", get(get_latest))
         .route("/api/health", get(health_check))
+        // 发现数据 API
+        .route("/api/discoveries", get(list_discoveries))
+        .route("/api/discoveries/random", get(random_discovery))
+        .route("/api/discoveries/{id}/click", post(click_discovery))
         // 管理后台
         .route("/api/admin", get(move || async move { Html(admin_html(&static_dir_clone)) }))
         .route("/api/admin/versions", get(admin_list_versions))
         .route("/api/admin/upload", post(admin_upload).layer(DefaultBodyLimit::max(100 * 1024 * 1024)))
         .route("/api/admin/versions/{id}", axum::routing::put(admin_update_version))
         .route("/api/admin/versions/{id}", axum::routing::delete(admin_delete_version))
+        // 发现数据管理 API
+        .route("/api/admin/discoveries", get(admin_list_discoveries))
+        .route("/api/admin/discoveries", post(admin_create_discovery))
+        .route("/api/admin/discoveries/{id}", axum::routing::put(admin_update_discovery))
+        .route("/api/admin/discoveries/{id}", axum::routing::delete(admin_delete_discovery))
         // 静态文件服务（上传的文件 + static 目录）
         .nest_service("/api/uploads", ServeDir::new(&uploads_dir))
         .nest_service("/static", ServeDir::new(&static_dir))

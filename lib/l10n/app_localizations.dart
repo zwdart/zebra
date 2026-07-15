@@ -260,6 +260,18 @@ class AppLocalizations {
   String get releaseDate => translate('releaseDate');
   String get fileSize => translate('fileSize');
 
+  // Discovery
+  String get discover => translate('discover');
+  String get discoveryTypeOfficial => translate('discoveryTypeOfficial');
+  String get discoveryTypeRecommended => translate('discoveryTypeRecommended');
+  String get discoveryTypeAd => translate('discoveryTypeAd');
+  String get discoverySortTime => translate('discoverySortTime');
+  String get discoverySortHot => translate('discoverySortHot');
+  String get discoveryRandom => translate('discoveryRandom');
+  String get discoveryFilterAll => translate('discoveryFilterAll');
+  String get discoveryTotal => translate('discoveryTotal');
+  String get discoveryEmpty => translate('discoveryEmpty');
+
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
     'connections': 'Connections',
@@ -482,6 +494,16 @@ class AppLocalizations {
     'changelog': 'Changelog',
     'releaseDate': 'Release Date',
     'fileSize': 'File Size',
+    'discover': 'Discover',
+    'discoveryTypeOfficial': 'Official',
+    'discoveryTypeRecommended': 'Recommended',
+    'discoveryTypeAd': 'Ad',
+    'discoverySortTime': 'Sort by Time',
+    'discoverySortHot': 'Sort by Hot',
+    'discoveryRandom': 'Random',
+    'discoveryFilterAll': 'All',
+    'discoveryTotal': 'Total',
+    'discoveryEmpty': 'No discovery items yet',
   };
 
   static const Map<String, String> _zh = {
@@ -706,6 +728,16 @@ class AppLocalizations {
     'changelog': '更新日志',
     'releaseDate': '发布日期',
     'fileSize': '文件大小',
+    'discover': '发现',
+    'discoveryTypeOfficial': '官方',
+    'discoveryTypeRecommended': '推荐',
+    'discoveryTypeAd': '广告',
+    'discoverySortTime': '按时间',
+    'discoverySortHot': '按热度',
+    'discoveryRandom': '随机',
+    'discoveryFilterAll': '全部',
+    'discoveryTotal': '共',
+    'discoveryEmpty': '暂无发现内容',
   };
 }
 
