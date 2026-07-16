@@ -20,11 +20,15 @@ class UpdateDialog extends StatefulWidget {
     final provider = context.read<UpdateProvider>();
     await provider.silentCheck();
     if (provider.state == UpdateState.hasUpdate && context.mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: !provider.forceUpdate,
-        builder: (_) => const UpdateDialog(showSkip: true),
-      );
+      // 检查是否在跳过期内
+      final isSkipValid = await UpdateService.isSkipUpdateValid();
+      if (!isSkipValid) {
+        showDialog(
+          context: context,
+          barrierDismissible: !provider.forceUpdate,
+          builder: (_) => const UpdateDialog(showSkip: true),
+        );
+      }
     }
   }
 
@@ -280,7 +284,10 @@ class _UpdateDialogState extends State<UpdateDialog> {
             // 跳过按钮（非强制更新时显示）
             if (widget.showSkip && !provider.forceUpdate)
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  UpdateService.saveSkipUpdateTime();
+                  Navigator.pop(context);
+                },
                 child: Text(loc.skip),
               ),
             // 更新按钮 - 根据类型显示不同文案

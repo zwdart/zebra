@@ -6,7 +6,9 @@ import '../l10n/app_localizations.dart';
 import '../build_info.dart';
 
 class AboutScreen extends StatelessWidget {
-  const AboutScreen({super.key});
+  final VoidCallback? onToggleApiServer;
+
+  const AboutScreen({super.key, this.onToggleApiServer});
 
   final String strEmail = 'zebra@dart.xin';
   final String strWebUrl = 'http://zebra.dart.xin';
@@ -67,11 +69,18 @@ class AboutScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '${loc.buildTime}: ${_getBuildTime()}',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
+                GestureDetector(
+                  onDoubleTap: onToggleApiServer,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                    child: Text(
+                      '${loc.buildTime}: ${_getBuildTime()}',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 40),

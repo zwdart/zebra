@@ -265,6 +265,7 @@ class AppLocalizations {
   String get discoveryTypeOfficial => translate('discoveryTypeOfficial');
   String get discoveryTypeRecommended => translate('discoveryTypeRecommended');
   String get discoveryTypeAd => translate('discoveryTypeAd');
+  String get discoverySortOrder => translate('discoverySortOrder');
   String get discoverySortTime => translate('discoverySortTime');
   String get discoverySortHot => translate('discoverySortHot');
   String get discoveryRandom => translate('discoveryRandom');
@@ -498,6 +499,7 @@ class AppLocalizations {
     'discoveryTypeOfficial': 'Official',
     'discoveryTypeRecommended': 'Recommended',
     'discoveryTypeAd': 'Ad',
+    'discoverySortOrder': 'Sort by Order',
     'discoverySortTime': 'Sort by Time',
     'discoverySortHot': 'Sort by Hot',
     'discoveryRandom': 'Random',
@@ -732,6 +734,7 @@ class AppLocalizations {
     'discoveryTypeOfficial': '官方',
     'discoveryTypeRecommended': '推荐',
     'discoveryTypeAd': '广告',
+    'discoverySortOrder': '按序号',
     'discoverySortTime': '按时间',
     'discoverySortHot': '按热度',
     'discoveryRandom': '随机',

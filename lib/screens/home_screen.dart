@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/connection_provider.dart';
 import '../providers/ssh_provider.dart';
 import '../providers/update_provider.dart';
+import '../services/update_service.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'connection_form_screen.dart';
@@ -36,11 +37,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final provider = context.read<UpdateProvider>();
     await provider.silentCheck();
     if (provider.state == UpdateState.hasUpdate && context.mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: !provider.forceUpdate,
-        builder: (_) => const UpdateDialog(showSkip: true),
-      );
+      // 检查是否在跳过期内
+      final isSkipValid = await UpdateService.isSkipUpdateValid();
+      if (!isSkipValid) {
+        showDialog(
+          context: context,
+          barrierDismissible: !provider.forceUpdate,
+          builder: (_) => const UpdateDialog(showSkip: true),
+        );
+      }
     }
   }
 

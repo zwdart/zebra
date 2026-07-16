@@ -18,7 +18,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   bool _hasMore = true;
   int _currentPage = 1;
   int _total = 0;
-  String _sort = 'time'; // 'time' or 'hot'
+  String _sort = 'order'; // 'order', 'time', or 'hot'
   int? _filterType; // null = all, 0=official, 1=recommended, 2=ad
 
   @override
@@ -50,7 +50,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       _isLoading = false;
       if (result != null) {
         if (refresh) _items.clear();
-        _items.addAll(result.items);
+        final newItems = List<DiscoveryItem>.from(result.items);
+        if (_sort == 'order') {
+          newItems.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+        }
+        _items.addAll(newItems);
         _total = result.total;
         _hasMore = result.hasMore;
         _currentPage++;
@@ -60,7 +64,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
   void _toggleSort() {
     setState(() {
-      _sort = _sort == 'time' ? 'hot' : 'time';
+      if (_sort == 'order') {
+        _sort = 'time';
+      } else if (_sort == 'time') {
+        _sort = 'hot';
+      } else {
+        _sort = 'order';
+      }
     });
     _loadData(refresh: true);
   }
@@ -150,8 +160,18 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               ),
               actions: [
                 IconButton(
-                  icon: Icon(_sort == 'hot' ? Icons.local_fire_department : Icons.access_time),
-                  tooltip: _sort == 'hot' ? loc.discoverySortHot : loc.discoverySortTime,
+                  icon: Icon(
+                    _sort == 'order'
+                        ? Icons.sort
+                        : _sort == 'hot'
+                            ? Icons.local_fire_department
+                            : Icons.access_time,
+                  ),
+                  tooltip: _sort == 'order'
+                      ? loc.discoverySortOrder
+                      : _sort == 'hot'
+                          ? loc.discoverySortHot
+                          : loc.discoverySortTime,
                   onPressed: _toggleSort,
                 ),
                 IconButton(
@@ -170,10 +190,18 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               actions: [
                 IconButton(
                   icon: Icon(
-                    _sort == 'hot' ? Icons.local_fire_department : Icons.access_time,
+                    _sort == 'order'
+                        ? Icons.sort
+                        : _sort == 'hot'
+                            ? Icons.local_fire_department
+                            : Icons.access_time,
                     size: 18,
                   ),
-                  tooltip: _sort == 'hot' ? loc.discoverySortHot : loc.discoverySortTime,
+                  tooltip: _sort == 'order'
+                      ? loc.discoverySortOrder
+                      : _sort == 'hot'
+                          ? loc.discoverySortHot
+                          : loc.discoverySortTime,
                   onPressed: _toggleSort,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 36, minHeight: 36),

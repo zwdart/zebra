@@ -15,8 +15,23 @@ import '../l10n/app_localizations.dart';
 import 'about_screen.dart';
 import 'update_dialog.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _showApiServer = false;
+
+  void toggleApiServerVisibility() {
+    setState(() {
+      _showApiServer = !_showApiServer;
+    });
+    // 切换 API Server 显示时，清除版本更新的7天跳过计时器
+    UpdateService.clearSkipUpdateTime();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,18 +83,20 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () => _onDatabaseTap(context),
                 ),
                 const Divider(),
-                _buildSectionHeader(context, 'API'),
-                ListTile(
-                  leading: const Icon(Icons.cloud),
-                  title: const Text('API Server'),
-                  subtitle: Text(
-                    UpdateService.apiBaseUrl,
-                    style: Theme.of(context).textTheme.bodySmall,
+                if (_showApiServer) ...[
+                  _buildSectionHeader(context, 'API'),
+                  ListTile(
+                    leading: const Icon(Icons.cloud),
+                    title: const Text('API Server'),
+                    subtitle: Text(
+                      UpdateService.apiBaseUrl,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showApiUrlDialog(context),
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _showApiUrlDialog(context),
-                ),
-                const Divider(),
+                  const Divider(),
+                ],
                 _buildSectionHeader(context, loc.about),
                 Consumer<UpdateProvider>(
                   builder: (context, updateProvider, _) {
@@ -125,7 +142,11 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const AboutScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => AboutScreen(
+                          onToggleApiServer: toggleApiServerVisibility,
+                        ),
+                      ),
                     );
                   },
                 ),

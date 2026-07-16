@@ -88,6 +88,8 @@ class DownloadProgress {
 class UpdateService {
   static const String _defaultApiBaseUrl = 'https://zebra.dart.xin';
   static const String _prefKeyApiBaseUrl = 'api_base_url';
+  static const String _prefKeySkipUpdateTime = 'skip_update_time';
+  static const int _skipDays = 7;
 
   /// API 基础地址
   static String apiBaseUrl = _defaultApiBaseUrl;
@@ -96,6 +98,28 @@ class UpdateService {
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     apiBaseUrl = prefs.getString(_prefKeyApiBaseUrl) ?? _defaultApiBaseUrl;
+  }
+
+  /// 保存跳过更新的时间戳
+  static Future<void> saveSkipUpdateTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_prefKeySkipUpdateTime, DateTime.now().millisecondsSinceEpoch);
+  }
+
+  /// 检查是否在跳过期内（7天内）
+  static Future<bool> isSkipUpdateValid() async {
+    final prefs = await SharedPreferences.getInstance();
+    final skipTime = prefs.getInt(_prefKeySkipUpdateTime);
+    if (skipTime == null) return false;
+    final skipDate = DateTime.fromMillisecondsSinceEpoch(skipTime);
+    final now = DateTime.now();
+    return now.difference(skipDate).inDays < _skipDays;
+  }
+
+  /// 清除跳过更新记录（用于测试或手动触发）
+  static Future<void> clearSkipUpdateTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefKeySkipUpdateTime);
   }
 
   /// 设置并持久化 API 基础地址
