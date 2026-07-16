@@ -507,35 +507,6 @@ fn db_get_latest(db: &Connection, platform: &str) -> Option<VersionInfo> {
     ).ok()
 }
 
-fn db_get_all(db: &Connection) -> Vec<VersionInfo> {
-    let mut stmt = db
-        .prepare(
-            "SELECT id, platform, version, version_code, type, download_url, force_update,
-                    changelog, file_size, file_hash, release_date, min_supported_version, file_name
-             FROM versions ORDER BY platform, version_code DESC",
-        )
-        .unwrap();
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(VersionInfo {
-                id: row.get(0)?,
-                platform: row.get(1)?,
-                version: row.get(2)?,
-                version_code: row.get(3)?,
-                version_type: row.get(4)?,
-                download_url: row.get(5)?,
-                force_update: row.get::<_, i64>(6)? != 0,
-                changelog: row.get(7)?,
-                file_size: row.get(8)?,
-                file_hash: row.get(9)?,
-                release_date: row.get(10)?,
-                min_supported_version: row.get(11)?,
-                file_name: row.get(12)?,
-            })
-        })
-        .unwrap();
-    rows.filter_map(|r| r.ok()).collect()
-}
 
 fn db_get_by_id(db: &Connection, id: i64) -> Option<VersionInfo> {
     db.query_row(
@@ -995,7 +966,7 @@ async fn admin_list_versions(
     let offset = (page.saturating_sub(1)) * size;
 
     // Count total
-    let (count_sql, mut count_params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(p) = platform {
+    let (count_sql, count_params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(p) = platform {
         ("SELECT COUNT(*) FROM versions WHERE platform = ?".to_string(), vec![Box::new(p.to_string())])
     } else {
         ("SELECT COUNT(*) FROM versions".to_string(), vec![])

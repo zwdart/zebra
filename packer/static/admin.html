@@ -88,6 +88,34 @@ td { font-size: 14px; }
 .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
 .pagination .page-info { font-size: 13px; color: #666; margin: 0 8px; }
 .page-size-select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .header { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+  .header h1 { font-size: 16px; }
+  .container { padding: 0 12px; margin: 12px auto; }
+  .tab-btn { padding: 10px 14px; font-size: 13px; }
+  .card-header { flex-direction: column; align-items: flex-start; gap: 10px; padding: 12px 14px; }
+  .card-header > div { width: 100%; }
+  .filter-bar { gap: 4px; }
+  .btn-filter { padding: 5px 10px; font-size: 11px; }
+  .card-body { padding: 12px; }
+  .stats-bar { flex-wrap: wrap; gap: 10px; padding: 10px 14px; font-size: 12px; }
+  .pagination { flex-wrap: wrap; gap: 4px; padding: 12px; }
+  .pagination button { padding: 5px 8px; font-size: 12px; }
+  .page-info { font-size: 12px; width: 100%; text-align: center; margin-top: 4px; }
+  .page-size-select { font-size: 11px; }
+  .modal { width: 95%; max-width: 520px; }
+  .modal-body { padding: 14px; }
+  .form-row { flex-direction: column; gap: 0; }
+  th, td { padding: 8px 10px; font-size: 12px; }
+  .btn-sm { padding: 4px 8px; font-size: 11px; }
+}
+@media (max-width: 480px) {
+  .header h1 { font-size: 14px; }
+  .tab-btn { padding: 8px 10px; font-size: 12px; }
+  th, td { padding: 6px 8px; font-size: 11px; }
+}
 </style>
 </head>
 <body>
@@ -100,13 +128,13 @@ td { font-size: 14px; }
 <div class="container">
   <div class="card" style="margin-bottom:0;border-radius:8px 8px 0 0;">
     <div class="tab-nav">
-      <button class="tab-btn active" onclick="switchTab('versions')">版本管理</button>
-      <button class="tab-btn" onclick="switchTab('discoveries')">发现管理</button>
+      <button class="tab-btn" onclick="switchTab('versions')">版本管理</button>
+      <button class="tab-btn active" onclick="switchTab('discoveries')">发现管理</button>
     </div>
   </div>
 
   <!-- 版本管理 Tab -->
-  <div class="tab-panel active" id="tab-versions">
+  <div class="tab-panel" id="tab-versions">
     <div class="card">
       <div class="card-header">
         <h2>版本列表</h2>
@@ -131,7 +159,7 @@ td { font-size: 14px; }
   </div>
 
   <!-- 发现管理 Tab -->
-  <div class="tab-panel" id="tab-discoveries">
+  <div class="tab-panel active" id="tab-discoveries">
     <div class="card">
       <div class="card-header">
         <h2>发现列表</h2>
@@ -445,7 +473,7 @@ function renderVersionTable(versions) {
     container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无版本数据</p></div>';
     return;
   }
-  let html = `<table><thead><tr>
+  let html = `<div class="table-scroll"><table><thead><tr>
     <th>ID</th><th>平台</th><th>版本</th><th>版本码</th><th>类型</th><th>文件名/链接</th><th>大小</th><th>更新日志</th><th>最低版本</th><th>强制</th><th>发布日期</th><th>操作</th>
   </tr></thead><tbody>`;
   for (const v of versions) {
@@ -473,7 +501,7 @@ function renderVersionTable(versions) {
       </td>
     </tr>`;
   }
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   container.innerHTML = html;
 }
 
@@ -662,7 +690,7 @@ function renderDiscoveryTable(items) {
     container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无发现数据</p></div>';
     return;
   }
-  let html = `<table><thead><tr>
+  let html = `<div class="table-scroll"><table><thead><tr>
     <th>ID</th><th>类型</th><th>名称</th><th>简介</th><th>链接</th><th>点击数</th><th>排序</th><th>状态</th><th>创建时间</th><th>操作</th>
   </tr></thead><tbody>`;
   for (const d of items) {
@@ -686,7 +714,7 @@ function renderDiscoveryTable(items) {
       </td>
     </tr>`;
   }
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   container.innerHTML = html;
 }
 
@@ -771,7 +799,7 @@ async function deleteDiscovery(id) {
 }
 
 // ===================== Init =====================
-loadVersions();
+switchTab('discoveries');
 </script>
 </body>
 </html>

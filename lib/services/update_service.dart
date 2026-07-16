@@ -105,6 +105,13 @@ class UpdateService {
     await prefs.setString(_prefKeyApiBaseUrl, url);
   }
 
+  /// 重置为默认 API 地址
+  static Future<void> resetApiBaseUrl() async {
+    apiBaseUrl = _defaultApiBaseUrl;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefKeyApiBaseUrl);
+  }
+
   /// 获取当前平台标识
   static String get _platform {
     if (Platform.isWindows) return 'windows';

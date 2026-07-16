@@ -434,6 +434,19 @@ class SettingsScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () async {
+              await UpdateService.resetApiBaseUrl();
+              controller.text = UpdateService.apiBaseUrl;
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('API URL reset to default')),
+                );
+              }
+            },
+            child: const Text('重置默认'),
+          ),
+          TextButton(
+            onPressed: () async {
               final url = controller.text.trim();
               if (url.isNotEmpty) {
                 await UpdateService.setApiBaseUrl(url);
