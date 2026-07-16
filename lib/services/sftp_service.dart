@@ -158,6 +158,7 @@ class SftpService {
       progress.completed = true;
     } catch (e) {
       progress.error = e.toString();
+      rethrow;
     } finally {
       _activeTransfers.remove(transferId);
       _progressController.add(Map.unmodifiable(_activeTransfers));
@@ -209,6 +210,7 @@ class SftpService {
       progress.completed = true;
     } catch (e) {
       progress.error = e.toString();
+      rethrow;
     } finally {
       _activeTransfers.remove(transferId);
       _progressController.add(Map.unmodifiable(_activeTransfers));

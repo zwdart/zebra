@@ -27,6 +27,7 @@ class _FileUploadInfo {
   final BatchUploadItem item;
   final int size;
   BatchUploadStatus status;
+  String? errorMessage;
 
   _FileUploadInfo({
     required this.item,
@@ -256,6 +257,7 @@ class _BatchUploadProgressDialogState extends State<BatchUploadProgressDialog> {
         _failedFiles.add(p.basename(item.localPath));
         if (fileInfo != null) {
           fileInfo.status = BatchUploadStatus.failed;
+          fileInfo.errorMessage = e.toString();
         }
       }
     }
@@ -612,6 +614,14 @@ class _BatchUploadProgressDialogState extends State<BatchUploadProgressDialog> {
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.bodySmall,
       ),
+      subtitle: (info.status == BatchUploadStatus.failed && info.errorMessage != null)
+          ? Text(
+              info.errorMessage!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error, fontSize: 11),
+            )
+          : null,
       trailing: Text(
         statusText,
         style: theme.textTheme.bodySmall?.copyWith(color: iconColor),
@@ -689,24 +699,47 @@ class _BatchUploadProgressDialogState extends State<BatchUploadProgressDialog> {
           child: ListView.builder(
             shrinkWrap: true,
             itemCount: _failedFiles.length,
-            itemBuilder: (ctx, i) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: [
-                  Icon(Icons.error_outline, size: 12, color: theme.colorScheme.error),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      _failedFiles[i],
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.error,
+            itemBuilder: (ctx, i) {
+              final failedName = _failedFiles[i];
+              final failedInfo = _fileInfos.firstWhere(
+                (f) => f.status == BatchUploadStatus.failed && p.basename(f.item.localPath) == failedName,
+                orElse: () => _FileUploadInfo(item: BatchUploadItem(localPath: '', remotePath: ''), size: 0, status: BatchUploadStatus.failed),
+              );
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.error_outline, size: 12, color: theme.colorScheme.error),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            failedName,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.error,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (failedInfo.errorMessage != null)
+                            Text(
+                              failedInfo.errorMessage!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.error,
+                                fontSize: 11,
+                              ),
+                            ),
+                        ],
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
-              ),
-            ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ],
