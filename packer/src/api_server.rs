@@ -4,7 +4,7 @@ use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Multipart, State},
     http::{Request, StatusCode},
-    response::{Html, Response},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
     body::Body,
 };
@@ -155,6 +155,7 @@ pub struct DiscoveryItem {
     pub description: String,
     pub url: String,
     pub icon_url: Option<String>,
+    pub tags: Option<String>,
     pub clicks: i64,
     pub sort_order: i32,
     pub enabled: bool,
@@ -169,6 +170,7 @@ pub struct DiscoveryQuery {
     pub sort: Option<String>,    // "time" or "hot"
     #[serde(rename = "type")]
     pub item_type: Option<i32>,  // filter by type
+    pub search: Option<String>,  // fuzzy search on name, description, tags
 }
 
 #[derive(Deserialize)]
@@ -179,6 +181,7 @@ pub struct DiscoveryCreateRequest {
     pub description: String,
     pub url: String,
     pub icon_url: Option<String>,
+    pub tags: Option<String>,
     pub sort_order: Option<i32>,
     pub enabled: Option<bool>,
 }
@@ -191,6 +194,7 @@ pub struct DiscoveryUpdateRequest {
     pub description: Option<String>,
     pub url: Option<String>,
     pub icon_url: Option<String>,
+    pub tags: Option<String>,
     pub clicks: Option<i64>,
     pub sort_order: Option<i32>,
     pub enabled: Option<bool>,
@@ -409,7 +413,7 @@ where
             if !resp_body_str.is_empty() && !skip_body {
                 // 截断过长的响应体
                 if log_max > 0 && resp_body_str.len() > log_max {
-                    let truncated = &resp_body_str[..log_max];
+                    let truncated: String = resp_body_str.chars().take(log_max).collect();
                     response_log.push_str(&format!("Body: (truncated, {} bytes total)\n", resp_body_str.len()));
                     response_log.push_str(&format!("{}\n", truncated));
                 } else {
@@ -461,6 +465,7 @@ fn init_db(db: &Connection) {
             description TEXT NOT NULL DEFAULT '',
             url TEXT NOT NULL DEFAULT '',
             icon_url TEXT DEFAULT '',
+            tags TEXT DEFAULT '',
             clicks INTEGER NOT NULL DEFAULT 0,
             sort_order INTEGER NOT NULL DEFAULT 0,
             enabled INTEGER NOT NULL DEFAULT 1,
@@ -477,6 +482,12 @@ fn init_db(db: &Connection) {
     let has_type: bool = db.prepare("SELECT type FROM versions LIMIT 1").is_ok();
     if !has_type {
         db.execute_batch("ALTER TABLE versions ADD COLUMN type TEXT NOT NULL DEFAULT 'file'").ok();
+    }
+
+    // 迁移：为已有数据添加 tags 字段（如果不存在）
+    let has_tags: bool = db.prepare("SELECT tags FROM discoveries LIMIT 1").is_ok();
+    if !has_tags {
+        db.execute_batch("ALTER TABLE discoveries ADD COLUMN tags TEXT DEFAULT ''").ok();
     }
 }
 
@@ -595,54 +606,65 @@ fn db_discovery_get_paginated(
     size: u32,
     sort: &str,
     item_type: Option<i32>,
+    search: Option<&str>,
+) -> (Vec<DiscoveryItem>, u64) {
+    db_discovery_get_paginated_inner(db, page, size, sort, item_type, search, true)
+}
+
+fn db_discovery_get_paginated_admin(
+    db: &Connection,
+    page: u32,
+    size: u32,
+    sort: &str,
+    item_type: Option<i32>,
+    search: Option<&str>,
+) -> (Vec<DiscoveryItem>, u64) {
+    db_discovery_get_paginated_inner(db, page, size, sort, item_type, search, false)
+}
+
+fn db_discovery_get_paginated_inner(
+    db: &Connection,
+    page: u32,
+    size: u32,
+    sort: &str,
+    item_type: Option<i32>,
+    search: Option<&str>,
+    enabled_only: bool,
 ) -> (Vec<DiscoveryItem>, u64) {
     let offset = (page.saturating_sub(1)) * size;
-    let (order_clause, count_params, list_params) = match sort {
-        "hot" => {
-            let mut cp: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-            let mut lp: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-            if let Some(t) = item_type {
-                cp.push(Box::new(t));
-                lp.push(Box::new(t));
-                (
-                    "WHERE enabled = 1 AND type = ?".to_string(),
-                    cp,
-                    lp,
-                )
-            } else {
-                ("".to_string(), cp, lp)
-            }
-        }
-        _ => {
-            // "time" or default
-            let mut cp: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-            let mut lp: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-            if let Some(t) = item_type {
-                cp.push(Box::new(t));
-                lp.push(Box::new(t));
-                (
-                    "WHERE enabled = 1 AND type = ?".to_string(),
-                    cp,
-                    lp,
-                )
-            } else {
-                ("".to_string(), cp, lp)
-            }
-        }
-    };
 
-    let where_enabled = if order_clause.is_empty() {
-        "WHERE enabled = 1"
+    let mut conditions: Vec<String> = Vec::new();
+    let mut params_list: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if enabled_only {
+        conditions.push("enabled = 1".to_string());
+    }
+
+    if let Some(t) = item_type {
+        conditions.push("type = ?".to_string());
+        params_list.push(Box::new(t));
+    }
+
+    if let Some(q) = search {
+        if !q.trim().is_empty() {
+            let pattern = format!("%{}%", q.trim());
+            conditions.push("(name LIKE ? OR description LIKE ? OR tags LIKE ?)".to_string());
+            params_list.push(Box::new(pattern.clone()));
+            params_list.push(Box::new(pattern.clone()));
+            params_list.push(Box::new(pattern));
+        }
+    }
+
+    let where_clause = if conditions.is_empty() {
+        String::new()
     } else {
-        &order_clause
+        format!("WHERE {}", conditions.join(" AND "))
     };
 
     // Count total
-    let count_sql = format!("SELECT COUNT(*) FROM discoveries {}", where_enabled);
-    let total: u64 = {
-        let mut count_params_iter = count_params.iter();
-        db.query_row(&count_sql, rusqlite::params_from_iter(count_params_iter.by_ref()), |row| row.get(0)).unwrap_or(0)
-    };
+    let count_sql = format!("SELECT COUNT(*) FROM discoveries {}", where_clause);
+    let count_params_list: Vec<&dyn rusqlite::types::ToSql> = params_list.iter().map(|p| p.as_ref()).collect();
+    let total: u64 = db.query_row(&count_sql, count_params_list.as_slice(), |row| row.get(0)).unwrap_or(0);
 
     // Fetch page
     let order = if sort == "hot" {
@@ -651,20 +673,19 @@ fn db_discovery_get_paginated(
         "ORDER BY created_at DESC, sort_order ASC, id DESC"
     };
     let list_sql = format!(
-        "SELECT id, type, name, description, url, icon_url, clicks, sort_order, enabled, created_at, updated_at
+        "SELECT id, type, name, description, url, icon_url, tags, clicks, sort_order, enabled, created_at, updated_at
          FROM discoveries {} {} LIMIT ? OFFSET ?",
-        where_enabled, order
+        where_clause, order
     );
 
-    let mut all_params: Vec<Box<dyn rusqlite::types::ToSql>> = list_params;
-    all_params.push(Box::new(size as i64));
-    all_params.push(Box::new(offset as i64));
+    params_list.push(Box::new(size as i64));
+    params_list.push(Box::new(offset as i64));
 
     let mut stmt = match db.prepare(&list_sql) {
         Ok(s) => s,
         Err(_) => return (vec![], total),
     };
-    let params_ref: Vec<&dyn rusqlite::types::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> = params_list.iter().map(|p| p.as_ref()).collect();
     let rows = stmt.query_map(params_ref.as_slice(), |row| {
         Ok(DiscoveryItem {
             id: row.get(0)?,
@@ -673,11 +694,12 @@ fn db_discovery_get_paginated(
             description: row.get(3)?,
             url: row.get(4)?,
             icon_url: row.get(5)?,
-            clicks: row.get(6)?,
-            sort_order: row.get(7)?,
-            enabled: row.get::<_, i64>(8)? != 0,
-            created_at: row.get(9)?,
-            updated_at: row.get(10)?,
+            tags: row.get(6)?,
+            clicks: row.get(7)?,
+            sort_order: row.get(8)?,
+            enabled: row.get::<_, i64>(9)? != 0,
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
         })
     }).unwrap();
 
@@ -687,7 +709,7 @@ fn db_discovery_get_paginated(
 
 fn db_discovery_get_random(db: &Connection) -> Option<DiscoveryItem> {
     db.query_row(
-        "SELECT id, type, name, description, url, icon_url, clicks, sort_order, enabled, created_at, updated_at
+        "SELECT id, type, name, description, url, icon_url, tags, clicks, sort_order, enabled, created_at, updated_at
          FROM discoveries WHERE enabled = 1 ORDER BY RANDOM() LIMIT 1",
         [],
         |row| {
@@ -698,11 +720,12 @@ fn db_discovery_get_random(db: &Connection) -> Option<DiscoveryItem> {
                 description: row.get(3)?,
                 url: row.get(4)?,
                 icon_url: row.get(5)?,
-                clicks: row.get(6)?,
-                sort_order: row.get(7)?,
-                enabled: row.get::<_, i64>(8)? != 0,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
+                tags: row.get(6)?,
+                clicks: row.get(7)?,
+                sort_order: row.get(8)?,
+                enabled: row.get::<_, i64>(9)? != 0,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
             })
         },
     ).ok()
@@ -710,7 +733,7 @@ fn db_discovery_get_random(db: &Connection) -> Option<DiscoveryItem> {
 
 fn db_discovery_get_by_id(db: &Connection, id: i64) -> Option<DiscoveryItem> {
     db.query_row(
-        "SELECT id, type, name, description, url, icon_url, clicks, sort_order, enabled, created_at, updated_at
+        "SELECT id, type, name, description, url, icon_url, tags, clicks, sort_order, enabled, created_at, updated_at
          FROM discoveries WHERE id = ?1",
         params![id],
         |row| {
@@ -721,11 +744,12 @@ fn db_discovery_get_by_id(db: &Connection, id: i64) -> Option<DiscoveryItem> {
                 description: row.get(3)?,
                 url: row.get(4)?,
                 icon_url: row.get(5)?,
-                clicks: row.get(6)?,
-                sort_order: row.get(7)?,
-                enabled: row.get::<_, i64>(8)? != 0,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
+                tags: row.get(6)?,
+                clicks: row.get(7)?,
+                sort_order: row.get(8)?,
+                enabled: row.get::<_, i64>(9)? != 0,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
             })
         },
     ).ok()
@@ -741,7 +765,7 @@ fn db_discovery_increment_clicks(db: &Connection, id: i64) {
 fn db_discovery_get_all(db: &Connection) -> Vec<DiscoveryItem> {
     let mut stmt = db
         .prepare(
-            "SELECT id, type, name, description, url, icon_url, clicks, sort_order, enabled, created_at, updated_at
+            "SELECT id, type, name, description, url, icon_url, tags, clicks, sort_order, enabled, created_at, updated_at
              FROM discoveries ORDER BY sort_order ASC, id DESC",
         )
         .unwrap();
@@ -754,11 +778,12 @@ fn db_discovery_get_all(db: &Connection) -> Vec<DiscoveryItem> {
                 description: row.get(3)?,
                 url: row.get(4)?,
                 icon_url: row.get(5)?,
-                clicks: row.get(6)?,
-                sort_order: row.get(7)?,
-                enabled: row.get::<_, i64>(8)? != 0,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
+                tags: row.get(6)?,
+                clicks: row.get(7)?,
+                sort_order: row.get(8)?,
+                enabled: row.get::<_, i64>(9)? != 0,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
             })
         })
         .unwrap();
@@ -769,14 +794,15 @@ fn db_discovery_create(db: &Connection, req: &DiscoveryCreateRequest) -> Result<
     let sort_order = req.sort_order.unwrap_or(0);
     let enabled = req.enabled.unwrap_or(true);
     db.execute(
-        "INSERT INTO discoveries (type, name, description, url, icon_url, clicks, sort_order, enabled)
-         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7)",
+        "INSERT INTO discoveries (type, name, description, url, icon_url, tags, clicks, sort_order, enabled)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8)",
         params![
             req.item_type,
             req.name,
             req.description,
             req.url,
             req.icon_url.as_deref().unwrap_or(""),
+            req.tags.as_deref().unwrap_or(""),
             sort_order,
             enabled as i64,
         ],
@@ -807,6 +833,9 @@ fn db_discovery_update(db: &Connection, id: i64, req: &DiscoveryUpdateRequest) -
     }
     if let Some(ref v) = req.icon_url {
         updates.push("icon_url = ?"); param_values.push(Box::new(v.clone()));
+    }
+    if let Some(ref v) = req.tags {
+        updates.push("tags = ?"); param_values.push(Box::new(v.clone()));
     }
     if let Some(v) = req.clicks {
         updates.push("clicks = ?"); param_values.push(Box::new(v));
@@ -1338,9 +1367,10 @@ async fn list_discoveries(
     let size = query.size.unwrap_or(10).min(50);
     let sort = query.sort.as_deref().unwrap_or("time");
     let item_type = query.item_type;
+    let search = query.search.as_deref();
 
     let db = state.db.lock().unwrap();
-    let (items, total) = db_discovery_get_paginated(&db, page, size, sort, item_type);
+    let (items, total) = db_discovery_get_paginated(&db, page, size, sort, item_type, search);
 
     Json(PaginatedResponse {
         success: true,
@@ -1395,15 +1425,26 @@ async fn click_discovery(
     }))
 }
 
-/// GET /admin/api/discoveries - 管理后台获取所有发现数据
+/// GET /admin/api/discoveries?page=1&size=20&search=xxx&dtype=0
 async fn admin_list_discoveries(
     State(state): State<Arc<AppState>>,
-) -> Json<ApiResponse<Vec<DiscoveryItem>>> {
+    axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Json<PaginatedResponse<Vec<DiscoveryItem>>> {
+    let page: u32 = query.get("page").and_then(|v| v.parse().ok()).unwrap_or(1).max(1);
+    let size: u32 = query.get("size").and_then(|v| v.parse().ok()).unwrap_or(20).min(100);
+    let search = query.get("search").map(|s| s.as_str());
+    let item_type: Option<i32> = query.get("type").and_then(|v| v.parse().ok());
+    let sort = query.get("sort").map(|s| s.as_str()).unwrap_or("time");
+
     let db = state.db.lock().unwrap();
-    let items = db_discovery_get_all(&db);
-    Json(ApiResponse {
+    let (items, total) = db_discovery_get_paginated_admin(&db, page, size, sort, item_type, search);
+
+    Json(PaginatedResponse {
         success: true,
         data: Some(items),
+        total,
+        page,
+        size,
         error: None,
     })
 }
@@ -1507,6 +1548,158 @@ async fn admin_delete_discovery(
     }
 }
 
+/// GET /admin/api/discoveries/export
+async fn admin_export_discoveries(
+    State(state): State<Arc<AppState>>,
+) -> Response<Body> {
+    let db = state.db.lock().unwrap();
+    let items = db_discovery_get_all(&db);
+
+    let mut csv = String::from("type,name,description,url,icon_url,tags,sort_order,enabled\n");
+    for item in &items {
+        csv.push_str(&format!(
+            "{},{},{},{},{},{},{},{}\n",
+            item.item_type,
+            csv_escape(&item.name),
+            csv_escape(&item.description),
+            csv_escape(&item.url),
+            csv_escape(item.icon_url.as_deref().unwrap_or("")),
+            csv_escape(item.tags.as_deref().unwrap_or("")),
+            item.sort_order,
+            item.enabled as i32,
+        ));
+    }
+
+    (
+        StatusCode::OK,
+        [
+            ("Content-Type", "text/csv; charset=utf-8"),
+            ("Content-Disposition", "attachment; filename=\"discoveries.csv\""),
+        ],
+        csv,
+    ).into_response()
+}
+
+/// POST /admin/api/discoveries/import (multipart: file=csv)
+async fn admin_import_discoveries(
+    State(state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> Result<Json<ApiResponse<serde_json::Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let mut csv_data = String::new();
+
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<()> { success: false, data: None, error: Some(format!("Failed to read multipart: {}", e)) }),
+        )
+    })? {
+        let name = field.name().unwrap_or("").to_string();
+        if name == "file" {
+            csv_data = field.text().await.map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::<()> { success: false, data: None, error: Some(format!("Failed to read file: {}", e)) }),
+                )
+            })?;
+        }
+    }
+
+    if csv_data.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse { success: false, data: None, error: Some("No CSV data".to_string()) }),
+        ));
+    }
+
+    let db = state.db.lock().unwrap();
+    let mut imported = 0u64;
+    for (i, line) in csv_data.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        if i == 0 && line.to_lowercase().contains("type") && line.to_lowercase().contains("name") { continue; }
+
+        let parts = parse_csv_line(line);
+        if parts.len() >= 4 {
+            let item_type: i32 = parts[0].trim().parse().unwrap_or(0);
+            let name = parts[1].trim().to_string();
+            let description = parts[2].trim().to_string();
+            let url = parts[3].trim().to_string();
+            let icon_url = if parts.len() >= 5 { Some(parts[4].trim().to_string()).filter(|s| !s.is_empty()) } else { None };
+            let tags = if parts.len() >= 6 { Some(parts[5].trim().to_string()).filter(|s| !s.is_empty()) } else { None };
+            let sort_order: i32 = if parts.len() >= 7 { parts[6].trim().parse().unwrap_or(0) } else { 0 };
+            let enabled: bool = if parts.len() >= 8 { parts[7].trim() != "0" && parts[7].trim().to_lowercase() != "false" } else { true };
+
+            if !name.is_empty() && !url.is_empty() {
+                let req = DiscoveryCreateRequest {
+                    item_type,
+                    name,
+                    description,
+                    url,
+                    icon_url,
+                    tags,
+                    sort_order: Some(sort_order),
+                    enabled: Some(enabled),
+                };
+                if db_discovery_create(&db, &req).is_ok() {
+                    imported += 1;
+                }
+            }
+        }
+    }
+
+    Ok(Json(ApiResponse {
+        success: true,
+        data: Some(serde_json::json!({ "imported": imported })),
+        error: None,
+    }))
+}
+
+fn csv_escape(field: &str) -> String {
+    if field.contains(',') || field.contains('"') || field.contains('\n') {
+        format!("\"{}\"", field.replace('"', "\"\""))
+    } else {
+        field.to_string()
+    }
+}
+
+fn parse_csv_line(line: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut buffer = String::new();
+    let mut in_quotes = false;
+    let chars: Vec<char> = line.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        let c = chars[i];
+        if in_quotes {
+            if c == '"' {
+                if i + 1 < chars.len() && chars[i + 1] == '"' {
+                    buffer.push('"');
+                    i += 1;
+                } else {
+                    in_quotes = false;
+                }
+            } else {
+                buffer.push(c);
+            }
+        } else {
+            if c == '"' {
+                in_quotes = true;
+            } else if c == ',' {
+                result.push(buffer.clone());
+                buffer.clear();
+            } else {
+                buffer.push(c);
+            }
+        }
+        i += 1;
+    }
+    result.push(buffer);
+    result
+}
+
+// ============================================================
+// HTML Admin Panel
 // ============================================================
 // HTML Admin Panel
 // ============================================================
@@ -1596,6 +1789,8 @@ async fn main() {
         .route("/api/admin/discoveries", post(admin_create_discovery))
         .route("/api/admin/discoveries/{id}", axum::routing::put(admin_update_discovery))
         .route("/api/admin/discoveries/{id}", axum::routing::delete(admin_delete_discovery))
+        .route("/api/admin/discoveries/export", get(admin_export_discoveries))
+        .route("/api/admin/discoveries/import", post(admin_import_discoveries))
         // 静态文件服务（上传的文件 + static 目录）
         .nest_service("/api/uploads", ServeDir::new(&uploads_dir))
         .nest_service("/static", ServeDir::new(&static_dir))

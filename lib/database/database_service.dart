@@ -3,6 +3,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:path/path.dart' as p;
 import '../models/ssh_connection.dart';
+import '../models/diary_entry.dart';
 
 class DatabaseService {
   static Database? _db;
@@ -39,7 +40,20 @@ class DatabaseService {
         updated_at TEXT NOT NULL
       )
     ''');
+
+    _db!.execute('''
+      CREATE TABLE IF NOT EXISTS diary (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL DEFAULT '',
+        content TEXT NOT NULL DEFAULT '',
+        mood TEXT NOT NULL DEFAULT 'neutral',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
   }
+
+  // ==================== Connections ====================
 
   static List<SshConnection> getAllConnections() {
     final results = _db!.select('SELECT * FROM connections ORDER BY updated_at DESC');
@@ -108,5 +122,65 @@ class DatabaseService {
   static void close() {
     _db?.dispose();
     _db = null;
+  }
+
+  // ==================== Diary ====================
+
+  static List<DiaryEntry> getAllDiaryEntries() {
+    final results = _db!.select('SELECT * FROM diary ORDER BY created_at DESC');
+    return results.map((row) => DiaryEntry.fromMap(row)).toList();
+  }
+
+  static DiaryEntry? getDiaryEntry(int id) {
+    final results = _db!.select('SELECT * FROM diary WHERE id = ?', [id]);
+    if (results.isEmpty) return null;
+    return DiaryEntry.fromMap(results.first);
+  }
+
+  static int insertDiaryEntry(DiaryEntry entry) {
+    final stmt = _db!.prepare('''
+      INSERT INTO diary (title, content, mood, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    ''');
+    stmt.execute([
+      entry.title,
+      entry.content,
+      entry.mood,
+      entry.createdAt.toIso8601String(),
+      entry.updatedAt.toIso8601String(),
+    ]);
+    final lastId = _db!.lastInsertRowId;
+    stmt.dispose();
+    return lastId;
+  }
+
+  static void updateDiaryEntry(DiaryEntry entry) {
+    final stmt = _db!.prepare('''
+      UPDATE diary
+      SET title = ?, content = ?, mood = ?, updated_at = ?
+      WHERE id = ?
+    ''');
+    stmt.execute([
+      entry.title,
+      entry.content,
+      entry.mood,
+      entry.updatedAt.toIso8601String(),
+      entry.id,
+    ]);
+    stmt.dispose();
+  }
+
+  static void deleteDiaryEntry(int id) {
+    final stmt = _db!.prepare('DELETE FROM diary WHERE id = ?');
+    stmt.execute([id]);
+    stmt.dispose();
+  }
+
+  static List<DiaryEntry> searchDiaryEntries(String query) {
+    final results = _db!.select(
+      "SELECT * FROM diary WHERE title LIKE ? OR content LIKE ? ORDER BY created_at DESC",
+      ['%$query%', '%$query%'],
+    );
+    return results.map((row) => DiaryEntry.fromMap(row)).toList();
   }
 }

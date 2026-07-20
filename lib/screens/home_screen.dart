@@ -13,6 +13,7 @@ import 'settings_screen.dart';
 import 'discovery_screen.dart';
 import 'monitor_screen.dart';
 import 'update_dialog.dart';
+import 'diary_screen.dart';
 import '../widgets/connection_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -66,15 +67,25 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: loc.settings,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              );
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'settings') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              } else if (value == 'diary') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DiaryScreen()),
+                );
+              }
             },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(value: 'settings', child: Text(loc.settings)),
+              PopupMenuItem(value: 'diary', child: Text(loc.diary)),
+            ],
           ),
         ],
       ),
@@ -96,17 +107,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.settings, size: 18),
-                  tooltip: loc.settings,
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                    );
-                  },
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, size: 18),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  onSelected: (value) {
+                    if (value == 'settings') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                      );
+                    } else if (value == 'diary') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DiaryScreen()),
+                      );
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    PopupMenuItem(value: 'settings', child: Text(loc.settings)),
+                    PopupMenuItem(value: 'diary', child: Text(loc.diary)),
+                  ],
                 ),
               ],
             ),

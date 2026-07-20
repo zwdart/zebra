@@ -1,0 +1,4054 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux 常用命令速查手册</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --dim: #94a3b8;
+    --accent: #38bdf8;
+    --accent2: #818cf8;
+    --green: #4ade80;
+    --orange: #fb923c;
+    --red: #f87171;
+    --cmd-bg: #0c1322;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', 'Noto Sans SC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 {
+    text-align: center;
+    font-size: 2rem;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--dim);
+    margin-bottom: 30px;
+    font-size: 0.95rem;
+  }
+
+  /* Search */
+  .search-box {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 30px;
+  }
+  .search-box input {
+    width: 100%;
+    max-width: 500px;
+    padding: 12px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .search-box input:focus {
+    border-color: var(--accent);
+  }
+  .search-box input::placeholder {
+    color: var(--dim);
+  }
+
+  /* Category */
+  .category {
+    margin-bottom: 28px;
+  }
+  .category-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 10px;
+    padding-left: 4px;
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+  }
+
+  /* Command card */
+  .cmd-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 6px;
+    overflow: hidden;
+    transition: border-color .2s;
+  }
+  .cmd-card:hover {
+    border-color: var(--accent);
+  }
+  .cmd-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    cursor: pointer;
+    user-select: none;
+    gap: 12px;
+  }
+  .cmd-header:hover {
+    background: rgba(56, 189, 248, 0.05);
+  }
+  .cmd-name {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    color: var(--green);
+    font-weight: 600;
+    min-width: 140px;
+    flex-shrink: 0;
+  }
+  .cmd-brief {
+    color: var(--dim);
+    flex: 1;
+  }
+  .cmd-arrow {
+    color: var(--dim);
+    font-size: 0.8rem;
+    transition: transform .2s;
+    flex-shrink: 0;
+  }
+  .cmd-card.open .cmd-arrow {
+    transform: rotate(90deg);
+  }
+
+  /* Detail panel */
+  .cmd-detail {
+    display: none;
+    padding: 0 16px 14px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .cmd-card.open .cmd-detail {
+    display: block;
+  }
+  .cmd-detail pre {
+    background: var(--cmd-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-top: 8px;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.88rem;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .cmd-detail .usage {
+    color: var(--accent2);
+    font-weight: 600;
+    margin-top: 8px;
+    font-size: 0.9rem;
+  }
+  .cmd-detail .note {
+    color: var(--orange);
+    font-size: 0.85rem;
+    margin-top: 4px;
+  }
+  .cmd-detail .tag {
+    display: inline-block;
+    background: rgba(56,189,248,0.15);
+    color: var(--accent);
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    margin-right: 4px;
+  }
+  .hidden { display: none !important; }
+
+  /* Expand all button */
+  .toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 16px;
+    gap: 10px;
+  }
+  .toolbar button {
+    background: var(--card);
+    color: var(--dim);
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all .2s;
+  }
+  .toolbar button:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  @media (max-width: 640px) {
+    .cmd-name { min-width: 100px; font-size: 0.85rem; }
+    .cmd-header { padding: 8px 10px; gap: 8px; }
+    body { padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Linux 常用命令速查手册</h1>
+<p class="subtitle">点击任意命令展开查看完整用法与示例 · 共 110+ 命令 · 16 个分类</p>
+
+<div class="search-box">
+  <input type="text" id="search" placeholder="搜索命令... 如 grep、chmod、docker" autocomplete="off">
+</div>
+
+<div class="toolbar">
+  <button onclick="toggleAll(true)">全部展开</button>
+  <button onclick="toggleAll(false)">全部收起</button>
+</div>
+
+<div id="app"></div>
+
+<script>
+const data = [
+{
+  cat: "文件与目录操作",
+  cmds: [
+    {
+      name: "ls",
+      brief: "列出目录内容",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>ls [选项] [目录]</pre>
+<div class="usage">常用参数</div>
+<pre>-l    长格式显示（权限、大小、时间等）
+-a    显示所有文件，包括隐藏文件（以 . 开头）
+-h    以人类可读格式显示大小（KB/MB/GB）
+-t    按修改时间排序
+-r    反向排序
+-R    递归列出子目录
+-d    只列出目录本身，不列出内容
+-i    显示 inode 号</pre>
+<div class="usage">示例</div>
+<pre># 当前目录详细列表
+ls -la
+
+# 按大小排序，人类可读
+ls -lhS
+
+# 查看 /etc 下所有 .conf 文件
+ls -la /etc/*.conf
+
+# 递归列出，仅目录
+ls -ld */</pre>
+<div class="note">提示：配合 alias ll='ls -lah' 使用更方便</div>`
+    },
+    {
+      name: "cd",
+      brief: "切换当前工作目录",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>cd [目录路径]</pre>
+<div class="usage">特殊路径</div>
+<pre>cd          # 回到用户主目录
+cd ~        # 回到用户主目录
+cd -        # 回到上一次所在的目录
+cd ..       # 回到上级目录
+cd ../..    # 回到上两级目录
+cd /        # 回到根目录</pre>
+<div class="usage">示例</div>
+<pre># 进入绝对路径
+cd /var/log
+
+# 进入相对路径
+cd ../src
+
+# 回到 home
+cd</pre>`
+    },
+    {
+      name: "pwd",
+      brief: "显示当前工作目录的完整路径",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>pwd         # 输出当前目录的绝对路径
+pwd -P      # 显示物理路径（解析符号链接）</pre>
+<div class="usage">示例</div>
+<pre>$ pwd
+/home/user/projects
+
+$ cd /var/run
+$ pwd -P
+/run</pre>`
+    },
+    {
+      name: "mkdir",
+      brief: "创建目录",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>mkdir [选项] 目录名</pre>
+<div class="usage">常用参数</div>
+<pre>-p    递归创建多级目录（父目录不存在时自动创建）
+-v    显示创建过程
+-m    创建时指定权限</pre>
+<div class="usage">示例</div>
+<pre># 创建单个目录
+mkdir mydir
+
+# 递归创建多级目录
+mkdir -p /tmp/a/b/c/d
+
+# 创建目录并指定权限
+mkdir -m 755 www
+
+# 一次创建多个目录
+mkdir dir1 dir2 dir3
+
+# 显示过程
+mkdir -pv project/{src,lib,bin,docs}</pre>`
+    },
+    {
+      name: "rmdir",
+      brief: "删除空目录",
+      detail: `<div class="usage">用法</div>
+<pre>rmdir [选项] 目录名</pre>
+<div class="usage">常用参数</div>
+<pre>-p    删除目录后，递归删除空的父目录</pre>
+<div class="usage">示例</div>
+<pre>rmdir empty_dir
+rmdir -p a/b/c    # 依次删除 c, b, a（前提是都为空）</pre>
+<div class="note">注意：只能删除空目录，非空目录请用 rm -r</div>`
+    },
+    {
+      name: "rm",
+      brief: "删除文件或目录",
+      detail: `<span class="tag">必备</span> <span class="tag">危险</span>
+<div class="usage">用法</div>
+<pre>rm [选项] 文件/目录</pre>
+<div class="usage">常用参数</div>
+<pre>-r / -R    递归删除目录及其内容
+-f    强制删除，不提示确认
+-i    删除前逐一确认
+-v    显示删除过程</pre>
+<div class="usage">示例</div>
+<pre># 删除单个文件
+rm file.txt
+
+# 强制递归删除目录
+rm -rf /tmp/build
+
+# 删除前确认
+rm -i *.log
+
+# 删除所有 .o 文件
+find . -name "*.o" -exec rm {} \;
+
+# 交互式删除（逐个确认）
+rm -ri mydir/</pre>
+<div class="note">警告：rm -rf / 将删除系统所有文件！永远不要执行此命令！</div>`
+    },
+    {
+      name: "cp",
+      brief: "复制文件或目录",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>cp [选项] 源 目标</pre>
+<div class="usage">常用参数</div>
+<pre>-r / -R    递归复制目录
+-a    归档模式，保留所有属性（符号链接、时间戳等）
+-i    覆盖前提示
+-u    仅当源文件比目标新时才复制
+-v    显示复制过程
+-p    保留权限和时间戳
+-d    保留符号链接</pre>
+<div class="usage">示例</div>
+<pre># 复制文件
+cp file.txt /tmp/
+
+# 复制并重命名
+cp file.txt /tmp/backup.txt
+
+# 递归复制目录
+cp -r src/ /backup/src/
+
+# 归档复制（保留所有属性）
+cp -a /var/www/ /backup/www/
+
+# 交互式复制
+cp -iv *.log /logs/
+
+# 仅复制更新的文件
+cp -ru /src/* /dst/</pre>`
+    },
+    {
+      name: "mv",
+      brief: "移动或重命名文件/目录",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>mv [选项] 源 目标</pre>
+<div class="usage">常用参数</div>
+<pre>-i    覆盖前提示
+-f    强制覆盖，不提示
+-v    显示移动过程
+-n    不覆盖已存在的文件
+-u    仅当源比目标新时移动</pre>
+<div class="usage">示例</div>
+<pre># 重命名文件
+mv oldname.txt newname.txt
+
+# 移动文件到目录
+mv file.txt /tmp/
+
+# 移动并重命名
+mv file.txt /tmp/backup.txt
+
+# 批量移动
+mv *.log /var/log/
+
+# 移动多个文件到目录
+mv file1.txt file2.txt /dest/
+
+# 不覆盖已存在的文件
+mv -n newfile.txt existing.txt</pre>`
+    },
+    {
+      name: "touch",
+      brief: "创建空文件或更新文件时间戳",
+      detail: `<div class="usage">用法</div>
+<pre>touch [选项] 文件...</pre>
+<div class="usage">常用参数</div>
+<pre>-a    只更新访问时间
+-m    只更新修改时间
+-d    设置指定的时间
+-c    如果文件不存在则不创建</pre>
+<div class="usage">示例</div>
+<pre># 创建空文件
+touch newfile.txt
+
+# 一次创建多个文件
+touch file1.txt file2.txt file3.txt
+
+# 更新时间戳为当前时间
+touch existing_file.txt
+
+# 设置特定时间
+touch -d "2025-01-01 12:00:00" file.txt
+
+# 创建批量编号文件
+touch {01..10}.log</pre>`
+    },
+    {
+      name: "ln",
+      brief: "创建链接（硬链接 / 符号链接）",
+      detail: `<div class="usage">用法</div>
+<pre>ln [选项] 源 目标</pre>
+<div class="usage">常用参数</div>
+<pre>-s    创建符号链接（软链接）
+-f    强制创建，覆盖已存在的
+-v    显示创建过程</pre>
+<div class="usage">示例</div>
+<pre># 创建硬链接
+ln source.txt hardlink.txt
+
+# 创建符号链接（最常用）
+ln -s /usr/bin/python3 /usr/local/bin/python
+
+# 强制创建符号链接
+ln -sf /new/path/link.txt /old/path/link.txt
+
+# 创建指向目录的符号链接
+ln -s /var/www/html ~/webroot
+
+# 查看链接指向
+ls -l link_file</pre>
+<div class="note">硬链接：不能跨文件系统，不能链接目录；符号链接：类似快捷方式，可跨系统</div>`
+    },
+    {
+      name: "find",
+      brief: "在目录树中查找文件",
+      detail: `<span class="tag">强大</span>
+<div class="usage">用法</div>
+<pre>find [路径] [表达式]</pre>
+<div class="usage">常用表达式</div>
+<pre>-name "pattern"     按文件名匹配（支持通配符）
+-iname "pattern"    按文件名匹配（忽略大小写）
+-type f/d/l/b/c     按类型（文件/目录/链接/块设备/字符设备）
+-size +100M         大于100MB
+-size -10k          小于10KB
+-mtime -7           7天内修改过
+-mtime +30          30天前修改过
+-perm 755           按权限匹配
+-user username      按属主匹配
+-empty              空文件或空目录
+-exec cmd {} \;     对找到的文件执行命令
+-maxdepth N         限制搜索深度
+-inum N             按 inode 号查找</pre>
+<div class="usage">示例</div>
+<pre># 查找所有 .log 文件
+find /var/log -name "*.log"
+
+# 查找大于100MB的文件
+find / -size +100M -type f 2>/dev/null
+
+# 查找7天内修改的 .py 文件
+find . -name "*.py" -mtime -7
+
+# 查找并删除
+find . -name "*.tmp" -exec rm {} \;
+
+# 查找并执行（简写 +）
+find . -name "*.log" -exec gzip {} +
+
+# 按深度搜索
+find . -maxdepth 2 -name "*.conf"
+
+# 查找空文件
+find . -empty -type f
+
+# 按权限查找（危险：其他人可写的文件）
+find / -perm -o+w -type f 2>/dev/null</pre>`
+    },
+    {
+      name: "tree",
+      brief: "以树状结构显示目录",
+      detail: `<div class="usage">用法</div>
+<pre>tree [选项] [目录]</pre>
+<div class="usage">常用参数</div>
+<pre>-L N        只显示 N 层深度
+-d          只显示目录
+-a          显示隐藏文件
+-h          人类可读的文件大小
+-I pattern  排除匹配的文件
+--dirsfirst 目录排在前面
+-P pattern  只显示匹配的文件</pre>
+<div class="usage">示例</div>
+<pre># 显示当前目录树
+tree
+
+# 只显示2层深度，仅目录
+tree -L 2 -d
+
+# 排除 node_modules 和 .git
+tree -I "node_modules|.git"
+
+# 显示隐藏文件和大小
+tree -ah</pre>`
+    },
+    {
+      name: "stat",
+      brief: "显示文件或文件系统的详细信息",
+      detail: `<div class="usage">用法</div>
+<pre>stat [选项] 文件/目录</pre>
+<div class="usage">示例</div>
+<pre># 显示文件详细信息
+stat file.txt
+
+# 只显示文件大小
+stat -c %s file.txt
+
+# 自定义输出格式
+stat -c "文件: %n, 大小: %s, 修改: %y" file.txt
+
+# 显示文件系统信息
+stat -f /</pre>`
+    },
+    {
+      name: "du",
+      brief: "估算文件/目录的磁盘使用量",
+      detail: `<div class="usage">用法</div>
+<pre>du [选项] [文件/目录]</pre>
+<div class="usage">常用参数</div>
+<pre>-h        人类可读格式（KB/MB/GB）
+-s        仅显示总计
+--max-depth=N  限制显示深度
+-a        显示所有文件（不只是目录）
+-c        显示总计行</pre>
+<div class="usage">示例</div>
+<pre># 查看当前目录总大小
+du -sh .
+
+# 查看每个子目录的大小
+du -h --max-depth=1
+
+# 查看最大的10个目录
+du -h --max-depth=1 | sort -rh | head -10
+
+# 查看特定目录大小
+du -sh /var/log/*
+
+# 查找大于500MB的目录
+du -h --max-depth=2 / 2>/dev/null | grep -E "^[0-9.]*G"</pre>`
+    },
+    {
+      name: "df",
+      brief: "报告磁盘空间使用情况",
+      detail: `<div class="usage">用法</div>
+<pre>df [选项] [文件系统]</pre>
+<div class="usage">常用参数</div>
+<pre>-h        人类可读格式
+-T        显示文件系统类型
+-i        显示 inode 使用情况
+-t ext4   只显示指定类型的文件系统</pre>
+<div class="usage">示例</div>
+<pre># 查看所有挂载点的空间
+df -h
+
+# 只看 ext4 文件系统
+df -hT -t ext4
+
+# 查看 inode 使用
+df -i
+
+# 查看特定目录所在分区
+df -h /home</pre>`
+    }
+  ]
+},
+{
+  cat: "文件内容查看与编辑",
+  cmds: [
+    {
+      name: "cat",
+      brief: "连接并显示文件内容",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>cat [选项] 文件...</pre>
+<div class="usage">常用参数</div>
+<pre>-n    显示行号
+-b    只给非空行编号
+-s    压缩连续空行为一行
+-E    显示行尾的 $ 符号
+-A    显示所有非打印字符</pre>
+<div class="usage">示例</div>
+<pre># 显示文件内容
+cat file.txt
+
+# 带行号显示
+cat -n file.txt
+
+# 连接多个文件
+cat file1.txt file2.txt > combined.txt
+
+# 显示不可见字符
+cat -A file.txt
+
+# 压缩空行
+cat -s file.txt</pre>`
+    },
+    {
+      name: "less",
+      brief: "分页查看文件内容（可向前向后翻页）",
+      detail: `<span class="tag">推荐</span>
+<div class="usage">用法</div>
+<pre>less [选项] 文件</pre>
+<div class="usage">常用快捷键</div>
+<pre>空格 / f      向下翻一页
+b             向上翻一页
+↓ / j         向下一行
+↑ / k         向上一行
+/pattern      向下搜索
+?pattern      向上搜索
+n             下一个匹配
+N             上一个匹配
+g             跳到文件开头
+G             跳到文件末尾
+q             退出
+h             显示帮助
+-F            如果内容不足一页则直接显示</pre>
+<div class="usage">示例</div>
+<pre># 查看大文件
+less /var/log/syslog
+
+# 带行号
+less -N file.txt
+
+# 查看命令输出
+dmesg | less
+
+# 搜索内容
+less file.txt   # 然后输入 /keyword 搜索</pre>`
+    },
+    {
+      name: "head",
+      brief: "显示文件的前 N 行",
+      detail: `<div class="usage">用法</div>
+<pre>head [选项] 文件</pre>
+<div class="usage">常用参数</div>
+<pre>-n N    显示前 N 行（默认 10）
+-c N    显示前 N 个字节
+-q      不显示文件名头</pre>
+<div class="usage">示例</div>
+<pre># 默认前10行
+head file.txt
+
+# 前20行
+head -n 20 file.txt
+
+# 前100个字节
+head -c 100 file.txt
+
+# 查看命令输出前5行
+ls -la | head -5</pre>`
+    },
+    {
+      name: "tail",
+      brief: "显示文件的末尾 N 行",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>tail [选项] 文件</pre>
+<div class="usage">常用参数</div>
+<pre>-n N      显示末尾 N 行（默认 10）
+-f        实时跟踪文件变化（follow）
+-c N      显示末尾 N 个字节
+--pid=PID 当指定进程结束后停止跟踪</pre>
+<div class="usage">示例</div>
+<pre># 默认末尾10行
+tail file.txt
+
+# 末尾30行
+tail -n 30 file.txt
+
+# 实时跟踪日志（最常用）
+tail -f /var/log/syslog
+
+# 跟踪多个文件
+tail -f /var/log/*.log
+
+# 从第100行开始显示到末尾
+tail -n +100 file.txt
+
+# 实时跟踪，最多显示最新20行
+tail -f -n 20 logfile.log</pre>`
+    },
+    {
+      name: "grep",
+      brief: "文本搜索/过滤工具",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>grep [选项] 模式 [文件...]</pre>
+<div class="usage">常用参数</div>
+<pre>-i        忽略大小写
+-v        反向匹配（显示不匹配的行）
+-n        显示行号
+-c        只显示匹配的行数
+-l        只显示包含匹配的文件名
+-L        显示不包含匹配的文件名
+-r / -R   递归搜索目录
+-w        匹配整个单词
+-x        整行匹配
+-E        使用扩展正则（等同 egrep）
+-P        使用 Perl 正则
+-o        只输出匹配的部分
+--color   高亮匹配内容
+-m N      最多匹配 N 次
+-A N      显示匹配行后的 N 行
+-B N      显示匹配行前的 N 行
+-C N      显示匹配行前后各 N 行</pre>
+<div class="usage">示例</div>
+<pre># 搜索文件中的字符串
+grep "error" logfile.log
+
+# 忽略大小写搜索
+grep -i "warning" file.txt
+
+# 递归搜索目录
+grep -rn "TODO" src/
+
+# 反向匹配（排除）
+grep -v "^#" config.conf | grep -v "^$"
+
+# 只显示匹配的文件
+grep -rl "function" src/
+
+# 统计匹配行数
+grep -c "error" /var/log/syslog
+
+# 使用正则
+grep -E "^[0-9]{4}-[0-9]{2}" log.txt
+
+# 显示上下文
+grep -C 3 "panic" dmesg
+
+# 匹配整个单词
+grep -w "port" config.txt
+
+# 只输出匹配部分
+grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+" file.txt</pre>`
+    },
+    {
+      name: "wc",
+      brief: "统计文件的行数、单词数、字节数",
+      detail: `<div class="usage">用法</div>
+<pre>wc [选项] 文件...</pre>
+<div class="usage">常用参数</div>
+<pre>-l    只统计行数
+-w    只统计单词数
+-c    只统计字节数
+-m    只统计字符数
+-L    最长行的长度</pre>
+<div class="usage">示例</div>
+<pre># 统计行、词、字节
+wc file.txt
+# 输出：  42  156 1024 file.txt
+
+# 只统计行数（最常用）
+wc -l file.txt
+
+# 统计命令输出的行数
+ls -la | wc -l
+
+# 统计多个文件
+wc -l *.txt
+
+# 找出最长行
+wc -L file.txt</pre>`
+    },
+    {
+      name: "sort",
+      brief: "对文本行进行排序",
+      detail: `<div class="usage">用法</div>
+<pre>sort [选项] 文件...</pre>
+<div class="usage">常用参数</div>
+<pre>-n        按数值排序
+-r        逆序排序
+-u        去重
+-k N      按第 N 列排序
+-t CH     指定分隔符
+-f        忽略大小写
+-h        人类可读的数值排序（1K, 2M, 3G）
+-R        随机排序
+-M        按月份排序</pre>
+<div class="usage">示例</div>
+<pre># 字母排序
+sort names.txt
+
+# 数值排序
+sort -n numbers.txt
+
+# 逆序排序
+sort -rn numbers.txt
+
+# 按第二列排序
+sort -k2 -t: file.txt
+
+# 去重排序
+sort -u file.txt
+
+# 统计词频（经典组合）
+cat file.txt | tr ' ' '\n' | sort | uniq -c | sort -rn</pre>`
+    },
+    {
+      name: "uniq",
+      brief: "报告或忽略重复行",
+      detail: `<div class="usage">用法</div>
+<pre>uniq [选项] 输入文件 [输出文件]</pre>
+<div class="usage">常用参数</div>
+<pre>-c    在每行前显示该行出现的次数
+-d    只显示重复行
+-u    只显示唯一行
+-i    忽略大小写
+-f N  跳过前 N 个字段
+-w N  只比较前 N 个字符</pre>
+<div class="usage">示例</div>
+<pre># 去重（输入必须已排序）
+sort file.txt | uniq
+
+# 统计出现次数
+sort file.txt | uniq -c
+
+# 统计词频（经典组合）
+cat file.txt | sort | uniq -c | sort -rn | head -20
+
+# 只看重复行
+sort file.txt | uniq -d
+
+# 只看唯一行
+sort file.txt | uniq -u</pre>`
+    },
+    {
+      name: "cut",
+      brief: "按列或字节提取文本",
+      detail: `<div class="usage">用法</div>
+<pre>cut [选项] 文件...</pre>
+<div class="usage">常用参数</div>
+<pre>-d CH     指定分隔符（默认 Tab）
+-f N      提取第 N 列（支持 N-M, N-, -M）
+-b N      提取第 N 个字节
+-c N      提取第 N 个字符
+--complement  反向选择</pre>
+<div class="usage">示例</div>
+<pre># 提取第一列（以:分隔）
+cut -d: -f1 /etc/passwd
+
+# 提取第1和第3列
+cut -d: -f1,3 /etc/passwd
+
+# 提取第2列之后的所有列
+cut -d: -f2- /etc/passwd
+
+# 提取前10个字符
+cut -c1-10 file.txt
+
+# 提取IP地址的第二段
+echo "192.168.1.100" | cut -d. -f2</pre>`
+    },
+    {
+      name: "awk",
+      brief: "强大的文本处理工具（按模式处理行）",
+      detail: `<span class="tag">强大</span>
+<div class="usage">用法</div>
+<pre>awk 'pattern {action}' 文件
+awk -F '分隔符' 'pattern {action}' 文件</pre>
+<div class="usage">常用变量</div>
+<pre>$0      整行内容
+$1,$2.. 第1,2..列
+NR      当前行号
+NF      当前行的字段数
+FS      输入字段分隔符
+OFS     输出字段分隔符
+FILENAME 当前文件名</pre>
+<div class="usage">示例</div>
+<pre># 打印每一行
+awk '{print}' file.txt
+
+# 打印第一列
+awk '{print $1}' file.txt
+
+# 指定分隔符
+awk -F: '{print $1, $3}' /etc/passwd
+
+# 条件过滤
+awk '$3 > 100' data.txt
+
+# 求和
+awk '{sum += $1} END {print sum}' numbers.txt
+
+# 格式化输出
+awk -F: '{printf "%-20s %s\n", $1, $3}' /etc/passwd
+
+# 统计行数
+awk 'END {print NR}' file.txt</pre>`
+    },
+    {
+      name: "sed",
+      brief: "流编辑器（文本替换、删除、插入）",
+      detail: `<span class="tag">强大</span>
+<div class="usage">用法</div>
+<pre>sed [选项] '命令' 文件
+sed -i 's/旧/新/g' 文件    # -i 直接修改文件</pre>
+<div class="usage">常用命令</div>
+<pre>s/pattern/replacement/g    替换（全局）
+d                          删除行
+i\text                     在匹配行前插入
+a\text                     在匹配行后追加
+p                          打印匹配的行
+-n                         静默模式（配合 p 使用）</pre>
+<div class="usage">示例</div>
+<pre># 替换第一个匹配
+sed 's/foo/bar/' file.txt
+
+# 全局替换
+sed 's/foo/bar/g' file.txt
+
+# 直接修改文件
+sed -i 's/foo/bar/g' file.txt
+
+# 删除空行
+sed '/^$/d' file.txt
+
+# 删除注释行
+sed '/^#/d' file.txt
+
+# 只打印第5-10行
+sed -n '5,10p' file.txt
+
+# 在匹配行后追加
+sed '/\[section\]/a\new_value' config.txt
+
+# 多个替换
+sed -e 's/foo/bar/g' -e 's/baz/qux/g' file.txt
+
+# 使用正则
+sed -E 's/[0-9]+/NUM/g' file.txt</pre>`
+    },
+    {
+      name: "diff",
+      brief: "比较两个文件的差异",
+      detail: `<div class="usage">用法</div>
+<pre>diff [选项] 文件1 文件2</pre>
+<div class="usage">常用参数</div>
+<pre>-u        统一格式输出（最常用）
+-y        并排对比
+-W N      设置并排对比宽度
+--brief   只报告是否不同
+-i        忽略大小写</pre>
+<div class="usage">示例</div>
+<pre># 基本对比
+diff file1.txt file2.txt
+
+# 统一格式（补丁格式）
+diff -u old.conf new.conf
+
+# 生成补丁文件
+diff -u old.conf new.conf > changes.patch
+
+# 应用补丁
+patch file.conf < changes.patch
+
+# 并排对比
+diff -y file1.txt file2.txt
+
+# 对比目录
+diff -ru dir1/ dir2/</pre>`
+    },
+    {
+      name: "xargs",
+      brief: "将标准输入转换为命令行参数",
+      detail: `<span class="tag">实用</span>
+<div class="usage">用法</div>
+<pre>命令 | xargs [选项] 命令</pre>
+<div class="usage">常用参数</div>
+<pre>-I {}    指定占位符
+-n N     每次传入 N 个参数
+-0       以 null 字符分隔（配合 find -print0）
+-p       执行前确认
+-t       执行前打印命令</pre>
+<div class="usage">示例</div>
+<pre># 删除所有 .tmp 文件
+find . -name "*.tmp" | xargs rm
+
+# 安全删除（处理文件名含空格）
+find . -name "*.tmp" -print0 | xargs -0 rm
+
+# 批量执行
+cat urls.txt | xargs -I {} curl -s {}
+
+# 每次传3个参数
+echo {1..10} | xargs -n 3 echo
+
+# 批量杀进程
+ps aux | grep "defunct" | awk '{print $2}' | xargs kill -9
+
+# 并行执行
+find . -name "*.gz" | xargs -P 4 -I {} gunzip {}</pre>`
+    }
+  ]
+},
+{
+  cat: "权限与用户管理",
+  cmds: [
+    {
+      name: "chmod",
+      brief: "修改文件或目录的权限",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>chmod [选项] 权限 文件/目录</pre>
+<div class="usage">权限表示</div>
+<pre>数字模式：
+  4 = 读 (r)
+  2 = 写 (w)
+  1 = 执行 (x)
+  0 = 无权限
+
+  例如：755 = rwxr-xr-x
+        644 = rw-r--r--
+        777 = rwxrwxrwx
+
+符号模式：
+  u = 用户(所有者)
+  g = 组
+  o = 其他人
+  a = 所有人
+
+  + 添加权限
+  - 移除权限
+  = 设置权限</pre>
+<div class="usage">示例</div>
+<pre># 数字模式
+chmod 755 script.sh      # rwxr-xr-x
+chmod 644 config.txt     # rw-r--r--
+chmod 700 private.key    # rwx------
+
+# 符号模式
+chmod u+x script.sh      # 给所有者添加执行权限
+chmod g+w file.txt       # 给组添加写权限
+chmod o-rwx secret.txt   # 移除其他人的所有权限
+chmod a+r public.txt     # 所有人可读
+
+# 递归修改
+chmod -R 755 /var/www/
+
+# 只修改目录，不修改文件
+find . -type d -exec chmod 755 {} \;
+
+# 给文件添加执行权限
+chmod +x deploy.sh</pre>`
+    },
+    {
+      name: "chown",
+      brief: "修改文件或目录的所有者和所属组",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>chown [选项] 用户[:组] 文件/目录</pre>
+<div class="usage">示例</div>
+<pre># 修改所有者
+chown www-data file.txt
+
+# 同时修改所有者和组
+chown www-data:www-data /var/www/
+
+# 递归修改
+chown -R user:group /path/to/dir/
+
+# 只修改组
+chown :staff file.txt
+
+# 修改符号链接指向的文件
+chown -h user:group link_file</pre>`
+    },
+    {
+      name: "useradd",
+      brief: "创建新用户",
+      detail: `<div class="usage">用法</div>
+<pre>useradd [选项] 用户名</pre>
+<div class="usage">常用参数</div>
+<pre>-m            创建用户主目录
+-s SHELL      指定登录 shell
+-G group1,group2  附加组
+-d HOME_DIR   指定主目录
+-e DATE       账号过期日期
+-g GROUP      指定初始组
+-u UID        指定用户ID
+-c "注释"     用户描述</pre>
+<div class="usage">示例</div>
+<pre># 创建用户（带主目录和默认shell）
+useradd -m -s /bin/bash newuser
+
+# 设置密码
+passwd newuser
+
+# 创建用户并加入sudo组
+useradd -m -G sudo newuser
+
+# 创建系统用户（无主目录）
+useradd -r -s /usr/sbin/nologin sysuser</pre>`
+    },
+    {
+      name: "userdel",
+      brief: "删除用户",
+      detail: `<div class="usage">用法</div>
+<pre>userdel [选项] 用户名</pre>
+<div class="usage">示例</div>
+<pre># 删除用户（保留主目录）
+userdel username
+
+# 删除用户及其主目录
+userdel -r username
+
+# 强制删除（即使用户在线）
+userdel -rf username</pre>`
+    },
+    {
+      name: "passwd",
+      brief: "修改用户密码",
+      detail: `<div class="usage">用法</div>
+<pre>passwd [用户名]</pre>
+<div class="usage">示例</div>
+<pre># 修改当前用户密码
+passwd
+
+# 修改指定用户密码（需root权限）
+passwd username
+
+# 锁定用户账号
+passwd -l username
+
+# 解锁用户账号
+passwd -u username
+
+# 设置密码过期
+passwd -e username</pre>`
+    },
+    {
+      name: "sudo",
+      brief: "以超级用户身份执行命令",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>sudo [选项] 命令</pre>
+<div class="usage">常用参数</div>
+<pre>-i          以 root 身份启动登录 shell
+-u USER     以指定用户身份执行
+-l          列出当前用户的 sudo 权限
+-k          使缓存的密码失效
+-s          以 root 身份启动 shell</pre>
+<div class="usage">示例</div>
+<pre># 以 root 执行命令
+sudo apt update
+
+# 以 root 身份启动 shell
+sudo -i
+
+# 以指定用户执行
+sudo -u postgres psql
+
+# 查看自己的 sudo 权限
+sudo -l
+
+# 编辑 sudoers 文件
+sudo visudo</pre>`
+    },
+    {
+      name: "su",
+      brief: "切换用户身份",
+      detail: `<div class="usage">用法</div>
+<pre>su [选项] [用户名]</pre>
+<div class="usage">示例</div>
+<pre># 切换到 root（需要密码）
+su -
+
+# 以 root 身份运行命令
+su -c "ls /root"
+
+# 切换到指定用户
+su - username
+
+# 切换但保留环境变量
+su username</pre>
+<div class="note">推荐用 sudo -i 代替 su -，更安全</div>`
+    },
+    {
+      name: "groups",
+      brief: "显示用户所属的组",
+      detail: `<div class="usage">示例</div>
+<pre># 查看当前用户的组
+groups
+
+# 查看指定用户的组
+groups username</pre>`
+    },
+    {
+      name: "id",
+      brief: "显示用户的 UID、GID 及所属组",
+      detail: `<div class="usage">示例</div>
+<pre># 显示当前用户信息
+id
+
+# 显示指定用户信息
+id username
+
+# 只显示 UID
+id -u
+
+# 只显示 GID
+id -g</pre>`
+    }
+  ]
+},
+{
+  cat: "系统信息与监控",
+  cmds: [
+    {
+      name: "uname",
+      brief: "显示系统信息",
+      detail: `<div class="usage">用法</div>
+<pre>uname [选项]</pre>
+<div class="usage">常用参数</div>
+<pre>-a        显示所有信息
+-s        内核名称
+-r        内核版本
+-m        硬件架构
+-n        主机名
+-p        处理器类型</pre>
+<div class="usage">示例</div>
+<pre>uname -a
+# Linux server 5.15.0 #1 SMP x86_64 GNU/Linux
+
+uname -r
+# 5.15.0-generic
+
+uname -m
+# x86_64</pre>`
+    },
+    {
+      name: "hostname",
+      brief: "显示或设置系统主机名",
+      detail: `<div class="usage">示例</div>
+<pre># 显示主机名
+hostname
+
+# 设置主机名（临时）
+hostname new-name
+
+# 设置主机名（永久）
+sudo hostnamectl set-hostname new-name</pre>`
+    },
+    {
+      name: "uptime",
+      brief: "系统运行时间和负载",
+      detail: `<div class="usage">示例</div>
+<pre>$ uptime
+ 14:30:15 up 15 days,  3:22,  2 users,  load average: 0.15, 0.10, 0.05
+
+# 含义：运行了15天3小时22分，2个用户在线
+# load average: 最近1/5/15分钟的平均负载</pre>`
+    },
+    {
+      name: "top",
+      brief: "实时显示系统进程和资源使用",
+      detail: `<span class="tag">必备</span>
+<div class="usage">快捷键</div>
+<pre>P     按 CPU 使用排序
+M     按内存使用排序
+k     杀死进程（输入 PID）
+r     调整进程优先级（renice）
+1     显示每个 CPU 核心
+H     显示线程
+q     退出
+u     按用户过滤
+c     显示完整命令行
+V     树状视图</pre>
+<div class="usage">示例</div>
+<pre># 基本使用
+top
+
+# 只看特定用户
+top -u www-data
+
+# 批处理模式（写入文件）
+top -b -n 1 > top_output.txt
+
+# 只运行一次
+top -bn1</pre>`
+    },
+    {
+      name: "htop",
+      brief: "增强版 top（彩色、交互式）",
+      detail: `<div class="usage">说明</div>
+<pre>htop 是 top 的增强版，界面更友好
+需要安装：sudo apt install htop</pre>
+<div class="usage">快捷键</div>
+<pre>F5     树状视图
+F6     排序
+F9     杀死进程
+F3     搜索进程
+u      按用户过滤
+t      树状/列表切换</pre>
+<div class="usage">示例</div>
+<pre># 基本使用
+htop
+
+# 按 CPU 排序
+htop --sort-key=PERCENT_CPU</pre>`
+    },
+    {
+      name: "free",
+      brief: "显示内存使用情况",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>free [选项]</pre>
+<div class="usage">常用参数</div>
+<pre>-h    人类可读格式
+-m    以 MB 为单位
+-g    以 GB 为单位
+-t    显示总和行</pre>
+<div class="usage">示例</div>
+<pre>$ free -h
+              total        used        free      shared  buff/cache   available
+Mem:           15Gi       4.2Gi       8.1Gi       512Mi       2.9Gi       10Gi
+Swap:         2.0Gi          0B       2.0Gi
+
+# 重点看 available（可用内存）而非 free
+# buff/cache 是可以回收的缓存</pre>`
+    },
+    {
+      name: "vmstat",
+      brief: "虚拟内存统计",
+      detail: `<div class="usage">用法</div>
+<pre>vmstat [选项] [刷新间隔] [刷新次数]</pre>
+<div class="usage">示例</div>
+<pre># 每2秒刷新一次，共5次
+vmstat 2 5
+
+# 查看磁盘统计
+vmstat -d
+
+# 宽格式显示
+vmstat -w</pre>
+<div class="usage">字段说明</div>
+<pre>r   等待运行的进程数
+b   不可中断睡眠的进程数
+swpd  使用的虚拟内存
+free  空闲物理内存
+buff  缓冲区使用
+cache 缓存使用
+si    从磁盘换入的内存
+so    从内存换出到磁盘
+us    用户空间 CPU 使用
+sy    内核空间 CPU 使用
+id    空闲 CPU</pre>`
+    },
+    {
+      name: "iostat",
+      brief: "磁盘 I/O 统计",
+      detail: `<div class="usage">用法</div>
+<pre>iostat [选项] [间隔] [次数]</pre>
+<div class="usage">示例</div>
+<pre># 基本磁盘统计
+iostat
+
+# 每2秒刷新
+iostat -x 2
+
+# 只看特定设备
+iostat -x sda</pre>`
+    },
+    {
+      name: "lscpu",
+      brief: "显示 CPU 信息",
+      detail: `<div class="usage">示例</div>
+<pre>lscpu
+
+# 输出包含：
+# 架构、CPU数量、核心数、线程数
+# 型号名称、频率、缓存大小
+# NUMA 节点信息</pre>`
+    },
+    {
+      name: "lsblk",
+      brief: "列出块设备信息",
+      detail: `<div class="usage">示例</div>
+<pre># 列出所有块设备
+lsblk
+
+# 显示文件系统类型
+lsblk -f
+
+# 显示指定设备
+lsblk /dev/sda</pre>`
+    },
+    {
+      name: "dmesg",
+      brief: "显示内核环形缓冲区消息",
+      detail: `<div class="usage">示例</div>
+<pre># 查看内核日志
+dmesg | tail -50
+
+# 查看硬件错误
+dmesg | grep -i error
+
+# 查看 USB 设备
+dmesg | grep -i usb
+
+# 持续跟踪
+dmesg -w</pre>`
+    },
+    {
+      name: "journalctl",
+      brief: "查看 systemd 日志",
+      detail: `<div class="usage">用法</div>
+<pre>journalctl [选项]</pre>
+<div class="usage">示例</div>
+<pre># 查看所有日志
+journalctl
+
+# 查看最近100行
+journalctl -n 100
+
+# 实时跟踪
+journalctl -f
+
+# 按服务过滤
+journalctl -u nginx
+
+# 按时间过滤
+journalctl --since "2025-01-01" --until "2025-01-02"
+
+# 查看本次启动的日志
+journalctl -b
+
+# 查看上次启动的日志
+journalctl -b -1
+
+# 查看错误级别日志
+journalctl -p err</pre>`
+    },
+    {
+      name: "ps",
+      brief: "报告当前进程状态",
+      detail: `<span class="tag">必备</span>
+<div class="usage">常用组合</div>
+<pre>ps aux          # 显示所有进程（BSD 风格）
+ps -ef          # 显示所有进程（System V 风格）
+ps -aux --sort=-%mem | head  # 按内存排序
+ps -aux --sort=-%cpu | head  # 按 CPU 排序</pre>
+<div class="usage">示例</div>
+<pre># 查看所有进程
+ps aux
+
+# 查看特定进程
+ps aux | grep nginx
+
+# 查看进程树
+ps auxf
+pstree
+
+# 查看进程的线程
+ps -eLf | grep nginx
+
+# 查看特定用户的进程
+ps -u www-data
+
+# 查看特定 PID 的进程
+ps -p 1234 -o pid,ppid,user,cmd</pre>`
+    },
+    {
+      name: "kill",
+      brief: "向进程发送信号",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>kill [信号] PID</pre>
+<div class="usage">常用信号</div>
+<pre>1  SIGHUP    重新加载配置
+2  SIGINT    中断（Ctrl+C）
+9  SIGKILL   强制杀死（不可捕获）
+15 SIGTERM   优雅终止（默认）
+18 SIGCONT   继续
+19 SIGSTOP   暂停（不可捕获）
+20 SIGTSTP   暂停（Ctrl+Z）</pre>
+<div class="usage">示例</div>
+<pre># 优雅终止
+kill 1234
+
+# 强制杀死
+kill -9 1234
+
+# 重新加载配置
+kill -HUP 1234
+
+# 杀死所有 nginx 进程
+killall nginx
+
+# 按名字杀进程
+pkill -f "python server.py"</pre>`
+    },
+    {
+      name: "nohup",
+      brief: "忽略挂起信号运行命令（后台持续运行）",
+      detail: `<div class="usage">用法</div>
+<pre>nohup 命令 [参数] &</pre>
+<div class="usage">示例</div>
+<pre># 后台运行脚本，输出重定向
+nohup python server.py > server.log 2>&1 &
+
+# 查看进程
+ps aux | grep server.py
+
+# 查看输出
+tail -f server.log</pre>
+<div class="note">nohup + & 组合可以让进程在退出终端后继续运行</div>`
+    },
+    {
+      name: "screen",
+      brief: "终端复用器（保持会话）",
+      detail: `<div class="usage">用法</div>
+<pre>screen [选项]</pre>
+<div class="usage">常用快捷键</div>
+<pre>Ctrl+A, D    分离（detach）会话
+Ctrl+A, C    创建新窗口
+Ctrl+A, N    下一个窗口
+Ctrl+A, P    上一个窗口
+Ctrl+A, K    关闭当前窗口
+Ctrl+A, [    进入复制模式（可滚动）</pre>
+<div class="usage">示例</div>
+<pre># 创建新会话
+screen -S mysession
+
+# 查看所有会话
+screen -ls
+
+# 恢复会话
+screen -r mysession
+
+# 分离会话
+# 按 Ctrl+A 然后 D
+
+# 终止会话
+screen -X -S mysession quit</pre>`
+    },
+    {
+      name: "tmux",
+      brief: "终端复用器（screen 的现代替代）",
+      detail: `<div class="usage">用法</div>
+<pre>tmux [命令]</pre>
+<div class="usage">常用命令</div>
+<pre>tmux                  # 新建会话
+tmux new -s name      # 新建命名会话
+tmux ls               # 列出会话
+tmux attach -t name   # 连接会话
+tmux kill-session -t name  # 关闭会话</pre>
+<div class="usage">快捷键（前缀 Ctrl+B）</div>
+<pre>Ctrl+B, D        分离会话
+Ctrl+B, C        新建窗口
+Ctrl+B, N/P      下/上一个窗口
+Ctrl+B, %        水平分屏
+Ctrl+B, "        垂直分屏
+Ctrl+B, 方向键   切换面板
+Ctrl+B, [        进入复制模式</pre>
+<div class="usage">示例</div>
+<pre># 创建命名会话
+tmux new -s work
+
+# 后台创建会话
+tmux new -d -s work
+
+# 恢复会话
+tmux attach -t work</pre>`
+    }
+  ]
+},
+{
+  cat: "SSH 远程管理",
+  cmds: [
+    {
+      name: "ssh",
+      brief: "安全远程登录到另一台机器",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>ssh [选项] [用户@]主机 [命令]</pre>
+<div class="usage">常用参数</div>
+<pre>-p PORT    指定端口（默认22）
+-i KEY     指定私钥文件
+-l USER    指定登录用户
+-X         启用 X11 转发
+-f         后台运行
+-N         不执行远程命令（仅端口转发）
+-C         启用压缩
+-v         详细调试输出
+-o OPT     设置配置选项
+-t         强制分配伪终端（如 sudo 需要时）</pre>
+<div class="usage">示例</div>
+<pre># 基本登录
+ssh user@192.168.1.100
+
+# 指定端口
+ssh -p 2222 user@host
+
+# 执行远程命令（不登录）
+ssh user@host "df -h && free -m"
+
+# 使用密钥登录
+ssh -i ~/.ssh/mykey user@host
+
+# X11 转发（图形程序）
+ssh -X user@host
+
+# 后台运行远程命令
+ssh -fN user@host -L 8080:localhost:80
+
+# 强制终端（运行交互式程序时需要）
+ssh -t user@host sudo vim /etc/nginx/nginx.conf
+
+# 调试连接问题
+ssh -vvv user@host</pre>`
+    },
+    {
+      name: "ssh-keygen",
+      brief: "生成 SSH 密钥对",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>ssh-keygen [选项]</pre>
+<div class="usage">常用参数</div>
+<pre>-t TYPE    密钥类型（ed25519, rsa, ecdsa）
+-b BITS    RSA 密钥长度（默认3072）
+-f FILE    指定输出文件
+-C COMMENT 注释（通常用邮箱）
+-N PASS   密码短语（空表示无密码）
+-q         静默模式</pre>
+<div class="usage">示例</div>
+<pre># 生成 Ed25519 密钥（推荐，最安全最快）
+ssh-keygen -t ed25519 -C "your@email.com"
+
+# 生成 RSA 密钥（兼容旧系统）
+ssh-keygen -t rsa -b 4096 -C "your@email.com"
+
+# 指定输出文件
+ssh-keygen -t ed25519 -f ~/.ssh/mykey -C "myserver"
+
+# 生成无密码的密钥（用于自动化）
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""
+
+# 生成后查看公钥
+cat ~/.ssh/id_ed25519.pub
+
+# 修改密钥密码
+ssh-keygen -p -f ~/.ssh/id_ed25519</pre>`
+    },
+    {
+      name: "ssh-copy-id",
+      brief: "将公钥安装到远程主机的 authorized_keys",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>ssh-copy-id [选项] [用户@]主机</pre>
+<div class="usage">示例</div>
+<pre># 安装公钥到远程主机（最常用）
+ssh-copy-id user@192.168.1.100
+
+# 指定公钥文件
+ssh-copy-id -i ~/.ssh/mykey.pub user@host
+
+# 指定端口
+ssh-copy-id -p 2222 user@host
+
+# 安装后测试免密登录
+ssh user@192.168.1.100</pre>
+<div class="note">执行后会要求输入远程密码，之后即可用密钥免密登录</div>`
+    },
+    {
+      name: "ssh-agent",
+      brief: "管理私钥的内存缓存（避免反复输入密码）",
+      detail: `<div class="usage">用法</div>
+<pre>ssh-agent [命令]</pre>
+<div class="usage">示例</div>
+<pre># 启动 ssh-agent
+eval "$(ssh-agent -s)"
+# 输出：Agent pid 12345
+
+# 添加私钥到缓存
+ssh-add ~/.ssh/id_ed25519
+
+# 列出已缓存的密钥
+ssh-add -l
+
+# 删除所有缓存的密钥
+ssh-add -D
+
+# 使用 ssh-agent 后，SSH 连接不再需要输入密码</pre>
+<div class="note">推荐在 ~/.bashrc 中自动启动：
+eval "$(ssh-agent -s)" > /dev/null 2>&1
+ssh-add ~/.ssh/id_ed25519 2>/dev/null</div>`
+    },
+    {
+      name: "ssh_config",
+      brief: "SSH 客户端配置文件（简化连接参数）",
+      detail: `<div class="usage">配置文件位置</div>
+<pre>~/.ssh/config          # 用户级配置
+/etc/ssh/ssh_config    # 全局配置</pre>
+<div class="usage">示例配置</div>
+<pre># ~/.ssh/config
+
+# 简单连接别名
+Host dev
+    HostName 192.168.1.100
+    User deploy
+    Port 22
+
+# 生产服务器
+Host prod
+    HostName 10.0.0.50
+    User admin
+    Port 2222
+    IdentityFile ~/.ssh/prod_key
+
+# 跳板机 + 内网服务器
+Host internal
+    HostName 192.168.1.200
+    User root
+    ProxyJump jumpserver
+
+# 全局默认设置
+Host *
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    AddKeysToAgent yes
+    IdentityFile ~/.ssh/id_ed25519</pre>
+<div class="usage">使用配置文件</div>
+<pre># 配置好后，直接用别名连接
+ssh dev              # 等同于 ssh deploy@192.168.1.100
+ssh prod             # 等同于 ssh -p 2222 admin@10.0.0.50
+
+# 查看配置
+ssh -G dev</pre>`
+    },
+    {
+      name: "scp",
+      brief: "通过 SSH 安全复制文件到远程主机",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>scp [选项] 源 目标</pre>
+<div class="usage">常用参数</div>
+<pre>-P PORT    指定端口（注意大写）
+-i KEY     指定私钥
+-r         递归复制目录
+-C         启用压缩
+-l LIMIT   限速（Kbit/s）
+-p         保留修改时间和权限
+-v         详细输出</pre>
+<div class="usage">示例</div>
+<pre># 本地文件 -> 远程
+scp file.txt user@host:/remote/path/
+
+# 远程文件 -> 本地
+scp user@host:/remote/file.txt /local/path/
+
+# 复制目录（递归）
+scp -r /local/dir/ user@host:/remote/path/
+
+# 指定端口
+scp -P 2222 file.txt user@host:/path/
+
+# 使用密钥
+scp -i ~/.ssh/mykey file.txt user@host:/path/
+
+# 复制远程目录到本地
+scp -r user@host:/var/log/ /tmp/logs/
+
+# 限速传输（1MB/s = 8192 Kbit/s）
+scp -l 8192 large_file.zip user@host:/path/
+
+# 使用配置文件的别名
+scp file.txt prod:/tmp/</pre>`
+    },
+    {
+      name: "sftp",
+      brief: "交互式 SFTP 文件传输客户端",
+      detail: `<div class="usage">用法</div>
+<pre>sftp [选项] [用户@]主机</pre>
+<div class="usage">常用命令</div>
+<pre>ls              列出远程目录
+lls             列出本地目录
+cd DIR          切换远程目录
+lcd DIR         切换本地目录
+get FILE        下载文件
+put FILE        上传文件
+get -r DIR      递归下载目录
+put -r DIR      递归上传目录
+mkdir DIR       创建远程目录
+rm FILE         删除远程文件
+rename OLD NEW  重命名远程文件
+pwd             查看远程工作目录
+lpwd            查看本地工作目录
+!COMMAND        执行本地命令
+bye / exit      退出</pre>
+<div class="usage">示例</div>
+<pre># 交互式连接
+sftp user@host
+
+# 指定端口
+sftp -P 2222 user@host
+
+# 使用配置文件别名
+sftp prod
+
+# 非交互式下载文件
+sftp user@host:"/remote/file.txt" /local/path/
+
+# 批量执行命令
+sftp user@host <<EOF
+cd /var/log
+ls *.log
+get access.log
+bye
+EOF</pre>`
+    },
+    {
+      name: "rsync",
+      brief: "增量文件同步工具（比 scp 更高效）",
+      detail: `<span class="tag">实用</span>
+<div class="usage">用法</div>
+<pre>rsync [选项] 源 目标</pre>
+<div class="usage">常用参数</div>
+<pre>-a        归档模式（保留所有属性）
+-v        详细输出
+-z        传输时压缩
+-P        显示进度并支持断点续传
+--delete  删除目标中源没有的文件
+-n        干跑（不实际传输）
+-e ssh    指定远程 shell（可省略）
+--exclude 排除文件/目录
+--include 只包含文件/目录
+--progress 显示传输进度
+--bwlimit 限速（KB/s）</pre>
+<div class="usage">示例</div>
+<pre># 同步目录到远程
+rsync -avz /local/dir/ user@host:/remote/dir/
+
+# 同步并删除目标多余文件
+rsync -avz --delete /src/ user@host:/dst/
+
+# 只同步特定文件
+rsync -av --include="*.txt" --exclude="*" /src/ /dst/
+
+# 显示传输进度
+rsync -avzP /src/ user@host:/dst/
+
+# 干跑（查看会传输什么）
+rsync -avn /src/ /dst/
+
+# 使用配置文件别名
+rsync -avzP /local/ prod:/remote/
+
+# 排除 node_modules 和 .git
+rsync -avz --exclude="node_modules" --exclude=".git" /src/ /dst/
+
+# 限速传输（1000 KB/s）
+rsync -avz --bwlimit=1000 /src/ user@host:/dst/
+
+# 断点续传（大文件）
+rsync -avzP --partial /large/file user@host:/dst/</pre>
+<div class="note">注意：源路径末尾的 / 很重要！
+  /src/ → 同步 src 目录下的内容到目标
+  /src  → 把 src 目录本身放到目标目录下</div>`
+    },
+    {
+      name: "sshpass",
+      brief: "非交互式 SSH 密码输入（自动化脚本用）",
+      detail: `<div class="usage">安装</div>
+<pre>sudo apt install sshpass   # Debian/Ubuntu
+sudo yum install sshpass   # CentOS/RHEL</pre>
+<div class="usage">示例</div>
+<pre># 使用密码登录
+sshpass -p "password" ssh user@host
+
+# 指定密码文件
+sshpass -f /path/to/passwordfile ssh user@host
+
+# 用 scp 传输文件
+sshpass -p "password" scp file.txt user@host:/path/
+
+# 远程执行命令
+sshpass -p "password" ssh user@host "uptime"
+
+# 指定端口
+sshpass -p "password" ssh -p 2222 user@host
+
+# 使用环境变量（更安全）
+export SSHPASS="mypassword"
+sshpass -e ssh user@host</pre>
+<div class="note">警告：密码会在命令行中暴露！
+  推荐使用 ssh-keygen + ssh-copy-id 实现免密登录
+  sshpass 仅用于无法使用密钥的自动化场景</div>`
+    },
+    {
+      name: "ssh-audit",
+      brief: "审计 SSH 服务器的安全配置",
+      detail: `<div class="usage">安装</div>
+<pre># 使用 ssh-audit 工具
+pip install ssh-audit
+# 或
+git clone https://github.com/jtesta/ssh-audit.git</pre>
+<div class="usage">示例</div>
+<pre># 审计远程 SSH 服务器
+ssh-audit user@host
+
+# 审计特定端口
+ssh-audit -p 2222 host
+
+# 只显示严重问题
+ssh-audit -s host
+
+# 输出到文件
+ssh-audit host > audit_report.txt</pre>`
+    },
+    {
+      name: "autossh",
+      brief: "自动重连的 SSH 隧道（保活）",
+      detail: `<div class="usage">安装</div>
+<pre>sudo apt install autossh</pre>
+<div class="usage">示例</div>
+<pre># 自动重连的反向隧道
+autossh -M 0 -f -N -R 9090:localhost:3000 user@host
+
+# 自动重连的端口转发
+autossh -M 0 -f -N -L 8080:localhost:80 user@host
+
+# 使用 ssh 配置
+autossh -M 0 -f -N -o "ServerAliveInterval=30" \\
+        -o "ServerAliveCountMax=3" user@host
+
+# 作为 systemd 服务运行
+# /etc/systemd/system/autossh-tunnel.service
+[Unit]
+Description=AutoSSH Tunnel
+After=network.target
+
+[Service]
+Environment=AUTOSSH_GATETIME=0
+ExecStart=/usr/bin/autossh -M 0 -N -R 9090:localhost:3000 user@host
+Restart=always
+
+[Install]
+WantedBy=multi-user.target</pre>`
+    },
+    {
+      name: "lsof -i / ss",
+      brief: "查看 SSH 连接状态",
+      detail: `<div class="usage">示例</div>
+<pre># 查看当前 SSH 连接
+ss -tnp | grep ssh
+
+# 查看监听的 SSH 端口
+ss -tlnp | grep :22
+
+# 查看 SSH 进程
+ps aux | grep sshd
+
+# 查看 SSH 连接数
+ss -tn state established '( dport = :22 or sport = :22 )' | wc -l
+
+# 查看 SSH 登录日志
+last | head -20
+lastb | head -20    # 失败的登录
+
+# 查看当前登录用户
+who
+w</pre>`
+    }
+  ]
+},
+{
+  cat: "网络相关",
+  cmds: [
+    {
+      name: "ip",
+      brief: "网络配置工具（现代替代 ifconfig）",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>ip [选项] 对象 [命令]</pre>
+<div class="usage">示例</div>
+<pre># 查看所有网络接口
+ip addr
+ip a
+
+# 查看路由表
+ip route
+ip r
+
+# 查看邻居表（ARP）
+ip neigh
+
+# 启用/禁用接口
+sudo ip link set eth0 up
+sudo ip link set eth0 down
+
+# 配置 IP 地址
+sudo ip addr add 192.168.1.100/24 dev eth0
+
+# 删除 IP 地址
+sudo ip addr del 192.168.1.100/24 dev eth0
+
+# 添加路由
+sudo ip route add 10.0.0.0/8 via 192.168.1.1</pre>`
+    },
+    {
+      name: "ifconfig",
+      brief: "配置网络接口（传统工具）",
+      detail: `<div class="usage">示例</div>
+<pre># 查看所有接口
+ifconfig
+
+# 查看特定接口
+ifconfig eth0
+
+# 启用接口
+sudo ifconfig eth0 up
+
+# 禁用接口
+sudo ifconfig eth0 down
+
+# 配置 IP
+sudo ifconfig eth0 192.168.1.100 netmask 255.255.255.0
+
+# 配置 DHCP
+sudo dhclient eth0</pre>
+<div class="note">推荐使用 ip 命令替代 ifconfig</div>`
+    },
+    {
+      name: "ping",
+      brief: "测试网络连通性",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>ping [选项] 主机/IP</pre>
+<div class="usage">常用参数</div>
+<pre>-c N        发送 N 个包后停止
+-i SECONDS  每隔 SECONDS 秒发包
+-s SIZE     包大小（字节）
+-t TTL      设置 TTL
+-W SECONDS  超时时间</pre>
+<div class="usage">示例</div>
+<pre># 基本测试
+ping google.com
+
+# 只发4个包
+ping -c 4 8.8.8.8
+
+# 指定包大小（测试 MTU）
+ping -s 1472 -M do google.com
+
+# 设置间隔
+ping -i 0.2 192.168.1.1
+
+# ping 广播地址
+ping -b 192.168.1.255</pre>`
+    },
+    {
+      name: "curl",
+      brief: "URL 数据传输工具",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>curl [选项] URL</pre>
+<div class="usage">常用参数</div>
+<pre>-o FILE    保存到文件
+-O         使用远程文件名保存
+-I         只获取响应头
+-L         跟随重定向
+-v         详细输出
+-s         静默模式
+-S         显示错误
+-u USER:PASS  HTTP 认证
+-X METHOD  指定请求方法
+-d DATA    POST 数据
+-H "Header: Value"  设置请求头
+-k         忽略 SSL 证书错误
+--limit-rate  限速</pre>
+<div class="usage">示例</div>
+<pre># 下载文件
+curl -O https://example.com/file.zip
+
+# 保存为指定文件名
+curl -o output.zip https://example.com/file.zip
+
+# 只看响应头
+curl -I https://example.com
+
+# 跟随重定向
+curl -L https://example.com
+
+# POST 请求
+curl -X POST -d "name=value" https://api.example.com
+
+# 带自定义头的 POST（JSON）
+curl -X POST -H "Content-Type: application/json" \\
+  -d '{"key":"value"}' https://api.example.com
+
+# 下载并显示进度
+curl -# -O https://example.com/large-file.zip
+
+# 查看详细连接信息
+curl -v https://example.com</pre>`
+    },
+    {
+      name: "wget",
+      brief: "从网络下载文件",
+      detail: `<div class="usage">用法</div>
+<pre>wget [选项] URL</pre>
+<div class="usage">常用参数</div>
+<pre>-O FILE    保存为指定文件名
+-c         断点续传
+-b         后台下载
+-r         递归下载
+-nd         不创建目录
+-np         不追溯到父目录
+--limit-rate=RATE  限速
+-t N       最大重试次数</pre>
+<div class="usage">示例</div>
+<pre># 下载文件
+wget https://example.com/file.zip
+
+# 保存为指定文件名
+wget -O output.zip https://example.com/file.zip
+
+# 断点续传
+wget -c https://example.com/large-file.zip
+
+# 后台下载
+wget -b https://example.com/large-file.zip
+
+# 限速下载
+wget --limit-rate=1m https://example.com/file.zip
+
+# 递归下载整个网站
+wget -r -np -nH https://example.com/dir/</pre>`
+    },
+    {
+      name: "ss",
+      brief: "查看网络套接字统计（替代 netstat）",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>ss [选项]</pre>
+<div class="usage">常用参数</div>
+<pre>-t        TCP 连接
+-u        UDP 连接
+-l        监听中的套接字
+-n        不解析服务名
+-p        显示进程信息
+-a        所有套接字
+-s        统计摘要</pre>
+<div class="usage">示例</div>
+<pre># 查看所有监听端口
+ss -tlnp
+
+# 查看所有 TCP 连接
+ss -tanp
+
+# 查看统计信息
+ss -s
+
+# 查看特定端口
+ss -tlnp | grep :80
+
+# 查看所有 UDP 连接
+ss -ulnp</pre>`
+    },
+    {
+      name: "netstat",
+      brief: "网络连接和端口查看（传统工具）",
+      detail: `<div class="usage">用法</div>
+<pre>netstat [选项]</pre>
+<div class="usage">常用参数</div>
+<pre>-t        TCP
+-u        UDP
+-l        监听
+-n        不解析
+-p        显示进程
+-a        所有</pre>
+<div class="usage">示例</div>
+<pre># 查看监听端口
+netstat -tlnp
+
+# 查看所有连接
+netstat -tanp
+
+# 查看路由表
+netstat -r
+
+# 查看网络统计
+netstat -s</pre>
+<div class="note">推荐使用 ss 替代 netstat</div>`
+    },
+    {
+      name: "dig",
+      brief: "DNS 查询工具",
+      detail: `<div class="usage">用法</div>
+<pre>dig [选项] 域名</pre>
+<div class="usage">示例</div>
+<pre># 查询 A 记录
+dig example.com
+
+# 查询特定记录类型
+dig example.com MX
+dig example.com NS
+dig example.com TXT
+
+# 简洁输出
+dig +short example.com
+
+# 指定 DNS 服务器
+dig @8.8.8.8 example.com
+
+# 反向解析
+dig -x 8.8.8.8
+
+# 查看完整追踪
+dig +trace example.com</pre>`
+    },
+    {
+      name: "nslookup",
+      brief: "DNS 查询（交互式）",
+      detail: `<div class="usage">示例</div>
+<pre># 查询域名
+nslookup example.com
+
+# 指定 DNS 服务器
+nslookup example.com 8.8.8.8
+
+# 交互模式
+nslookup
+> server 8.8.8.8
+> example.com
+> exit</pre>`
+    },
+    {
+      name: "traceroute",
+      brief: "追踪数据包到达目标的路径",
+      detail: `<div class="usage">示例</div>
+<pre># 基本追踪
+traceroute google.com
+
+# 使用 ICMP
+traceroute -I google.com
+
+# 使用 TCP
+traceroute -T google.com
+
+# 不解析域名（更快）
+traceroute -n google.com</pre>`
+    },
+    {
+      name: "nc (netcat)",
+      brief: "网络瑞士军刀（端口扫描、数据传输）",
+      detail: `<div class="usage">示例</div>
+<pre># 监听端口
+nc -l 8080
+
+# 连接远程端口
+nc example.com 80
+
+# 端口扫描
+nc -zv example.com 1-1000
+
+# 扫描特定端口范围
+nc -zv 192.168.1.1 20-80
+
+# 传输文件
+# 接收端：
+nc -l 9999 > received_file
+# 发送端：
+nc 192.168.1.1 9999 < file_to_send
+
+# HTTP 请求测试
+echo -e "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n" | nc example.com 80</pre>`
+    },
+    {
+      name: "tcpdump",
+      brief: "网络抓包工具",
+      detail: `<span class="tag">高级</span>
+<div class="usage">用法</div>
+<pre>tcpdump [选项] [过滤表达式]</pre>
+<div class="usage">常用过滤</div>
+<pre>host IP            指定主机
+port N             指定端口
+src/dst host IP    指定源/目标主机
+tcp/udp            指定协议
+net CIDR           指定网段</pre>
+<div class="usage">示例</div>
+<pre># 抓取所有流量
+sudo tcpdump
+
+# 抓取特定端口
+sudo tcpdump -i eth0 port 80
+
+# 抓取特定主机
+sudo tcpdump host 192.168.1.100
+
+# 保存到文件
+sudo tcpdump -w capture.pcap
+
+# 读取抓包文件
+tcpdump -r capture.pcap
+
+# 详细输出
+sudo tcpdump -vvv -i eth0
+
+# 限制包数量
+sudo tcpdump -c 100 -i eth0</pre>`
+    },
+    {
+      name: "arp",
+      brief: "查看/操作 ARP 缓存表",
+      detail: `<div class="usage">示例</div>
+<pre># 查看 ARP 表
+arp -a
+
+# 查看特定接口
+arp -i eth0
+
+# 添加静态 ARP 条目
+sudo arp -s 192.168.1.1 aa:bb:cc:dd:ee:ff
+
+# 删除 ARP 条目
+sudo arp -d 192.168.1.1</pre>`
+    },
+    {
+      name: "nmap",
+      brief: "网络扫描和安全审计工具",
+      detail: `<span class="tag">安全</span>
+<div class="usage">示例</div>
+<pre># 快速扫描常用端口
+nmap 192.168.1.1
+
+# 扫描特定端口
+nmap -p 80,443,8080 192.168.1.1
+
+# 扫描全部端口
+nmap -p- 192.168.1.1
+
+# 服务版本检测
+nmap -sV 192.168.1.1
+
+# OS 检测
+nmap -O 192.168.1.1
+
+# 扫描整个子网
+nmap 192.168.1.0/24
+
+# TCP SYN 扫描（隐蔽）
+nmap -sS 192.168.1.1
+
+# 脚本扫描
+nmap --script vuln 192.168.1.1</pre>`
+    },
+    {
+      name: "iptables",
+      brief: "Linux 防火墙配置",
+      detail: `<span class="tag">高级</span>
+<div class="usage">用法</div>
+<pre>iptables [选项] 链 命令</pre>
+<div class="usage">示例</div>
+<pre># 查看规则
+sudo iptables -L -n
+
+# 允许特定端口
+sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+
+# 允许已建立的连接
+sudo iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# 拒绝特定 IP
+sudo iptables -A INPUT -s 1.2.3.4 -j DROP
+
+# 限制连接速率（防 DDoS）
+sudo iptables -A INPUT -p tcp --dport 80 -m limit --limit 25/minute -j ACCEPT
+
+# 删除规则
+sudo iptables -D INPUT 1
+
+# 清除所有规则
+sudo iptables -F
+
+# 保存规则
+sudo iptables-save > /etc/iptables/rules.v4</pre>`
+    },
+    {
+      name: "ufw",
+      brief: "简化的防火墙管理工具",
+      detail: `<div class="usage">示例</div>
+<pre># 启用防火墙
+sudo ufw enable
+
+# 查看状态
+sudo ufw status verbose
+
+# 允许 SSH
+sudo ufw allow ssh
+sudo ufw allow 22/tcp
+
+# 允许特定端口
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+
+# 拒绝特定 IP
+sudo ufw deny from 1.2.3.4
+
+# 允许特定子网
+sudo ufw allow from 192.168.1.0/24
+
+# 删除规则
+sudo ufw delete allow 80/tcp
+
+# 重置所有规则
+sudo ufw reset</pre>`
+    }
+  ]
+},
+{
+  cat: "包管理",
+  cmds: [
+    {
+      name: "apt",
+      brief: "Debian/Ubuntu 包管理器",
+      detail: `<span class="tag">Ubuntu/Debian</span>
+<div class="usage">常用命令</div>
+<pre>sudo apt update              # 更新软件源索引
+sudo apt upgrade             # 升级所有已安装的包
+sudo apt install 包名        # 安装包
+sudo apt remove 包名         # 卸载包（保留配置）
+sudo apt purge 包名          # 卸载包（删除配置）
+sudo apt autoremove          # 清理不再需要的依赖
+sudo apt search 关键词       # 搜索包
+sudo apt show 包名           # 显示包信息
+apt list --installed         # 列出已安装的包
+apt list --upgradable        # 列出可升级的包
+sudo apt clean               # 清理下载缓存
+sudo apt update && sudo apt upgrade -y  # 全面升级</pre>
+<div class="usage">示例</div>
+<pre># 安装多个包
+sudo apt install git curl wget
+
+# 安装特定版本
+sudo apt install nginx=1.18.0-0ubuntu1
+
+# 查看包的依赖关系
+apt-cache depends nginx
+
+# 下载但不安装
+apt download nginx</pre>`
+    },
+    {
+      name: "yum/dnf",
+      brief: "RHEL/CentOS/Fedora 包管理器",
+      detail: `<span class="tag">RHEL/CentOS</span>
+<div class="usage">yum（CentOS 7及以前）</div>
+<pre>sudo yum update              # 更新所有包
+sudo yum install 包名        # 安装包
+sudo yum remove 包名         # 卸载包
+yum search 关键词            # 搜索包
+yum info 包名                # 显示包信息
+yum list installed           # 列出已安装的包
+sudo yum clean all           # 清理缓存</pre>
+<div class="usage">dnf（Fedora/RHEL 8+）</div>
+<pre>sudo dnf update
+sudo dnf install 包名
+sudo dnf remove 包名
+dnf search 关键词
+dnf info 包名</pre>`
+    },
+    {
+      name: "pip",
+      brief: "Python 包管理器",
+      detail: `<span class="tag">Python</span>
+<div class="usage">示例</div>
+<pre># 安装包
+pip install 包名
+pip3 install 包名
+
+# 安装特定版本
+pip install package==1.2.3
+
+# 升级包
+pip install --upgrade package
+
+# 卸载包
+pip uninstall package
+
+# 列出已安装的包
+pip list
+
+# 查看包信息
+pip show package
+
+# 从 requirements.txt 安装
+pip install -r requirements.txt
+
+# 导出当前环境的包
+pip freeze > requirements.txt</pre>`
+    },
+    {
+      name: "npm / yarn",
+      brief: "Node.js 包管理器",
+      detail: `<span class="tag">Node.js</span>
+<div class="usage">npm 命令</div>
+<pre>npm install                    # 安装 package.json 中的依赖
+npm install 包名               # 安装包
+npm install -g 包名            # 全局安装
+npm uninstall 包名             # 卸载包
+npm update                     # 更新所有包
+npm list                       # 列出已安装的包
+npm list -g --depth=0          # 列出全局安装的包
+npm init                       # 初始化新项目
+npm run script                 # 运行脚本
+npm outdated                   # 检查过时的包</pre>
+<div class="usage">yarn 命令</div>
+<pre>yarn install                   # 安装依赖
+yarn add 包名                  # 添加包
+yarn remove 包名               # 移除包
+yarn upgrade                   # 升级包
+yarn list                      # 列出包</pre>`
+    },
+    {
+      name: "snap",
+      brief: "通用 Linux 包管理器",
+      detail: `<div class="usage">示例</div>
+<pre># 搜索包
+snap find editor
+
+# 安装包
+sudo snap install code --classic
+
+# 列出已安装的包
+snap list
+
+# 更新所有包
+sudo snap refresh
+
+# 卸载包
+sudo snap remove code
+
+# 查看包信息
+snap info code</pre>`
+    },
+    {
+      name: "flatpak",
+      brief: "通用 Linux 桌面应用分发",
+      detail: `<div class="usage">示例</div>
+<pre># 安装包
+flatpak install flathub org.mozilla.firefox
+
+# 运行应用
+flatpak run org.mozilla.firefox
+
+# 列出已安装
+flatpak list
+
+# 更新所有
+flatpak update
+
+# 卸载
+flatpak uninstall org.mozilla.firefox</pre>`
+    },
+    {
+      name: "make",
+      brief: "构建工具（编译源码）",
+      detail: `<div class="usage">示例</div>
+<pre># 编译安装软件的经典流程
+./configure
+make
+sudo make install
+
+# 只编译不安装
+make
+
+# 清理编译文件
+make clean
+
+# 完全清理（回到源码状态）
+make distclean
+
+# 并行编译（使用4个核心）
+make -j4
+
+# 指定 Makefile
+make -f MyMakefile</pre>`
+    }
+  ]
+},
+{
+  cat: "磁盘与存储",
+  cmds: [
+    {
+      name: "fdisk",
+      brief: "磁盘分区工具",
+      detail: `<div class="usage">示例</div>
+<pre># 查看所有磁盘分区
+sudo fdisk -l
+
+# 查看特定磁盘
+sudo fdisk -l /dev/sda
+
+# 交互式分区
+sudo fdisk /dev/sda</pre>
+<div class="note">交互式命令：n(新建) d(删除) p(打印) t(类型) w(写入) q(退出)</div>`
+    },
+    {
+      name: "mount / umount",
+      brief: "挂载/卸载文件系统",
+      detail: `<div class="usage">mount 示例</div>
+<pre># 查看已挂载的文件系统
+mount
+cat /proc/mounts
+
+# 挂载分区
+sudo mount /dev/sdb1 /mnt/data
+
+# 挂载 ISO 文件
+sudo mount -o loop image.iso /mnt/iso
+
+# 挂载网络文件系统（NFS）
+sudo mount -t nfs server:/share /mnt/nfs
+
+# 挂载 CIFS/SMB
+sudo mount -t cifs //server/share /mnt/smb -o username=user
+
+# 只读挂载
+sudo mount -o ro /dev/sdb1 /mnt/data</pre>
+<div class="usage">umount 示例</div>
+<pre># 卸载
+sudo umount /mnt/data
+
+# 卸载忙碌时强制卸载
+sudo umount -l /mnt/data
+
+# 查找谁在使用
+sudo lsof +D /mnt/data</pre>`
+    },
+    {
+      name: "blkid",
+      brief: "查看块设备的 UUID 和文件系统类型",
+      detail: `<div class="usage">示例</div>
+<pre>sudo blkid
+
+# 输出类似：
+# /dev/sda1: UUID="xxxx-xxxx" TYPE="ext4"
+# /dev/sdb1: UUID="xxxx-xxxx" TYPE="ntfs"
+
+# 查看特定设备
+sudo blkid /dev/sda1</pre>`
+    },
+    {
+      name: "mkfs",
+      brief: "创建文件系统",
+      detail: `<span class="tag">危险</span>
+<div class="usage">示例</div>
+<pre># 创建 ext4 文件系统
+sudo mkfs.ext4 /dev/sdb1
+
+# 创建 xfs 文件系统
+sudo mkfs.xfs /dev/sdb1
+
+# 创建 btrfs 文件系统
+sudo mkfs.btrfs /dev/sdb1
+
+# 指定卷标
+sudo mkfs.ext4 -L "MyData" /dev/sdb1</pre>
+<div class="note">警告：这会格式化磁盘，数据将丢失！</div>`
+    },
+    {
+      name: "dd",
+      brief: "低级别数据复制/转换工具",
+      detail: `<span class="tag">强大</span> <span class="tag">危险</span>
+<div class="usage">用法</div>
+<pre>dd if=输入 of=输出 bs=块大小 count=块数</pre>
+<div class="usage">示例</div>
+<pre># 创建指定大小的空文件
+dd if=/dev/zero of=test.img bs=1M count=100
+
+# 磁盘镜像
+dd if=/dev/sda of=disk.img bs=4M status=progress
+
+# 写入镜像到U盘
+dd if=image.iso of=/dev/sdb bs=4M status=progress
+
+# 清除磁盘数据
+dd if=/dev/zero of=/dev/sdb bs=1M status=progress
+
+# 生成随机文件
+dd if=/dev/urandom of=random.bin bs=1M count=10</pre>
+<div class="note">警告：dd 的 if 和 of 很容易搞反！搞反可能导致数据丢失！</div>`
+    },
+    {
+      name: "losetup",
+      brief: "管理循环设备（挂载镜像文件）",
+      detail: `<div class="usage">示例</div>
+<pre># 创建循环设备
+sudo losetup -f --show disk.img
+# 输出：/dev/loop0
+
+# 挂载镜像
+sudo mount /dev/loop0 /mnt
+
+# 查看所有循环设备
+sudo losetup -a
+
+# 卸载
+sudo losetup -d /dev/loop0</pre>`
+    }
+  ]
+},
+{
+  cat: "进程管理",
+  cmds: [
+    {
+      name: "jobs / bg / fg",
+      brief: "后台任务管理",
+      detail: `<div class="usage">用法</div>
+<pre>jobs           # 列出后台任务
+bg %N          # 将任务 N 放到后台运行
+fg %N          # 将任务 N 调到前台
+Ctrl+Z         # 暂停当前任务（放到后台）</pre>
+<div class="usage">示例</div>
+<pre># 后台运行长时间任务
+long_command &
+
+# 查看后台任务
+jobs
+
+# 暂停当前任务
+# 按 Ctrl+Z
+
+# 继续在后台运行
+bg
+
+# 调回前台
+fg</pre>`
+    },
+    {
+      name: "nice / renice",
+      brief: "调整进程优先级",
+      detail: `<div class="usage">用法</div>
+<pre>nice -n 优先级 命令     # 以指定优先级启动命令
+renice 优先级 -p PID   # 修改运行中进程的优先级</pre>
+<div class="usage">示例</div>
+<pre># 以低优先级运行（值越大优先级越低）
+nice -n 10 tar czf backup.tar.gz /data/
+
+# 以高优先级运行
+nice -n -5 ./important_script.sh
+
+# 修改运行中进程的优先级
+renice -n 5 -p 1234
+
+# 给进程组设置优先级
+renice -n 10 -g mygroup</pre>`
+    },
+    {
+      name: "pkill / pgrep",
+      brief: "按名称/模式查找和杀进程",
+      detail: `<div class="usage">示例</div>
+<pre># 查找进程
+pgrep nginx
+
+# 查找并显示详细信息
+pgrep -a nginx
+
+# 按模式杀进程
+pkill nginx
+
+# 按完整命令杀进程
+pkill -f "python server.py"
+
+# 发送特定信号
+pkill -HUP nginx
+
+# 按用户杀进程
+pkill -u www-data</pre>`
+    },
+    {
+      name: "strace",
+      brief: "跟踪进程的系统调用",
+      detail: `<span class="tag">调试</span>
+<div class="usage">示例</div>
+<pre># 跟踪程序的系统调用
+strace ls
+
+# 跟踪已运行的进程
+strace -p 1234
+
+# 只跟踪特定类型的系统调用
+strace -e trace=network curl http://example.com
+
+# 跟踪文件操作
+strace -e trace=open,read,write ls
+
+# 统计系统调用时间
+strace -c ls
+
+# 跟踪子进程
+strace -f ./program</pre>`
+    },
+    {
+      name: "lsof",
+      brief: "列出打开的文件",
+      detail: `<span class="tag">实用</span>
+<div class="usage">示例</div>
+<pre># 列出所有打开的文件
+sudo lsof
+
+# 查看特定文件被谁打开
+sudo lsof /var/log/syslog
+
+# 查看特定端口被谁占用
+sudo lsof -i :80
+
+# 查看特定进程打开的文件
+lsof -p 1234
+
+# 查看用户打开的文件
+lsof -u www-data
+
+# 查看网络连接
+lsof -i -n
+
+# 查看目录下的文件
+sudo lsof +D /var/log</pre>`
+    }
+  ]
+},
+{
+  cat: "服务与启动",
+  cmds: [
+    {
+      name: "systemctl",
+      brief: "systemd 服务管理器",
+      detail: `<span class="tag">必备</span>
+<div class="usage">用法</div>
+<pre>systemctl [命令] 服务名</pre>
+<div class="usage">常用命令</div>
+<pre>systemctl start 服务      # 启动服务
+systemctl stop 服务       # 停止服务
+systemctl restart 服务    # 重启服务
+systemctl reload 服务     # 重新加载配置
+systemctl status 服务     # 查看状态
+systemctl enable 服务     # 开机自启
+systemctl disable 服务    # 取消开机自启
+systemctl is-active 服务  # 检查是否运行
+systemctl is-enabled 服务 # 检查是否开机自启
+systemctl list-units --type=service  # 列出所有服务
+systemctl daemon-reload   # 重新加载 systemd 配置</pre>
+<div class="usage">示例</div>
+<pre># 查看 nginx 状态
+sudo systemctl status nginx
+
+# 启动并设置开机自启
+sudo systemctl enable --now nginx
+
+# 查看所有运行中的服务
+systemctl list-units --type=service --state=running
+
+# 查看失败的服务
+systemctl --failed
+
+# 查看服务日志
+journalctl -u nginx</pre>`
+    },
+    {
+      name: "service",
+      brief: "传统服务管理（兼容 SysV init）",
+      detail: `<div class="usage">示例</div>
+<pre># 启动服务
+sudo service nginx start
+
+# 停止服务
+sudo service nginx stop
+
+# 重启服务
+sudo service nginx restart
+
+# 查看状态
+sudo service nginx status</pre>
+<div class="note">推荐使用 systemctl 替代 service</div>`
+    }
+  ]
+},
+{
+  cat: "Git 版本控制",
+  cmds: [
+    {
+      name: "git init",
+      brief: "初始化新的 Git 仓库",
+      detail: `<div class="usage">示例</div>
+<pre># 初始化新仓库
+git init
+
+# 初始化裸仓库（用于服务器）
+git init --bare</pre>`
+    },
+    {
+      name: "git clone",
+      brief: "克隆远程仓库",
+      detail: `<div class="usage">示例</div>
+<pre># 克隆仓库
+git clone https://github.com/user/repo.git
+
+# 克隆到指定目录
+git clone https://github.com/user/repo.git mydir
+
+# 克隆指定分支
+git clone -b branch-name https://github.com/user/repo.git
+
+# 浅克隆（只克隆最近的提交）
+git clone --depth 1 https://github.com/user/repo.git</pre>`
+    },
+    {
+      name: "git add / commit",
+      brief: "暂存和提交更改",
+      detail: `<div class="usage">示例</div>
+<pre># 添加所有更改到暂存区
+git add .
+
+# 添加特定文件
+git add file.txt
+
+# 添加所有 .txt 文件
+git add *.txt
+
+# 提交
+git commit -m "提交信息"
+
+# 提交已暂存的更改（跳过 add）
+git commit -a -m "提交信息"
+
+# 修改上一次提交
+git commit --amend -m "新的提交信息"
+
+# 查看暂存状态
+git status</pre>`
+    },
+    {
+      name: "git push / pull",
+      brief: "推送和拉取远程更改",
+      detail: `<div class="usage">示例</div>
+<pre># 推送到远程
+git push origin main
+
+# 推送并设置上游分支
+git push -u origin main
+
+# 拉取远程更改
+git pull
+
+# 拉取并变基
+git pull --rebase
+
+# 获取远程更新（不合并）
+git fetch
+
+# 查看远程仓库
+git remote -v
+
+# 添加远程仓库
+git remote add origin https://github.com/user/repo.git</pre>`
+    },
+    {
+      name: "git branch",
+      brief: "分支管理",
+      detail: `<div class="usage">示例</div>
+<pre># 列出本地分支
+git branch
+
+# 列出所有分支（包括远程）
+git branch -a
+
+# 创建新分支
+git branch feature-name
+
+# 切换分支
+git checkout feature-name
+git switch feature-name
+
+# 创建并切换到新分支
+git checkout -b feature-name
+git switch -c feature-name
+
+# 删除分支
+git branch -d feature-name
+
+# 强制删除分支
+git branch -D feature-name
+
+# 重命名分支
+git branch -m old-name new-name</pre>`
+    },
+    {
+      name: "git log",
+      brief: "查看提交历史",
+      detail: `<div class="usage">示例</div>
+<pre># 基本日志
+git log
+
+# 简洁日志
+git log --oneline
+
+# 图形化显示
+git log --graph --oneline --all
+
+# 查看最近5次提交
+git log -5
+
+# 按作者查看
+git log --author="John"
+
+# 按日期查看
+git log --since="2025-01-01"
+
+# 查看特定文件的历史
+git log -- file.txt
+
+# 查看提交详情
+git log --stat</pre>`
+    },
+    {
+      name: "git diff",
+      brief: "查看更改内容",
+      detail: `<div class="usage">示例</div>
+<pre># 工作区与暂存区的差异
+git diff
+
+# 暂存区与上次提交的差异
+git diff --staged
+
+# 两次提交之间的差异
+git diff commit1 commit2
+
+# 两个分支之间的差异
+git diff main..feature
+
+# 查看特定文件的差异
+git diff file.txt</pre>`
+    },
+    {
+      name: "git stash",
+      brief: "暂存工作区的更改",
+      detail: `<div class="usage">示例</div>
+<pre># 暂存当前更改
+git stash
+
+# 暂存并添加描述
+git stash push -m "正在做X功能"
+
+# 查看暂存列表
+git stash list
+
+# 恢复最近的暂存
+git stash pop
+
+# 恢复但不删除暂存
+git stash apply
+
+# 删除暂存
+git stash drop
+
+# 清空所有暂存
+git stash clear</pre>`
+    },
+    {
+      name: "git reset",
+      brief: "重置提交历史",
+      detail: `<div class="usage">用法</div>
+<pre>git reset [--soft|--mixed|--hard] [commit]</pre>
+<div class="usage">示例</div>
+<pre># 软重置（保留更改在暂存区）
+git reset --soft HEAD~1
+
+# 混合重置（保留更改在工作区）
+git reset HEAD~1
+
+# 硬重置（丢弃所有更改）
+git reset --hard HEAD~1
+
+# 重置到特定提交
+git reset --hard abc1234</pre>
+<div class="note">警告：--hard 会丢弃所有未提交的更改！</div>`
+    },
+    {
+      name: "git rebase",
+      brief: "变基（整理提交历史）",
+      detail: `<div class="usage">示例</div>
+<pre># 变基到 main 分支
+git rebase main
+
+# 交互式变基（整理最近3次提交）
+git rebase -i HEAD~3
+
+# 变基中止
+git rebase --abort
+
+# 变基后继续
+git rebase --continue</pre>`
+    },
+    {
+      name: "git merge",
+      brief: "合并分支",
+      detail: `<div class="usage">示例</div>
+<pre># 合并 feature 分支到当前分支
+git merge feature
+
+# 合并时不要自动提交
+git merge --no-ff feature
+
+# 合并后中止
+git merge --abort</pre>`
+    }
+  ]
+},
+{
+  cat: "压缩与解压",
+  cmds: [
+    {
+      name: "tar",
+      brief: "打包和解压归档文件",
+      detail: `<span class="tag">必备</span>
+<div class="usage">常用参数</div>
+<pre>-c    创建归档
+-x    解压归档
+-t    查看归档内容
+-z    使用 gzip 压缩/解压
+-j    使用 bzip2 压缩/解压
+-J    使用 xz 压缩/解压
+-v    显示过程
+-f    指定文件名
+-C    指定解压目录</pre>
+<div class="usage">示例</div>
+<pre># 创建 tar.gz 归档
+tar -czvf archive.tar.gz /path/to/dir/
+
+# 解压 tar.gz
+tar -xzvf archive.tar.gz
+
+# 解压到指定目录
+tar -xzvf archive.tar.gz -C /target/dir/
+
+# 创建 tar.bz2 归档
+tar -cjvf archive.tar.bz2 /path/to/dir/
+
+# 解压 tar.bz2
+tar -xjvf archive.tar.bz2
+
+# 创建 tar.xz 归档
+tar -cJvf archive.tar.xz /path/to/dir/
+
+# 查看归档内容
+tar -tzvf archive.tar.gz
+
+# 只解压特定文件
+tar -xzvf archive.tar.gz --include="*.txt"
+
+# 排除某些文件
+tar -czvf backup.tar.gz --exclude="*.log" /data/</pre>`
+    },
+    {
+      name: "zip / unzip",
+      brief: "ZIP 格式压缩与解压",
+      detail: `<div class="usage">zip 示例</div>
+<pre># 压缩文件
+zip archive.zip file1 file2
+
+# 压缩目录（递归）
+zip -r archive.zip directory/
+
+# 排除某些文件
+zip -r archive.zip directory/ -x "*.log"
+
+# 添加到已有压缩包
+zip -u archive.zip newfile.txt</pre>
+<div class="usage">unzip 示例</div>
+<pre># 解压到当前目录
+unzip archive.zip
+
+# 解压到指定目录
+unzip archive.zip -d /target/dir/
+
+# 只查看内容
+unzip -l archive.zip
+
+# 解压特定文件
+unzip archive.zip file.txt
+
+# 覆盖时不提示
+unzip -o archive.zip</pre>`
+    },
+    {
+      name: "gzip / gunzip",
+      brief: "gzip 压缩与解压",
+      detail: `<div class="usage">示例</div>
+<pre># 压缩文件（原文件被替换为 .gz）
+gzip file.txt
+
+# 保留原文件
+gzip -k file.txt
+
+# 解压
+gunzip file.txt.gz
+gzip -d file.txt.gz
+
+# 查看压缩率
+gzip -l file.txt.gz
+
+# 指定压缩级别（1-9，6为默认）
+gzip -9 file.txt
+
+# 压缩 tar 归档
+tar -czf archive.tar.gz /path/</pre>`
+    },
+    {
+      name: "zcat / zmore",
+      brief: "直接查看 gzip 压缩文件的内容",
+      detail: `<div class="usage">示例</div>
+<pre># 直接查看压缩文件（不解压）
+zcat compressed.gz
+
+# 分页查看
+zmore compressed.gz
+
+# 配合 grep 使用
+zgrep "error" compressed.gz</pre>`
+    },
+    {
+      name: "7z",
+      brief: "7-Zip 压缩工具（支持多种格式）",
+      detail: `<div class="usage">示例</div>
+<pre># 压缩
+7z a archive.7z file1 file2
+
+# 解压
+7z x archive.7z
+
+# 解压到指定目录
+7z x archive.7z -o/target/dir/
+
+# 查看内容
+7z l archive.7z
+
+# 压缩为 zip 格式
+7z a archive.zip file1 file2</pre>`
+    }
+  ]
+},
+{
+  cat: "文本处理与正则",
+  cmds: [
+    {
+      name: "tr",
+      brief: "字符转换或删除",
+      detail: `<div class="usage">示例</div>
+<pre># 大小写转换
+echo "hello" | tr 'a-z' 'A-Z'
+echo "HELLO" | tr 'A-Z' 'a-z'
+
+# 替换字符
+echo "hello world" | tr ' ' '\n'
+
+# 删除字符
+echo "hello123" | tr -d '0-9'
+
+# 压缩连续字符
+echo "hello   world" | tr -s ' '
+
+# 删除所有数字
+echo "abc123def456" | tr -d '0-9'</pre>`
+    },
+    {
+      name: "tee",
+      brief: "读取标准输入并输出到文件和屏幕",
+      detail: `<div class="usage">示例</div>
+<pre># 输出到文件和屏幕
+ls -la | tee output.txt
+
+# 追加到文件
+ls -la | tee -a output.txt
+
+# 同时写入多个文件
+ls -la | tee file1.txt file2.txt
+
+# 查看命令输出并保存
+find / -name "*.conf" 2>/dev/null | tee conf_files.txt</pre>`
+    },
+    {
+      name: "paste",
+      brief: "按列合并文件内容",
+      detail: `<div class="usage">示例</div>
+<pre># 并行合并（按行）
+paste file1.txt file2.txt
+
+# 指定分隔符
+paste -d',' file1.txt file2.txt
+
+# 合并为一行
+paste -s file.txt
+
+# 指定分隔符合并为一行
+paste -sd',' file.txt</pre>`
+    },
+    {
+      name: "column",
+      brief: "格式化文本为表格",
+      detail: `<div class="usage">示例</div>
+<pre># 按制表符对齐
+mount | column -t
+
+# 按冒号分隔对齐
+cat /etc/passwd | column -t -s':'
+
+# 指定分隔符
+echo -e "a,b,c\n1,2,3" | column -t -s','</pre>`
+    },
+    {
+      name: "fmt",
+      brief: "文本格式化（段落重排）",
+      detail: `<div class="usage">示例</div>
+<pre># 重新格式化段落（默认宽度72）
+fmt file.txt
+
+# 指定宽度
+fmt -w 80 file.txt
+
+# 保持段落间空行
+fmt -t file.txt</pre>`
+    },
+    {
+      name: "fold",
+      brief: "按宽度折行",
+      detail: `<div class="usage">示例</div>
+<pre># 按80列折行
+fold file.txt
+
+# 指定宽度
+fold -w 120 file.txt
+
+# 在空格处折行
+fold -s -w 80 file.txt</pre>`
+    }
+  ]
+},
+{
+  cat: "设备与硬件",
+  cmds: [
+    {
+      name: "lsusb",
+      brief: "列出 USB 设备",
+      detail: `<div class="usage">示例</div>
+<pre>lsusb
+
+# 详细信息
+lsusb -v
+
+# 只显示特定厂商
+lsusb -d 046d:</pre>`
+    },
+    {
+      name: "lspci",
+      brief: "列出 PCI 设备",
+      detail: `<div class="usage">示例</div>
+<pre># 列出所有 PCI 设备
+lspci
+
+# 详细信息
+lspci -v
+
+# 只显示 GPU
+lspci | grep -i vga
+
+# 只显示网卡
+lspci | grep -i ethernet
+
+# 显示厂商和设备名
+lspci -nn</pre>`
+    },
+    {
+      name: "lsmod",
+      brief: "列出已加载的内核模块",
+      detail: `<div class="usage">示例</div>
+<pre># 列出所有模块
+lsmod
+
+# 搜索特定模块
+lsmod | grep usb
+
+# 加载模块
+sudo modprobe module_name
+
+# 卸载模块
+sudo modprobe -r module_name</pre>`
+    },
+    {
+      name: "dmidecode",
+      brief: "读取硬件 BIOS/DMI 信息",
+      detail: `<div class="usage">示例</div>
+<pre># 查看所有硬件信息
+sudo dmidecode
+
+# 查看内存信息
+sudo dmidecode -t memory
+
+# 查看 BIOS 信息
+sudo dmidecode -t bios
+
+# 查看系统信息
+sudo dmidecode -t system
+
+# 查看序列号
+sudo dmidecode -s system-serial-number</pre>`
+    },
+    {
+      name: "lsblk",
+      brief: "列出块设备信息",
+      detail: `<div class="usage">示例</div>
+<pre># 列出所有块设备
+lsblk
+
+# 显示文件系统类型和UUID
+lsblk -f
+
+# 显示完整设备路径
+lsblk -p
+
+# 显示指定设备
+lsblk /dev/sda</pre>`
+    },
+    {
+      name: "hdparm",
+      brief: "查看/设置硬盘参数",
+      detail: `<div class="usage">示例</div>
+<pre># 查看硬盘信息
+sudo hdparm -I /dev/sda
+
+# 测试读取速度
+sudo hdparm -Tt /dev/sda
+
+# 设置自动挂载参数
+sudo hdparm -S 120 /dev/sda</pre>`
+    },
+    {
+      name: "smartctl",
+      brief: "硬盘 S.M.A.R.T. 健康检查",
+      detail: `<div class="usage">示例</div>
+<pre># 查看硬盘健康状态
+sudo smartctl -a /dev/sda
+
+# 只看健康状态
+sudo smartctl -H /dev/sda
+
+# 运行短测试
+sudo smartctl -t short /dev/sda</pre>`
+    }
+  ]
+},
+{
+  cat: "日期与时间",
+  cmds: [
+    {
+      name: "date",
+      brief: "显示或设置系统日期和时间",
+      detail: `<div class="usage">示例</div>
+<pre># 显示当前日期时间
+date
+
+# 自定义格式
+date "+%Y-%m-%d %H:%M:%S"
+
+# 显示时间戳
+date +%s
+
+# 设置日期时间
+sudo date -s "2025-01-01 12:00:00"
+
+# 显示UTC时间
+date -u
+
+# 显示昨天的日期
+date -d "yesterday" "+%Y-%m-%d"
+
+# 显示7天后的日期
+date -d "+7 days" "+%Y-%m-%d"
+
+# 常用格式
+date "+%F"         # 2025-01-01
+date "+%T"         # 12:00:00
+date "+%Y%m%d"     # 20250101
+date "+%s"         # Unix 时间戳</pre>`
+    },
+    {
+      name: "timedatectl",
+      brief: "查看和设置系统时区与时间同步",
+      detail: `<div class="usage">示例</div>
+<pre># 查看当前时间设置
+timedatectl
+
+# 设置时区
+sudo timedatectl set-timezone Asia/Shanghai
+
+# 启用 NTP 同步
+sudo timedatectl set-ntp true
+
+# 查看可用时区
+timedatectl list-timezones | grep Shanghai</pre>`
+    },
+    {
+      name: "cal",
+      brief: "显示日历",
+      detail: `<div class="usage">示例</div>
+<pre># 当月日历
+cal
+
+# 指定年月
+cal 1 2025
+
+# 全年日历
+cal -y
+
+# 前后各一个月
+cal -3</pre>`
+    },
+    {
+      name: "hwclock",
+      brief: "访问硬件时钟",
+      detail: `<div class="usage">示例</div>
+<pre># 查看硬件时钟
+sudo hwclock -r
+
+# 将系统时间写入硬件时钟
+sudo hwclock -w
+
+# 将硬件时钟设为系统时间
+sudo hwclock -s</pre>`
+    }
+  ]
+},
+{
+  cat: "帮助与文档",
+  cmds: [
+    {
+      name: "man",
+      brief: "查看命令的手册页",
+      detail: `<span class="tag">必备</span>
+<div class="usage">示例</div>
+<pre># 查看手册
+man ls
+
+# 搜索手册
+man -k "network"
+
+# 查看特定章节
+man 5 passwd    # 配置文件手册
+man 1 passwd    # 命令手册
+
+# 查看所有章节
+man -a passwd</pre>`
+    },
+    {
+      name: "info",
+      brief: "查看命令的 Info 文档（比 man 更详细）",
+      detail: `<div class="usage">示例</div>
+<pre>info ls
+info coreutils</pre>`
+    },
+    {
+      name: "whatis / apropos",
+      brief: "快速查找命令说明",
+      detail: `<div class="usage">示例</div>
+<pre># 查看命令简要说明
+whatis ls
+whatis grep
+
+# 搜索相关命令
+apropos "network"
+apropos "compress"</pre>`
+    },
+    {
+      name: "which / whereis",
+      brief: "查找命令位置",
+      detail: `<div class="usage">示例</div>
+<pre># 查看命令路径
+which python
+which nginx
+
+# 查看命令的所有相关文件
+whereis python
+whereis nginx</pre>`
+    },
+    {
+      name: "type",
+      brief: "显示命令的类型",
+      detail: `<div class="usage">示例</div>
+<pre># 显示命令类型
+type ls
+# ls is aliased to 'ls --color=auto'
+
+type cd
+# cd is a shell builtin
+
+type python
+# python is /usr/bin/python</pre>`
+    }
+  ]
+},
+{
+  cat: "Docker 容器",
+  cmds: [
+    {
+      name: "docker run",
+      brief: "创建并运行容器",
+      detail: `<div class="usage">示例</div>
+<pre># 运行容器
+docker run ubuntu echo "Hello"
+
+# 后台运行
+docker run -d nginx
+
+# 交互式运行
+docker run -it ubuntu bash
+
+# 端口映射
+docker run -d -p 8080:80 nginx
+
+# 挂载目录
+docker run -v /host/path:/container/path nginx
+
+# 环境变量
+docker run -e MY_VAR=value nginx
+
+# 命名容器
+docker run --name my-nginx -d nginx
+
+# 容器退出后自动删除
+docker run --rm ubuntu echo "test"</pre>`
+    },
+    {
+      name: "docker ps",
+      brief: "列出容器",
+      detail: `<div class="usage">示例</div>
+<pre># 查看运行中的容器
+docker ps
+
+# 查看所有容器
+docker ps -a
+
+# 只显示容器 ID
+docker ps -q
+
+# 按状态过滤
+docker ps -a --filter "status=exited"
+
+# 自定义输出格式
+docker ps --format "table {{.ID}}\t{{.Names}}\t{{.Status}}"</pre>`
+    },
+    {
+      name: "docker images",
+      brief: "列出镜像",
+      detail: `<div class="usage">示例</div>
+<pre># 列出本地镜像
+docker images
+
+# 列出所有镜像（包括中间层）
+docker images -a
+
+# 按名称过滤
+docker images nginx
+
+# 删除镜像
+docker rmi image_name
+
+# 清理未使用的镜像
+docker image prune</pre>`
+    },
+    {
+      name: "docker exec",
+      brief: "在运行中的容器中执行命令",
+      detail: `<div class="usage">示例</div>
+<pre># 在容器中执行命令
+docker exec container_name ls /app
+
+# 交互式进入容器
+docker exec -it container_name bash
+
+# 以特定用户执行
+docker exec -u root container_name whoami</pre>`
+    },
+    {
+      name: "docker logs",
+      brief: "查看容器日志",
+      detail: `<div class="usage">示例</div>
+<pre># 查看日志
+docker logs container_name
+
+# 实时跟踪
+docker logs -f container_name
+
+# 查看最后100行
+docker logs --tail 100 container_name
+
+# 按时间过滤
+docker logs --since "2025-01-01" container_name</pre>`
+    },
+    {
+      name: "docker-compose",
+      brief: "多容器应用编排",
+      detail: `<div class="usage">示例</div>
+<pre># 启动所有服务
+docker-compose up -d
+
+# 停止所有服务
+docker-compose down
+
+# 查看服务状态
+docker-compose ps
+
+# 查看日志
+docker-compose logs
+
+# 重新构建并启动
+docker-compose up -d --build
+
+# 进入容器
+docker-compose exec web bash
+
+# 扩展服务实例数
+docker-compose up -d --scale web=3</pre>`
+    }
+  ]
+},
+{
+  cat: "杂项实用命令",
+  cmds: [
+    {
+      name: "alias / unalias",
+      brief: "创建/删除命令别名",
+      detail: `<div class="usage">示例</div>
+<pre># 创建别名
+alias ll='ls -lah'
+alias la='ls -la'
+alias ..='cd ..'
+alias ...='cd ../..'
+
+# 查看所有别名
+alias
+
+# 删除别名
+unalias ll
+
+# 永久生效：添加到 ~/.bashrc 或 ~/.zshrc
+echo "alias ll='ls -lah'" >> ~/.bashrc</pre>`
+    },
+    {
+      name: "history",
+      brief: "查看命令历史",
+      detail: `<div class="usage">示例</div>
+<pre># 查看历史命令
+history
+
+# 搜索历史
+history | grep "docker"
+
+# 清空历史
+history -c
+
+# 执行历史中的第 N 条命令
+!N
+
+# 执行上一条命令
+!!
+
+# 执行上一条以 string 开头的命令
+!string
+
+# 最后一条命令的参数
+!$</pre>`
+    },
+    {
+      name: "echo",
+      brief: "输出文本到终端",
+      detail: `<div class="usage">示例</div>
+<pre># 输出文本
+echo "Hello World"
+
+# 输出变量
+echo $PATH
+
+# 输出不换行
+echo -n "loading..."
+
+# 解释转义字符
+echo -e "line1\nline2\ttab"
+
+# 输出到文件
+echo "content" > file.txt
+
+# 追加到文件
+echo "new line" >> file.txt
+
+# 输出空行
+echo
+
+# 显示特殊字符
+echo \$PATH</pre>`
+    },
+    {
+      name: "env / printenv",
+      brief: "显示环境变量",
+      detail: `<div class="usage">示例</div>
+<pre># 显示所有环境变量
+env
+printenv
+
+# 显示特定变量
+echo $PATH
+echo $HOME
+printenv PATH
+
+# 临时设置环境变量
+export MY_VAR="hello"
+
+# 永久设置（添加到 ~/.bashrc）
+echo 'export MY_VAR="hello"' >> ~/.bashrc
+source ~/.bashrc</pre>`
+    },
+    {
+      name: "crontab",
+      brief: "定时任务管理",
+      detail: `<div class="usage">用法</div>
+<pre>分  时  日  月  周  命令
+*   *   *   *   *   command</pre>
+<div class="usage">示例</div>
+<pre># 编辑当前用户的定时任务
+crontab -e
+
+# 查看当前用户的定时任务
+crontab -l
+
+# 删除所有定时任务
+crontab -r
+
+# 示例：
+# 每天凌晨2点执行备份
+0 2 * * * /home/user/backup.sh
+
+# 每5分钟执行一次
+*/5 * * * * /home/user/check.sh
+
+# 每周一上午9点
+0 9 * * 1 /home/user/report.sh
+
+# 每小时的第30分钟
+30 * * * * /home/user/hourly.sh</pre>`
+    },
+    {
+      name: "watch",
+      brief: "定期执行命令并显示输出",
+      detail: `<div class="usage">示例</div>
+<pre># 每2秒执行一次（默认）
+watch df -h
+
+# 每5秒执行一次
+watch -n 5 free -m
+
+# 高亮变化
+watch -d df -h
+
+# 高亮所有变化
+watch -d=cumulative free -m</pre>`
+    },
+    {
+      name: "timeout",
+      brief: "限制命令执行时间",
+      detail: `<div class="usage">示例</div>
+<pre># 最多运行10秒
+timeout 10 long_running_command
+
+# 最多运行5分钟
+timeout 5m command
+
+# 最多运行1小时
+timeout 1h command
+
+# 超时后发送特定信号
+timeout -s KILL 30 command
+
+# 超时后返回特定退出码
+timeout --preserve-status 10 command</pre>`
+    },
+    {
+      name: "yes",
+      brief: "重复输出字符串（常用于自动确认）",
+      detail: `<div class="usage">示例</div>
+<pre># 自动确认删除
+yes | sudo apt remove package
+
+# 自动确认
+yes | command
+
+# 输出指定字符串
+yes "ok" | head -5</pre>`
+    },
+    {
+      name: "script / scriptreplay",
+      brief: "录制和回放终端会话",
+      detail: `<div class="usage">示例</div>
+<pre># 开始录制
+script session.log
+
+# 执行一些命令
+ls
+pwd
+date
+
+# 结束录制
+exit
+
+# 回放会话
+scriptreplay session.log</pre>`
+    },
+    {
+      name: "base64",
+      brief: "Base64 编码/解码",
+      detail: `<div class="usage">示例</div>
+<pre># 编码
+echo "hello" | base64
+# aGVsbG8=
+
+# 解码
+echo "aGVsbG8=" | base64 -d
+# hello
+
+# 编码文件
+base64 file.txt > encoded.txt
+
+# 解码文件
+base64 -d encoded.txt > decoded.txt</pre>`
+    },
+    {
+      name: "md5sum / sha256sum",
+      brief: "计算文件哈希值（校验完整性）",
+      detail: `<div class="usage">示例</div>
+<pre># MD5 校验
+md5sum file.txt
+
+# SHA256 校验
+sha256sum file.txt
+
+# 校验文件完整性
+sha256sum -c checksum.txt
+
+# 生成校验文件
+sha256sum *.txt > checksum.txt</pre>`
+    }
+  ]
+}
+];
+
+// Render
+const app = document.getElementById('app');
+let html = '';
+
+data.forEach(cat => {
+  html += `<div class="category" data-cat="${cat.cat}">`;
+  html += `<div class="category-title">${cat.cat}</div>`;
+  cat.cmds.forEach(cmd => {
+    const id = cmd.name.replace(/[^a-zA-Z0-9]/g, '_');
+    html += `<div class="cmd-card" data-name="${cmd.name.toLowerCase()}" data-brief="${cmd.brief.toLowerCase()}">`;
+    html += `<div class="cmd-header" onclick="toggle('${id}')">`;
+    html += `<span class="cmd-name">${cmd.name}</span>`;
+    html += `<span class="cmd-brief">${cmd.brief}</span>`;
+    html += `<span class="cmd-arrow">▶</span>`;
+    html += `</div>`;
+    html += `<div class="cmd-detail" id="d_${id}">${cmd.detail}</div>`;
+    html += `</div>`;
+  });
+  html += `</div>`;
+});
+
+app.innerHTML = html;
+
+function toggle(id) {
+  const el = document.getElementById('d_' + id);
+  el.closest('.cmd-card').classList.toggle('open');
+}
+
+function toggleAll(open) {
+  document.querySelectorAll('.cmd-card').forEach(card => {
+    card.classList.toggle('open', open);
+  });
+}
+
+// Search
+document.getElementById('search').addEventListener('input', function(e) {
+  const q = e.target.value.toLowerCase().trim();
+  document.querySelectorAll('.cmd-card').forEach(card => {
+    const name = card.dataset.name;
+    const brief = card.dataset.brief;
+    const match = !q || name.includes(q) || brief.includes(q) || card.textContent.toLowerCase().includes(q);
+    card.classList.toggle('hidden', !match);
+    if (q && match) card.classList.add('open');
+  });
+  document.querySelectorAll('.category').forEach(cat => {
+    const hasVisible = cat.querySelector('.cmd-card:not(.hidden)');
+    cat.classList.toggle('hidden', !hasVisible);
+  });
+});
+</script>
+
+</body>
+</html>

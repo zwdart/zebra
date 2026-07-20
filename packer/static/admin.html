@@ -163,7 +163,8 @@ td { font-size: 14px; }
     <div class="card">
       <div class="card-header">
         <h2>发现列表</h2>
-        <div style="display:flex;gap:12px;align-items:center;">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="discovery-search" placeholder="搜索名称/描述/标签..." style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;" oninput="debounceDiscoverySearch()">
           <div class="filter-bar" id="discovery-filter-bar">
             <button class="btn-filter active" data-type="all" onclick="filterDiscoveryType('all')">全部</button>
             <button class="btn-filter" data-type="0" onclick="filterDiscoveryType(0)">官方</button>
@@ -171,6 +172,8 @@ td { font-size: 14px; }
             <button class="btn-filter" data-type="2" onclick="filterDiscoveryType(2)">广告</button>
           </div>
           <button class="btn btn-primary" onclick="openDiscoveryCreateModal()">+ 新增发现</button>
+          <button class="btn btn-ghost" onclick="exportDiscoveries()">导出 CSV</button>
+          <label class="btn btn-ghost" style="cursor:pointer;">导入 CSV<input type="file" accept=".csv" style="display:none;" onchange="importDiscoveries(this)"></label>
         </div>
       </div>
       <div class="stats-bar" id="discovery-stats-bar"></div>
@@ -180,6 +183,7 @@ td { font-size: 14px; }
       <div class="pagination" id="discoveries-pagination"></div>
     </div>
   </div>
+
 </div>
 
 <!-- 上传版本弹窗 -->
@@ -357,6 +361,10 @@ td { font-size: 14px; }
           <input type="url" id="discovery-icon">
         </div>
         <div class="form-group">
+          <label>标签 (tags)</label>
+          <input type="text" id="discovery-tags" placeholder="多个标签用逗号分隔，如: 工具,推荐,热门">
+        </div>
+        <div class="form-group">
           <label>启用</label>
           <select id="discovery-enabled">
             <option value="true">是</option>
@@ -386,6 +394,10 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.className = 'toast', 3000);
 }
 
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+}
+
 function closeModal(id) {
   document.getElementById(id).classList.remove('active');
 }
@@ -397,7 +409,7 @@ function switchTab(tab) {
     document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
     document.getElementById('tab-versions').classList.add('active');
     loadVersions();
-  } else {
+  } else if (tab === 'discoveries') {
     document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
     document.getElementById('tab-discoveries').classList.add('active');
     loadDiscoveries();
@@ -649,14 +661,26 @@ let discoveryPageSize = 20;
 let discoveryTotal = 0;
 let discoveryData = [];
 let currentDiscoveryFilter = 'all';
+let discoverySearchQuery = '';
+let discoverySearchTimer = null;
 const TYPE_NAMES = { 0: '官方', 1: '推荐', 2: '广告' };
+
+function debounceDiscoverySearch() {
+  clearTimeout(discoverySearchTimer);
+  discoverySearchTimer = setTimeout(() => {
+    discoverySearchQuery = document.getElementById('discovery-search').value.trim();
+    discoveryPage = 1;
+    loadDiscoveries();
+  }, 300);
+}
 
 async function loadDiscoveries(page) {
   if (page !== undefined) discoveryPage = page;
   try {
-    let url = `${API_BASE}/discoveries?page=${discoveryPage}&size=${discoveryPageSize}`;
-    if (currentDiscoveryFilter !== 'all') url += `&type=${currentDiscoveryFilter}`;
-    const res = await fetch(url);
+    const params = new URLSearchParams({ page: discoveryPage, size: discoveryPageSize });
+    if (currentDiscoveryFilter !== 'all') params.set('type', currentDiscoveryFilter);
+    if (discoverySearchQuery) params.set('search', discoverySearchQuery);
+    const res = await fetch(`${API_BASE}/discoveries?${params}`);
     const json = await res.json();
     discoveryData = json.data || [];
     discoveryTotal = json.total || 0;
@@ -691,18 +715,22 @@ function renderDiscoveryTable(items) {
     return;
   }
   let html = `<div class="table-scroll"><table><thead><tr>
-    <th>ID</th><th>类型</th><th>名称</th><th>简介</th><th>链接</th><th>点击数</th><th>排序</th><th>状态</th><th>创建时间</th><th>操作</th>
+    <th>ID</th><th>类型</th><th>图标</th><th>名称</th><th>简介</th><th>标签</th><th>链接</th><th>点击数</th><th>排序</th><th>状态</th><th>创建时间</th><th>操作</th>
   </tr></thead><tbody>`;
   for (const d of items) {
     const typeName = TYPE_NAMES[d.type] || '未知';
     const desc = d.description ? (d.description.length > 50 ? d.description.substring(0, 50) + '...' : d.description) : '-';
     const url = d.url ? (d.url.length > 40 ? d.url.substring(0, 40) + '...' : d.url) : '-';
     const enabledHtml = d.enabled ? '<span class="enabled-badge enabled-true">启用</span>' : '<span class="enabled-badge enabled-false">禁用</span>';
+    const tagsHtml = d.tags ? d.tags.split(',').map(t => t.trim()).filter(t => t).map(t => `<span class="type-badge type-badge-1" style="margin:1px;">${escHtml(t)}</span>`).join(' ') : '-';
+    const iconHtml = d.icon_url ? `<img src="${escHtml(d.icon_url)}" style="width:24px;height:24px;border-radius:4px;object-fit:cover;" onerror="this.style.display='none'" title="${escHtml(d.icon_url)}">` : '<span style="color:#ccc;">-</span>';
     html += `<tr>
       <td>${d.id}</td>
       <td><span class="type-badge type-badge-${d.type}">${typeName}</span></td>
+      <td>${iconHtml}</td>
       <td><strong>${escHtml(d.name)}</strong></td>
       <td title="${escHtml(d.description)}">${escHtml(desc)}</td>
+      <td>${tagsHtml}</td>
       <td><span class="file-name" title="${escHtml(d.url)}" style="cursor:pointer;" onclick="copyToClipboard('${escHtml(d.url).replace(/'/g, "\\'")}')">${escHtml(url)}</span></td>
       <td>${d.clicks}</td>
       <td>${d.sort_order}</td>
@@ -734,7 +762,20 @@ function renderDiscoveryPagination() {
   html += `<button ${discoveryPage>=totalPages?'disabled':''} onclick="loadDiscoveries(${discoveryPage+1})">下一页</button>`;
   html += `<button ${discoveryPage>=totalPages?'disabled':''} onclick="loadDiscoveries(${totalPages})">末页</button>`;
   html += `<span class="page-info">第 ${discoveryPage}/${totalPages} 页，共 ${discoveryTotal} 条</span>`;
+  html += `<span class="page-info">跳转到 <input type="number" id="discovery-jump-page" min="1" max="${totalPages}" value="${discoveryPage}" style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:13px;text-align:center;" onkeydown="if(event.key==='Enter'){discoveryJumpToPage(${totalPages})}"> 页</span>`;
+  html += `<button class="btn btn-sm btn-ghost" onclick="discoveryJumpToPage(${totalPages})">GO</button>`;
   container.innerHTML = html;
+}
+
+function discoveryJumpToPage(totalPages) {
+  const input = document.getElementById('discovery-jump-page');
+  if (!input) return;
+  const page = parseInt(input.value);
+  if (isNaN(page) || page < 1 || page > totalPages) {
+    showToast('请输入有效页码 (1-' + totalPages + ')', 'error');
+    return;
+  }
+  loadDiscoveries(page);
 }
 
 function openDiscoveryCreateModal() {
@@ -757,6 +798,7 @@ function openDiscoveryEditModal(id) {
   document.getElementById('discovery-desc').value = d.description || '';
   document.getElementById('discovery-url').value = d.url || '';
   document.getElementById('discovery-icon').value = d.icon_url || '';
+  document.getElementById('discovery-tags').value = d.tags || '';
   document.getElementById('discovery-sort').value = d.sort_order || 0;
   document.getElementById('discovery-enabled').value = d.enabled ? 'true' : 'false';
   document.getElementById('discovery-save-btn').textContent = '保存';
@@ -773,6 +815,7 @@ async function handleDiscoverySave(e) {
     description: document.getElementById('discovery-desc').value,
     url: document.getElementById('discovery-url').value,
     icon_url: document.getElementById('discovery-icon').value,
+    tags: document.getElementById('discovery-tags').value,
     sort_order: parseInt(document.getElementById('discovery-sort').value) || 0,
     enabled: document.getElementById('discovery-enabled').value === 'true',
   };
@@ -796,6 +839,26 @@ async function deleteDiscovery(id) {
     if (json.success) { showToast('已删除'); loadDiscoveries(); }
     else showToast('删除失败', 'error');
   } catch (err) { showToast('删除失败: ' + err.message, 'error'); }
+}
+
+function exportDiscoveries() {
+  window.open(`${API_BASE}/discoveries/export`, '_blank');
+}
+
+async function importDiscoveries(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await fetch(`${API_BASE}/discoveries/import`, { method: 'POST', body: formData });
+    const json = await res.json();
+    if (json.success) {
+      showToast(`导入成功，共 ${json.data?.imported || 0} 条`);
+      loadDiscoveries();
+    } else showToast('导入失败: ' + (json.error || ''), 'error');
+  } catch (err) { showToast('导入失败: ' + err.message, 'error'); }
+  input.value = '';
 }
 
 // ===================== Init =====================

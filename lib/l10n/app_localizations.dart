@@ -273,6 +273,48 @@ class AppLocalizations {
   String get discoveryTotal => translate('discoveryTotal');
   String get discoveryEmpty => translate('discoveryEmpty');
 
+  // Linux Commands
+  String get linuxCommands => translate('linuxCommands');
+  String get linuxCommandsManage => translate('linuxCommandsManage');
+  String get command => translate('command');
+  String get commandDescriptionZh => translate('commandDescriptionZh');
+  String get commandDescriptionEn => translate('commandDescriptionEn');
+  String get exportCsv => translate('exportCsv');
+  String get importCsv => translate('importCsv');
+  String get resetToDefault => translate('resetToDefault');
+  String get addCommand => translate('addCommand');
+  String get editCommand => translate('editCommand');
+  String get deleteCommandConfirm => translate('deleteCommandConfirm');
+  String get commandCopied => translate('commandCopied');
+  String get noCommands => translate('noCommands');
+  String get importSuccess => translate('importSuccess');
+  String get importFailed => translate('importFailed');
+  String get exportSuccess => translate('exportSuccess');
+  String get exportFailed => translate('exportFailed');
+  String get totalCommands => translate('totalCommands');
+  String get usageExamples => translate('usageExamples');
+
+  // Diary
+  String get diary => translate('diary');
+  String get diaryEmpty => translate('diaryEmpty');
+  String get diaryTitle => translate('diaryTitle');
+  String get diaryContent => translate('diaryContent');
+  String get diaryMood => translate('diaryMood');
+  String get diaryNew => translate('diaryNew');
+  String get diaryEdit => translate('diaryEdit');
+  String get diaryDeleteConfirm => translate('diaryDeleteConfirm');
+  String get diaryMoodHappy => translate('diaryMoodHappy');
+  String get diaryMoodNeutral => translate('diaryMoodNeutral');
+  String get diaryMoodSad => translate('diaryMoodSad');
+  String get diaryMoodAngry => translate('diaryMoodAngry');
+  String get diaryMoodExcited => translate('diaryMoodExcited');
+  String get diaryExportCsv => translate('diaryExportCsv');
+  String get diaryImportCsv => translate('diaryImportCsv');
+  String get diaryImportSuccess => translate('diaryImportSuccess');
+  String get diaryImportFailed => translate('diaryImportFailed');
+  String get diaryExportSuccess => translate('diaryExportSuccess');
+  String get diaryExportFailed => translate('diaryExportFailed');
+
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
     'connections': 'Connections',
@@ -506,6 +548,44 @@ class AppLocalizations {
     'discoveryFilterAll': 'All',
     'discoveryTotal': 'Total',
     'discoveryEmpty': 'No discovery items yet',
+    'linuxCommands': 'Linux Commands',
+    'linuxCommandsManage': 'Manage Linux Commands',
+    'command': 'Command',
+    'commandDescriptionZh': 'Chinese Description',
+    'commandDescriptionEn': 'English Description',
+    'exportCsv': 'Export CSV',
+    'importCsv': 'Import CSV',
+    'resetToDefault': 'Reset to Default',
+    'addCommand': 'Add Command',
+    'editCommand': 'Edit Command',
+    'deleteCommandConfirm': 'Delete this command?',
+    'commandCopied': 'Command copied to clipboard',
+    'noCommands': 'No commands found',
+    'importSuccess': 'Import successful',
+    'importFailed': 'Import failed',
+    'exportSuccess': 'CSV exported successfully',
+    'exportFailed': 'Export failed',
+    'totalCommands': 'Total: {count}',
+    'usageExamples': 'Usage Examples',
+    'diary': 'Diary',
+    'diaryEmpty': 'No diary entries yet',
+    'diaryTitle': 'Title',
+    'diaryContent': 'Content',
+    'diaryMood': 'Mood',
+    'diaryNew': 'New Entry',
+    'diaryEdit': 'Edit Entry',
+    'diaryDeleteConfirm': 'Delete this diary entry?',
+    'diaryMoodHappy': 'Happy',
+    'diaryMoodNeutral': 'Neutral',
+    'diaryMoodSad': 'Sad',
+    'diaryMoodAngry': 'Angry',
+    'diaryMoodExcited': 'Excited',
+    'diaryExportCsv': 'Export CSV',
+    'diaryImportCsv': 'Import CSV',
+    'diaryImportSuccess': 'Import successful',
+    'diaryImportFailed': 'Import failed',
+    'diaryExportSuccess': 'CSV exported successfully',
+    'diaryExportFailed': 'Export failed',
   };
 
   static const Map<String, String> _zh = {
@@ -741,6 +821,44 @@ class AppLocalizations {
     'discoveryFilterAll': '全部',
     'discoveryTotal': '共',
     'discoveryEmpty': '暂无发现内容',
+    'linuxCommands': 'Linux 常用命令',
+    'linuxCommandsManage': '管理 Linux 命令',
+    'command': '命令',
+    'commandDescriptionZh': '中文说明',
+    'commandDescriptionEn': '英文说明',
+    'exportCsv': '导出 CSV',
+    'importCsv': '导入 CSV',
+    'resetToDefault': '恢复默认',
+    'addCommand': '添加命令',
+    'editCommand': '编辑命令',
+    'deleteCommandConfirm': '确定删除此命令？',
+    'commandCopied': '命令已复制到剪贴板',
+    'noCommands': '暂无命令',
+    'importSuccess': '导入成功',
+    'importFailed': '导入失败',
+    'exportSuccess': 'CSV 导出成功',
+    'exportFailed': '导出失败',
+    'totalCommands': '共 {count} 条',
+    'usageExamples': '使用示例',
+    'diary': '日记本',
+    'diaryEmpty': '暂无日记',
+    'diaryTitle': '标题',
+    'diaryContent': '内容',
+    'diaryMood': '心情',
+    'diaryNew': '新建日记',
+    'diaryEdit': '编辑日记',
+    'diaryDeleteConfirm': '确定删除这条日记？',
+    'diaryMoodHappy': '开心',
+    'diaryMoodNeutral': '平静',
+    'diaryMoodSad': '难过',
+    'diaryMoodAngry': '生气',
+    'diaryMoodExcited': '兴奋',
+    'diaryExportCsv': '导出 CSV',
+    'diaryImportCsv': '导入 CSV',
+    'diaryImportSuccess': '导入成功',
+    'diaryImportFailed': '导入失败',
+    'diaryExportSuccess': 'CSV 导出成功',
+    'diaryExportFailed': '导出失败',
   };
 }
 

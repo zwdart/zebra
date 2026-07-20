@@ -13,6 +13,7 @@ class DiscoveryService {
     int size = 10,
     String sort = 'time',
     int? type,
+    String? search,
   }) async {
     try {
       final params = <String, String>{
@@ -22,6 +23,9 @@ class DiscoveryService {
       };
       if (type != null) {
         params['type'] = '$type';
+      }
+      if (search != null && search.isNotEmpty) {
+        params['search'] = search;
       }
       final uri = Uri.parse('$_baseUrl/api/discoveries').replace(queryParameters: params);
       final response = await http.get(uri).timeout(const Duration(seconds: 10));
