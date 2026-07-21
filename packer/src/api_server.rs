@@ -139,6 +139,7 @@ pub struct VersionQuery {
     pub current_version: String,
     pub version_code: Option<i64>,
     pub platform: String,
+    pub unique_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -553,6 +554,17 @@ fn init_db(db: &Connection) {
         CREATE INDEX IF NOT EXISTS idx_blog_posts_published ON blog_posts(published);
         CREATE INDEX IF NOT EXISTS idx_blog_posts_created ON blog_posts(created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_blog_posts_sort ON blog_posts(sort_order DESC, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS app_launches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unique_id TEXT NOT NULL DEFAULT '',
+            platform TEXT NOT NULL DEFAULT '',
+            app_version TEXT NOT NULL DEFAULT '',
+            launched_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_app_launches_unique_id ON app_launches(unique_id);
+        CREATE INDEX IF NOT EXISTS idx_app_launches_launched_at ON app_launches(launched_at DESC);
         "
     ).expect("Failed to create table");
 
@@ -958,7 +970,7 @@ fn db_discovery_delete(db: &Connection, id: i64) -> Result<(), String> {
 // ============================================================
 
 /// POST /api/version
-/// Body: { "current_version": "1.0.0", "version_code": 100, "platform": "windows" }
+/// Body: { "current_version": "1.0.0", "version_code": 100, "platform": "windows", "unique_id": "..." }
 async fn check_version(
     State(state): State<Arc<AppState>>,
     Json(query): Json<VersionQuery>,
@@ -976,7 +988,7 @@ async fn check_version(
     }
 
     let db = state.db.lock().unwrap();
-    match db_get_latest(&db, &query.platform) {
+    let result = match db_get_latest(&db, &query.platform) {
         Some(info) => {
             // 优先使用 version_code 比较，否则使用版本号字符串比较
             let has_update = if let Some(client_version_code) = query.version_code {
@@ -1018,7 +1030,19 @@ async fn check_version(
                 error: Some(format!("No version found for platform: {}", query.platform)),
             }),
         )),
+    };
+
+    // 记录启动数据（不影响版本检查结果）
+    if let Some(ref uid) = query.unique_id {
+        if !uid.is_empty() {
+            let _ = db.execute(
+                "INSERT INTO app_launches (unique_id, platform, app_version) VALUES (?1, ?2, ?3)",
+                params![uid, query.platform, query.current_version],
+            );
+        }
     }
+
+    result
 }
 
 /// GET /api/version/latest?platform=windows
@@ -1823,6 +1847,17 @@ fn post_html(static_dir: &str) -> String {
     }
 }
 
+const STATS_HTML_FALLBACK: &str = include_str!("../static/stats.html");
+
+fn stats_html(static_dir: &str) -> String {
+    let html_path = std::path::Path::new(static_dir).join("stats.html");
+    if let Ok(content) = std::fs::read_to_string(&html_path) {
+        content
+    } else {
+        STATS_HTML_FALLBACK.to_string()
+    }
+}
+
 // ============================================================
 // Blog 数据库操作
 // ============================================================
@@ -2058,8 +2093,97 @@ async fn get_blog_post(
 }
 
 // ============================================================
-// Blog API Handlers - 管理
+// Stats API Handlers
 // ============================================================
+
+/// GET /api/admin/stats/data
+async fn admin_stats_data(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiResponse<()>>)> {
+    let db = state.db.lock().unwrap();
+
+    let total_users: i64 = db
+        .query_row("SELECT COUNT(DISTINCT unique_id) FROM app_launches WHERE unique_id != ''", [], |r| r.get(0))
+        .unwrap_or(0);
+    let total_launches: i64 = db
+        .query_row("SELECT COUNT(*) FROM app_launches", [], |r| r.get(0))
+        .unwrap_or(0);
+
+    let today_users: i64 = db
+        .query_row("SELECT COUNT(DISTINCT unique_id) FROM app_launches WHERE unique_id != '' AND date(launched_at) = date('now')", [], |r| r.get(0))
+        .unwrap_or(0);
+    let today_launches: i64 = db
+        .query_row("SELECT COUNT(*) FROM app_launches WHERE date(launched_at) = date('now')", [], |r| r.get(0))
+        .unwrap_or(0);
+
+    let week_users: i64 = db
+        .query_row("SELECT COUNT(DISTINCT unique_id) FROM app_launches WHERE unique_id != '' AND launched_at >= datetime('now', '-7 days')", [], |r| r.get(0))
+        .unwrap_or(0);
+    let week_launches: i64 = db
+        .query_row("SELECT COUNT(*) FROM app_launches WHERE launched_at >= datetime('now', '-7 days')", [], |r| r.get(0))
+        .unwrap_or(0);
+
+    let month_users: i64 = db
+        .query_row("SELECT COUNT(DISTINCT unique_id) FROM app_launches WHERE unique_id != '' AND launched_at >= datetime('now', '-30 days')", [], |r| r.get(0))
+        .unwrap_or(0);
+    let month_launches: i64 = db
+        .query_row("SELECT COUNT(*) FROM app_launches WHERE launched_at >= datetime('now', '-30 days')", [], |r| r.get(0))
+        .unwrap_or(0);
+
+    // 按平台统计
+    let mut by_platform = Vec::new();
+    if let Ok(mut stmt) = db.prepare(
+        "SELECT platform, COUNT(DISTINCT unique_id) as users, COUNT(*) as launches
+         FROM app_launches WHERE unique_id != ''
+         GROUP BY platform ORDER BY launches DESC"
+    ) {
+        if let Ok(rows) = stmt.query_map([], |row| {
+            Ok(serde_json::json!({
+                "platform": row.get::<_, String>(0)?,
+                "users": row.get::<_, i64>(1)?,
+                "launches": row.get::<_, i64>(2)?
+            }))
+        }) {
+            for row in rows.flatten() {
+                by_platform.push(row);
+            }
+        }
+    }
+
+    // 按版本统计
+    let mut by_version = Vec::new();
+    if let Ok(mut stmt) = db.prepare(
+        "SELECT app_version, platform, COUNT(DISTINCT unique_id) as users, COUNT(*) as launches
+         FROM app_launches WHERE unique_id != ''
+         GROUP BY app_version, platform ORDER BY launches DESC LIMIT 20"
+    ) {
+        if let Ok(rows) = stmt.query_map([], |row| {
+            Ok(serde_json::json!({
+                "app_version": row.get::<_, String>(0)?,
+                "platform": row.get::<_, String>(1)?,
+                "users": row.get::<_, i64>(2)?,
+                "launches": row.get::<_, i64>(3)?
+            }))
+        }) {
+            for row in rows.flatten() {
+                by_version.push(row);
+            }
+        }
+    }
+
+    Ok(Json(serde_json::json!({
+        "total_users": total_users,
+        "total_launches": total_launches,
+        "today_users": today_users,
+        "today_launches": today_launches,
+        "week_users": week_users,
+        "week_launches": week_launches,
+        "month_users": month_users,
+        "month_launches": month_launches,
+        "by_platform": by_platform,
+        "by_version": by_version,
+    })))
+}
 
 /// POST /api/admin/login
 async fn admin_login(
@@ -2358,6 +2482,9 @@ async fn main() {
         .route("/api/blog/post/{id}", get(move |State(s): State<Arc<AppState>>| async move { Html(post_html(&s.static_dir)) }))
         .route("/api/blog/posts", get(list_published_blog_posts))
         .route("/api/blog/posts/{id}", get(get_blog_post))
+        // 统计 API
+        .route("/api/admin/stats", get(move |State(s): State<Arc<AppState>>| async move { Html(stats_html(&s.static_dir)) }))
+        .route("/api/admin/stats/data", get(admin_stats_data))
         // 静态文件服务（上传的文件 + static 目录）
         .nest_service("/api/uploads", ServeDir::new(&uploads_dir))
         .nest_service("/static", ServeDir::new(&static_dir))
@@ -2368,6 +2495,7 @@ async fn main() {
     println!("Zebra Update Server running on http://{}", addr);
     println!();
     println!("  Admin Panel:  http://{}/api/admin", addr);
+    println!("  User Stats:   http://{}/api/admin/stats", addr);
     println!("  API Health:   http://{}/api/health", addr);
     println!("  Version API:  POST http://{}/api/version", addr);
     println!();

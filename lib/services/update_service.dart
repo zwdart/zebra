@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../utils/unique_id.dart';
 
 /// 版本信息
 class UpdateVersionInfo {
@@ -164,6 +165,7 @@ class UpdateService {
     final url = baseUrl ?? apiBaseUrl;
     final currentVersion = await getCurrentVersion();
     final currentVersionCode = await getCurrentVersionCode();
+    final uniqueId = await UniqueId.get();
 
     try {
       final uri = Uri.parse('$url/api/version');
@@ -175,6 +177,7 @@ class UpdateService {
           'current_version': currentVersion,
           'version_code': currentVersionCode,
           'platform': _platform,
+          'unique_id': uniqueId,
         }),
       ).timeout(
         const Duration(seconds: 10),
