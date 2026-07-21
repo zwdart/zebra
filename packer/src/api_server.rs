@@ -36,6 +36,10 @@ pub struct Config {
     pub static_dir: Option<String>,
     /// HTTP log max bytes per field (headers/body). 0 = unlimited. Default 2048.
     pub log_max_bytes: Option<usize>,
+    /// Admin login username (default: admin)
+    pub admin_username: Option<String>,
+    /// Admin login password (default: zebra2024)
+    pub admin_password: Option<String>,
 }
 
 impl Config {
@@ -64,6 +68,8 @@ impl Config {
             data_dir: None,
             static_dir: None,
             log_max_bytes: None,
+            admin_username: None,
+            admin_password: None,
         }
     }
 
@@ -82,6 +88,14 @@ impl Config {
     pub fn static_dir(&self) -> &str {
         self.static_dir.as_deref().unwrap_or("static")
     }
+
+    pub fn admin_username(&self) -> &str {
+        self.admin_username.as_deref().unwrap_or("admin")
+    }
+
+    pub fn admin_password(&self) -> &str {
+        self.admin_password.as_deref().unwrap_or("zebra2024")
+    }
 }
 
 impl Default for Config {
@@ -92,6 +106,8 @@ impl Default for Config {
             data_dir: None,
             static_dir: None,
             log_max_bytes: None,
+            admin_username: None,
+            admin_password: None,
         }
     }
 }
@@ -210,6 +226,50 @@ pub struct PaginatedResponse<T: Serialize> {
     pub error: Option<String>,
 }
 
+// ============================================================
+// 博客数据结构
+// ============================================================
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BlogPost {
+    pub id: i64,
+    pub title: String,
+    pub content: String,
+    pub summary: String,
+    pub tags: Option<String>,
+    pub sort_order: i32,
+    pub published: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct BlogCreateRequest {
+    pub title: String,
+    pub content: String,
+    pub summary: Option<String>,
+    pub tags: Option<String>,
+    pub sort_order: Option<i32>,
+    pub published: Option<bool>,
+}
+
+#[derive(Deserialize)]
+pub struct BlogUpdateRequest {
+    pub title: Option<String>,
+    pub content: Option<String>,
+    pub summary: Option<String>,
+    pub tags: Option<String>,
+    pub sort_order: Option<i32>,
+    pub published: Option<bool>,
+}
+
+#[derive(Deserialize)]
+pub struct BlogQuery {
+    pub page: Option<u32>,
+    pub size: Option<u32>,
+    pub search: Option<String>,
+}
+
 struct AppState {
     db: Mutex<Connection>,
     uploads_dir: String,
@@ -217,6 +277,9 @@ struct AppState {
     start_time: Instant,
     started_at: String,
     pid: u32,
+    admin_username: String,
+    admin_password: String,
+    static_dir: String,
 }
 
 // ============================================================
@@ -475,6 +538,21 @@ fn init_db(db: &Connection) {
         CREATE INDEX IF NOT EXISTS idx_discoveries_type ON discoveries(type);
         CREATE INDEX IF NOT EXISTS idx_discoveries_enabled ON discoveries(enabled);
         CREATE INDEX IF NOT EXISTS idx_discoveries_sort_order ON discoveries(sort_order);
+
+        CREATE TABLE IF NOT EXISTS blog_posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL DEFAULT '',
+            content TEXT NOT NULL DEFAULT '',
+            summary TEXT NOT NULL DEFAULT '',
+            tags TEXT DEFAULT '',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            published INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_blog_posts_published ON blog_posts(published);
+        CREATE INDEX IF NOT EXISTS idx_blog_posts_created ON blog_posts(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_blog_posts_sort ON blog_posts(sort_order DESC, created_at DESC);
         "
     ).expect("Failed to create table");
 
@@ -488,6 +566,12 @@ fn init_db(db: &Connection) {
     let has_tags: bool = db.prepare("SELECT tags FROM discoveries LIMIT 1").is_ok();
     if !has_tags {
         db.execute_batch("ALTER TABLE discoveries ADD COLUMN tags TEXT DEFAULT ''").ok();
+    }
+
+    // 迁移：为已有数据添加 sort_order 字段（如果不存在）
+    let has_sort_order: bool = db.prepare("SELECT sort_order FROM blog_posts LIMIT 1").is_ok();
+    if !has_sort_order {
+        db.execute_batch("ALTER TABLE blog_posts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0").ok();
     }
 }
 
@@ -1706,6 +1790,7 @@ fn parse_csv_line(line: &str) -> Vec<String> {
 
 // 编译时嵌入 admin.html 作为后备（确保二进制可独立运行）
 const ADMIN_HTML_FALLBACK: &str = include_str!("../static/admin.html");
+const BLOG_HTML_FALLBACK: &str = include_str!("../static/blog.html");
 
 /// 返回管理后台 HTML
 /// 优先从静态目录读取文件（支持运行时修改），不存在则使用编译时嵌入的版本
@@ -1716,6 +1801,471 @@ fn admin_html(static_dir: &str) -> String {
     } else {
         ADMIN_HTML_FALLBACK.to_string()
     }
+}
+
+fn blog_html(static_dir: &str) -> String {
+    let html_path = std::path::Path::new(static_dir).join("blog.html");
+    if let Ok(content) = std::fs::read_to_string(&html_path) {
+        content
+    } else {
+        BLOG_HTML_FALLBACK.to_string()
+    }
+}
+
+const POST_HTML_FALLBACK: &str = include_str!("../static/post.html");
+
+fn post_html(static_dir: &str) -> String {
+    let html_path = std::path::Path::new(static_dir).join("post.html");
+    if let Ok(content) = std::fs::read_to_string(&html_path) {
+        content
+    } else {
+        POST_HTML_FALLBACK.to_string()
+    }
+}
+
+// ============================================================
+// Blog 数据库操作
+// ============================================================
+
+fn db_blog_get_paginated(
+    db: &Connection,
+    page: u32,
+    size: u32,
+    search: Option<&str>,
+    published_only: bool,
+) -> (Vec<BlogPost>, u64) {
+    let offset = (page.saturating_sub(1)) * size;
+    let mut conditions: Vec<String> = Vec::new();
+    let mut params_list: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if published_only {
+        conditions.push("published = 1".to_string());
+    }
+
+    if let Some(q) = search {
+        if !q.trim().is_empty() {
+            let pattern = format!("%{}%", q.trim());
+            conditions.push("(title LIKE ? OR summary LIKE ? OR tags LIKE ?)".to_string());
+            params_list.push(Box::new(pattern.clone()));
+            params_list.push(Box::new(pattern.clone()));
+            params_list.push(Box::new(pattern));
+        }
+    }
+
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
+
+    let count_sql = format!("SELECT COUNT(*) FROM blog_posts {}", where_clause);
+    let count_params: Vec<&dyn rusqlite::types::ToSql> = params_list.iter().map(|p| p.as_ref()).collect();
+    let total: u64 = db.query_row(&count_sql, count_params.as_slice(), |row| row.get(0)).unwrap_or(0);
+
+    let list_sql = format!(
+        "SELECT id, title, content, summary, tags, sort_order, published, created_at, updated_at
+         FROM blog_posts {} ORDER BY sort_order DESC, created_at DESC LIMIT ? OFFSET ?",
+        where_clause
+    );
+
+    params_list.push(Box::new(size as i64));
+    params_list.push(Box::new(offset as i64));
+
+    let mut stmt = match db.prepare(&list_sql) {
+        Ok(s) => s,
+        Err(_) => return (vec![], total),
+    };
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> = params_list.iter().map(|p| p.as_ref()).collect();
+    let rows = stmt.query_map(params_ref.as_slice(), |row| {
+        Ok(BlogPost {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            content: row.get(2)?,
+            summary: row.get(3)?,
+            tags: row.get(4)?,
+            sort_order: row.get(5)?,
+            published: row.get::<_, i64>(6)? != 0,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+        })
+    }).unwrap();
+
+    let items: Vec<BlogPost> = rows.filter_map(|r| r.ok()).collect();
+    (items, total)
+}
+
+fn db_blog_get_by_id(db: &Connection, id: i64) -> Option<BlogPost> {
+    db.query_row(
+        "SELECT id, title, content, summary, tags, sort_order, published, created_at, updated_at
+         FROM blog_posts WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(BlogPost {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                content: row.get(2)?,
+                summary: row.get(3)?,
+                tags: row.get(4)?,
+                sort_order: row.get(5)?,
+                published: row.get::<_, i64>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        },
+    ).ok()
+}
+
+fn db_blog_create(db: &Connection, req: &BlogCreateRequest) -> Result<BlogPost, String> {
+    let published = req.published.unwrap_or(false);
+    let sort_order = req.sort_order.unwrap_or(0);
+    db.execute(
+        "INSERT INTO blog_posts (title, content, summary, tags, sort_order, published)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            req.title,
+            req.content,
+            req.summary.as_deref().unwrap_or(""),
+            req.tags.as_deref().unwrap_or(""),
+            sort_order,
+            published as i64,
+        ],
+    ).map_err(|e| e.to_string())?;
+    let id = db.last_insert_rowid();
+    db_blog_get_by_id(db, id).ok_or_else(|| "Failed to retrieve created blog post".to_string())
+}
+
+fn db_blog_update(db: &Connection, id: i64, req: &BlogUpdateRequest) -> Result<BlogPost, String> {
+    if db_blog_get_by_id(db, id).is_none() {
+        return Err("Blog post not found".to_string());
+    }
+
+    let mut updates = Vec::new();
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(ref v) = req.title {
+        updates.push("title = ?"); param_values.push(Box::new(v.clone()));
+    }
+    if let Some(ref v) = req.content {
+        updates.push("content = ?"); param_values.push(Box::new(v.clone()));
+    }
+    if let Some(ref v) = req.summary {
+        updates.push("summary = ?"); param_values.push(Box::new(v.clone()));
+    }
+    if let Some(ref v) = req.tags {
+        updates.push("tags = ?"); param_values.push(Box::new(v.clone()));
+    }
+    if let Some(v) = req.sort_order {
+        updates.push("sort_order = ?"); param_values.push(Box::new(v));
+    }
+    if let Some(v) = req.published {
+        updates.push("published = ?"); param_values.push(Box::new(v as i64));
+    }
+
+    if updates.is_empty() {
+        return db_blog_get_by_id(db, id).ok_or_else(|| "Blog post not found".to_string());
+    }
+
+    updates.push("updated_at = datetime('now')");
+    let sql = format!("UPDATE blog_posts SET {} WHERE id = ?", updates.join(", "));
+    let mut stmt = db.prepare(&sql).map_err(|e| e.to_string())?;
+    param_values.push(Box::new(id));
+    let params: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    stmt.execute(params.as_slice()).map_err(|e| e.to_string())?;
+
+    db_blog_get_by_id(db, id).ok_or_else(|| "Failed to retrieve updated blog post".to_string())
+}
+
+fn db_blog_delete(db: &Connection, id: i64) -> Result<(), String> {
+    if db_blog_get_by_id(db, id).is_none() {
+        return Err("Blog post not found".to_string());
+    }
+    db.execute("DELETE FROM blog_posts WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn db_blog_get_all(db: &Connection) -> Vec<BlogPost> {
+    let mut stmt = db
+        .prepare(
+            "SELECT id, title, content, summary, tags, sort_order, published, created_at, updated_at
+             FROM blog_posts ORDER BY sort_order DESC, created_at DESC",
+        )
+        .unwrap();
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(BlogPost {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                content: row.get(2)?,
+                summary: row.get(3)?,
+                tags: row.get(4)?,
+                sort_order: row.get(5)?,
+                published: row.get::<_, i64>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        })
+        .unwrap();
+    rows.filter_map(|r| r.ok()).collect()
+}
+
+// ============================================================
+// Blog API Handlers - 公开
+// ============================================================
+
+/// GET /api/blog?page=1&size=10&search=xxx
+async fn list_published_blog_posts(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(query): axum::extract::Query<BlogQuery>,
+) -> Json<PaginatedResponse<Vec<BlogPost>>> {
+    let page = query.page.unwrap_or(1).max(1);
+    let size = query.size.unwrap_or(10).min(50);
+    let search = query.search.as_deref();
+
+    let db = state.db.lock().unwrap();
+    let (items, total) = db_blog_get_paginated(&db, page, size, search, true);
+
+    Json(PaginatedResponse {
+        success: true,
+        data: Some(items),
+        total,
+        page,
+        size,
+        error: None,
+    })
+}
+
+/// GET /api/blog/{id}
+async fn get_blog_post(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let db = state.db.lock().unwrap();
+    match db_blog_get_by_id(&db, id) {
+        Some(post) => {
+            if !post.published {
+                return Err((
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({ "success": false, "error": "Blog post not found" })),
+                ));
+            }
+            Ok(Json(serde_json::json!({ "success": true, "data": post })))
+        }
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "success": false, "error": "Blog post not found" })),
+        )),
+    }
+}
+
+// ============================================================
+// Blog API Handlers - 管理
+// ============================================================
+
+/// POST /api/admin/login
+async fn admin_login(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let username = body.get("username").and_then(|v| v.as_str()).unwrap_or("");
+    let password = body.get("password").and_then(|v| v.as_str()).unwrap_or("");
+
+    if username == state.admin_username && password == state.admin_password {
+        let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+        let token_input = format!("{}:{}:{}", username, password, timestamp);
+        let mut hasher = Sha256::new();
+        hasher.update(token_input.as_bytes());
+        let token = format!("{:x}", hasher.finalize());
+
+        Ok(Json(serde_json::json!({
+            "success": true,
+            "token": token,
+            "expires_in": 86400,
+        })))
+    } else {
+        Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "success": false, "error": "Invalid credentials" })),
+        ))
+    }
+}
+
+/// GET /api/admin/blog?page=1&size=20&search=xxx
+async fn admin_list_blog_posts(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(query): axum::extract::Query<BlogQuery>,
+) -> Json<PaginatedResponse<Vec<BlogPost>>> {
+    let page = query.page.unwrap_or(1).max(1);
+    let size = query.size.unwrap_or(20).min(100);
+    let search = query.search.as_deref();
+
+    let db = state.db.lock().unwrap();
+    let (items, total) = db_blog_get_paginated(&db, page, size, search, false);
+
+    Json(PaginatedResponse {
+        success: true,
+        data: Some(items),
+        total,
+        page,
+        size,
+        error: None,
+    })
+}
+
+/// POST /api/admin/blog
+async fn admin_create_blog_post(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<BlogCreateRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if body.title.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "success": false, "error": "Title is required" })),
+        ));
+    }
+
+    let db = state.db.lock().unwrap();
+    match db_blog_create(&db, &body) {
+        Ok(post) => Ok(Json(serde_json::json!({ "success": true, "data": post }))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "success": false, "error": e })),
+        )),
+    }
+}
+
+/// PUT /api/admin/blog/{id}
+async fn admin_update_blog_post(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+    Json(body): Json<BlogUpdateRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let db = state.db.lock().unwrap();
+    match db_blog_update(&db, id, &body) {
+        Ok(post) => Ok(Json(serde_json::json!({ "success": true, "data": post }))),
+        Err(e) => {
+            let status = if e == "Blog post not found" {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            Err((status, Json(serde_json::json!({ "success": false, "error": e }))))
+        }
+    }
+}
+
+/// DELETE /api/admin/blog/{id}
+async fn admin_delete_blog_post(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let db = state.db.lock().unwrap();
+    match db_blog_delete(&db, id) {
+        Ok(()) => Ok(Json(serde_json::json!({ "success": true }))),
+        Err(e) => {
+            let status = if e == "Blog post not found" {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            Err((status, Json(serde_json::json!({ "success": false, "error": e }))))
+        }
+    }
+}
+
+/// GET /api/admin/blog/export
+async fn admin_export_blog_posts(
+    State(state): State<Arc<AppState>>,
+) -> Response<Body> {
+    let db = state.db.lock().unwrap();
+    let items = db_blog_get_all(&db);
+
+    let mut csv = String::from("title,content,summary,tags,sort_order,published\n");
+    for item in &items {
+        csv.push_str(&format!(
+            "{},{},{},{},{},{}\n",
+            csv_escape(&item.title),
+            csv_escape(&item.content),
+            csv_escape(&item.summary),
+            csv_escape(item.tags.as_deref().unwrap_or("")),
+            item.sort_order,
+            item.published as i32,
+        ));
+    }
+
+    (
+        StatusCode::OK,
+        [
+            ("Content-Type", "text/csv; charset=utf-8"),
+            ("Content-Disposition", "attachment; filename=\"blog_posts.csv\""),
+        ],
+        csv,
+    ).into_response()
+}
+
+/// POST /api/admin/blog/import (multipart: file=csv)
+async fn admin_import_blog_posts(
+    State(state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let mut csv_data = String::new();
+
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "success": false, "error": format!("Failed to read multipart: {}", e) })),
+        )
+    })? {
+        let name = field.name().unwrap_or("").to_string();
+        if name == "file" {
+            csv_data = field.text().await.map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({ "success": false, "error": format!("Failed to read file: {}", e) })),
+                )
+            })?;
+        }
+    }
+
+    if csv_data.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "success": false, "error": "No CSV data" })),
+        ));
+    }
+
+    let db = state.db.lock().unwrap();
+    let mut imported = 0u64;
+    for (i, line) in csv_data.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        if i == 0 && line.to_lowercase().contains("title") && line.to_lowercase().contains("content") { continue; }
+
+        let parts = parse_csv_line(line);
+        if parts.len() >= 3 {
+            let title = parts[0].trim().to_string();
+            let content = parts[1].trim().to_string();
+            let summary = if parts.len() >= 3 { parts[2].trim().to_string() } else { String::new() };
+            let tags = if parts.len() >= 4 { Some(parts[3].trim().to_string()).filter(|s| !s.is_empty()) } else { None };
+            let sort_order: i32 = if parts.len() >= 5 { parts[4].trim().parse().unwrap_or(0) } else { 0 };
+            let published: bool = if parts.len() >= 6 { parts[5].trim() != "0" && parts[5].trim().to_lowercase() != "false" } else { false };
+
+            if !title.is_empty() {
+                let req = BlogCreateRequest {
+                    title,
+                    content,
+                    summary: Some(summary).filter(|s| !s.is_empty()),
+                    tags,
+                    sort_order: Some(sort_order),
+                    published: Some(published),
+                };
+                if db_blog_create(&db, &req).is_ok() {
+                    imported += 1;
+                }
+            }
+        }
+    }
+
+    Ok(Json(serde_json::json!({ "success": true, "data": { "imported": imported } })))
 }
 
 // ============================================================
@@ -1758,6 +2308,9 @@ async fn main() {
         start_time: Instant::now(),
         started_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         pid: std::process::id(),
+        static_dir: static_dir.clone(),
+        admin_username: config.admin_username().to_string(),
+        admin_password: config.admin_password().to_string(),
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port.unwrap_or(8686)));
@@ -1791,6 +2344,20 @@ async fn main() {
         .route("/api/admin/discoveries/{id}", axum::routing::delete(admin_delete_discovery))
         .route("/api/admin/discoveries/export", get(admin_export_discoveries))
         .route("/api/admin/discoveries/import", post(admin_import_discoveries))
+        // 管理后台认证
+        .route("/api/admin/login", post(admin_login))
+        // 博客管理 API
+        .route("/api/admin/blog", get(admin_list_blog_posts))
+        .route("/api/admin/blog", post(admin_create_blog_post))
+        .route("/api/admin/blog/{id}", axum::routing::put(admin_update_blog_post))
+        .route("/api/admin/blog/{id}", axum::routing::delete(admin_delete_blog_post))
+        .route("/api/admin/blog/export", get(admin_export_blog_posts))
+        .route("/api/admin/blog/import", post(admin_import_blog_posts))
+        // 博客公开 API
+        .route("/api/blog", get(move |State(s): State<Arc<AppState>>| async move { Html(blog_html(&s.static_dir)) }))
+        .route("/api/blog/post/{id}", get(move |State(s): State<Arc<AppState>>| async move { Html(post_html(&s.static_dir)) }))
+        .route("/api/blog/posts", get(list_published_blog_posts))
+        .route("/api/blog/posts/{id}", get(get_blog_post))
         // 静态文件服务（上传的文件 + static 目录）
         .nest_service("/api/uploads", ServeDir::new(&uploads_dir))
         .nest_service("/static", ServeDir::new(&static_dir))

@@ -315,6 +315,15 @@ class AppLocalizations {
   String get diaryExportSuccess => translate('diaryExportSuccess');
   String get diaryExportFailed => translate('diaryExportFailed');
 
+  // Blog
+  String get blog => translate('blog');
+  String get blogEmpty => translate('blogEmpty');
+  String get blogTotal => translate('blogTotal');
+  String get share => translate('share');
+  String get openInBrowser => translate('openInBrowser');
+  String get copyLink => translate('copyLink');
+  String get linkCopied => translate('linkCopied');
+
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
     'connections': 'Connections',
@@ -586,6 +595,13 @@ class AppLocalizations {
     'diaryImportFailed': 'Import failed',
     'diaryExportSuccess': 'CSV exported successfully',
     'diaryExportFailed': 'Export failed',
+    'blog': 'Blog',
+    'blogEmpty': 'No blog posts yet',
+    'blogTotal': 'Total',
+    'share': 'Share',
+    'openInBrowser': 'Open in Browser',
+    'copyLink': 'Copy Link',
+    'linkCopied': 'Link copied',
   };
 
   static const Map<String, String> _zh = {
@@ -768,7 +784,7 @@ class AppLocalizations {
     'shareDatabase': '分享数据库',
     'about': '关于',
     'featuresAndUsage': '功能与使用说明',
-    'aboutUs': '关于我们',
+    'aboutUs': '关于',
     'version': '版本',
     'developer': '开发者',
     'contactUs': '联系我们',
@@ -840,7 +856,7 @@ class AppLocalizations {
     'exportFailed': '导出失败',
     'totalCommands': '共 {count} 条',
     'usageExamples': '使用示例',
-    'diary': '日记本',
+    'diary': '日记',
     'diaryEmpty': '暂无日记',
     'diaryTitle': '标题',
     'diaryContent': '内容',
@@ -859,6 +875,13 @@ class AppLocalizations {
     'diaryImportFailed': '导入失败',
     'diaryExportSuccess': 'CSV 导出成功',
     'diaryExportFailed': '导出失败',
+    'blog': '博客',
+    'blogEmpty': '暂无博客文章',
+    'blogTotal': '共',
+    'share': '分享',
+    'openInBrowser': '浏览器打开',
+    'copyLink': '复制链接',
+    'linkCopied': '链接已复制',
   };
 }
 

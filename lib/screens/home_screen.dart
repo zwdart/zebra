@@ -14,6 +14,8 @@ import 'discovery_screen.dart';
 import 'monitor_screen.dart';
 import 'update_dialog.dart';
 import 'diary_screen.dart';
+import 'blog_screen.dart';
+import 'about_screen.dart';
 import '../widgets/connection_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -80,11 +82,23 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   MaterialPageRoute(builder: (_) => const DiaryScreen()),
                 );
+              } else if (value == 'blog') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BlogScreen()),
+                );
+              } else if (value == 'about') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AboutScreen()),
+                );
               }
             },
             itemBuilder: (ctx) => [
               PopupMenuItem(value: 'settings', child: Text(loc.settings)),
               PopupMenuItem(value: 'diary', child: Text(loc.diary)),
+              PopupMenuItem(value: 'blog', child: Text(loc.blog)),
+              PopupMenuItem(value: 'about', child: Text(loc.aboutUs)),
             ],
           ),
         ],
@@ -122,11 +136,23 @@ class _HomeScreenState extends State<HomeScreen> {
                         context,
                         MaterialPageRoute(builder: (_) => const DiaryScreen()),
                       );
+                    } else if (value == 'blog') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const BlogScreen()),
+                      );
+                    } else if (value == 'about') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AboutScreen()),
+                      );
                     }
                   },
                   itemBuilder: (ctx) => [
                     PopupMenuItem(value: 'settings', child: Text(loc.settings)),
                     PopupMenuItem(value: 'diary', child: Text(loc.diary)),
+                    PopupMenuItem(value: 'blog', child: Text(loc.blog)),
+                    PopupMenuItem(value: 'about', child: Text(loc.aboutUs)),
                   ],
                 ),
               ],

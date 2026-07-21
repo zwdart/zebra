@@ -37,7 +37,7 @@ td { font-size: 14px; }
 .btn-filter { background: transparent; color: #666; border: 1px solid #ddd; padding: 6px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
 .btn-filter:hover { background: #f5f5f5; }
 .btn-filter.active { background: #1a73e8; color: white; border-color: #1a73e8; }
-.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; }
 .modal-overlay.active { display: flex; }
 .modal { background: white; border-radius: 12px; width: 520px; max-height: 90vh; overflow-y: auto; }
 .modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
@@ -120,9 +120,39 @@ td { font-size: 14px; }
 </head>
 <body>
 
+<!-- Login Overlay -->
+<div class="modal-overlay active" id="login-overlay" style="background:#1a1a2e;">
+  <div class="modal" style="width:380px;">
+    <div class="modal-header">
+      <h3>管理后台登录</h3>
+    </div>
+    <div class="modal-body">
+      <form onsubmit="return handleLogin(event)">
+        <div class="form-group">
+          <label>用户名</label>
+          <input type="text" id="login-username" required placeholder="admin" autofocus>
+        </div>
+        <div class="form-group">
+          <label>密码</label>
+          <div style="position:relative;">
+            <input type="password" id="login-password" required placeholder="请输入密码" style="padding-right:40px;">
+            <button type="button" onclick="togglePassword()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:#999;padding:4px;" title="显示/隐藏密码">👁</button>
+          </div>
+        </div>
+        <div id="login-error" style="color:#c62828;font-size:13px;margin-bottom:12px;display:none;"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;padding:10px;">登录</button>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="header">
   <h1>Zebra SSH - 管理后台</h1>
-  <span class="badge">Admin</span>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <a href="/api/blog" target="_blank" class="btn btn-ghost" style="color:white;border-color:rgba(255,255,255,0.3);font-size:12px;">查看博客</a>
+    <span class="badge">Admin</span>
+    <button class="btn btn-ghost" onclick="doLogout()" style="color:white;border-color:rgba(255,255,255,0.3);font-size:12px;">退出</button>
+  </div>
 </div>
 
 <div class="container">
@@ -130,6 +160,7 @@ td { font-size: 14px; }
     <div class="tab-nav">
       <button class="tab-btn" onclick="switchTab('versions')">版本管理</button>
       <button class="tab-btn active" onclick="switchTab('discoveries')">发现管理</button>
+      <button class="tab-btn" onclick="switchTab('blog')">博客管理</button>
     </div>
   </div>
 
@@ -181,6 +212,27 @@ td { font-size: 14px; }
         <div id="discoveries-table"></div>
       </div>
       <div class="pagination" id="discoveries-pagination"></div>
+    </div>
+  </div>
+
+  <!-- 博客管理 Tab -->
+  <div class="tab-panel" id="tab-blog">
+    <div class="card">
+      <div class="card-header">
+        <h2>博客文章</h2>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="blog-search" placeholder="搜索文章..." style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;" oninput="debounceBlogSearch()">
+          <button class="btn btn-primary" onclick="openBlogCreateModal()">+ 新建文章</button>
+          <button class="btn btn-ghost" onclick="exportBlogPosts()">导出 CSV</button>
+          <label class="btn btn-ghost" style="cursor:pointer;">导入 CSV<input type="file" accept=".csv" style="display:none;" onchange="importBlogPosts(this)"></label>
+          <a href="/api/blog" target="_blank" class="btn btn-ghost">查看博客</a>
+        </div>
+      </div>
+      <div class="stats-bar" id="blog-stats-bar"></div>
+      <div class="card-body" style="padding-bottom:0;">
+        <div id="blog-table"></div>
+      </div>
+      <div class="pagination" id="blog-pagination"></div>
     </div>
   </div>
 
@@ -380,6 +432,54 @@ td { font-size: 14px; }
   </div>
 </div>
 
+<!-- 博客编辑弹窗 -->
+<div class="modal-overlay" id="blog-modal">
+  <div class="modal" style="width:680px;">
+    <div class="modal-header">
+      <h3 id="blog-modal-title">新建文章</h3>
+      <button class="modal-close" onclick="closeModal('blog-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="blog-form" onsubmit="return handleBlogSave(event)">
+        <input type="hidden" id="blog-edit-id">
+        <div class="form-group">
+          <label>标题 *</label>
+          <input type="text" id="blog-title" required placeholder="文章标题">
+        </div>
+        <div class="form-group">
+          <label>摘要</label>
+          <textarea id="blog-summary" placeholder="文章摘要（可选）" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label>标签</label>
+          <input type="text" id="blog-tags" placeholder="多个标签用逗号分隔，如: Flutter,Rust,教程">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>排序</label>
+            <input type="number" id="blog-sort-order" value="0" placeholder="数字越大越靠前">
+          </div>
+          <div class="form-group">
+            <label>状态</label>
+            <select id="blog-published">
+              <option value="false">草稿</option>
+              <option value="true">已发布</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>内容 (支持 Markdown)</label>
+          <textarea id="blog-content" placeholder="支持 Markdown 格式..." style="min-height:300px;font-family:monospace;font-size:13px;"></textarea>
+        </div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+          <button type="button" class="btn btn-ghost" onclick="closeModal('blog-modal')">取消</button>
+          <button type="submit" class="btn btn-primary" id="blog-save-btn">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -413,6 +513,10 @@ function switchTab(tab) {
     document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
     document.getElementById('tab-discoveries').classList.add('active');
     loadDiscoveries();
+  } else if (tab === 'blog') {
+    document.querySelector('.tab-btn:nth-child(3)').classList.add('active');
+    document.getElementById('tab-blog').classList.add('active');
+    loadBlogPosts();
   }
 }
 
@@ -861,7 +965,248 @@ async function importDiscoveries(input) {
   input.value = '';
 }
 
+// ===================== 认证 =====================
+function checkLogin() {
+  const token = localStorage.getItem('admin_token');
+  if (token) {
+    document.getElementById('login-overlay').classList.remove('active');
+  }
+}
+
+function togglePassword() {
+  const input = document.getElementById('login-password');
+  const btn = input.nextElementSibling;
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁';
+  }
+}
+
+function handleLogin(e) {
+  e.preventDefault();
+  const username = document.getElementById('login-username').value;
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+
+  fetch(`${API_BASE}/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+  .then(r => r.text().then(text => {
+    try {
+      return { ok: r.ok, json: JSON.parse(text) };
+    } catch(e) {
+      return { ok: false, json: { error: 'Server returned non-JSON response' } };
+    }
+  }))
+  .then(({ ok, json }) => {
+    if (ok && json.success) {
+      localStorage.setItem('admin_token', json.token);
+      document.getElementById('login-overlay').classList.remove('active');
+    } else {
+      errEl.textContent = json.error || '登录失败';
+      errEl.style.display = 'block';
+    }
+  })
+  .catch(err => {
+    errEl.textContent = '网络错误: ' + err.message;
+    errEl.style.display = 'block';
+  });
+  return false;
+}
+
+function doLogout() {
+  localStorage.removeItem('admin_token');
+  location.reload();
+}
+
+// ===================== 博客管理 =====================
+let blogPage = 1;
+let blogPageSize = 20;
+let blogTotal = 0;
+let blogSearchQuery = '';
+let blogSearchTimer = null;
+
+function debounceBlogSearch() {
+  clearTimeout(blogSearchTimer);
+  blogSearchTimer = setTimeout(() => {
+    blogSearchQuery = document.getElementById('blog-search').value.trim();
+    blogPage = 1;
+    loadBlogPosts();
+  }, 300);
+}
+
+async function loadBlogPosts(page) {
+  if (page !== undefined) blogPage = page;
+  try {
+    const params = new URLSearchParams({ page: blogPage, size: blogPageSize });
+    if (blogSearchQuery) params.set('search', blogSearchQuery);
+    const res = await fetch(`${API_BASE}/blog?${params}`);
+    const json = await res.json();
+    blogTotal = json.total || 0;
+    renderBlogTable(json.data || []);
+    renderBlogPagination();
+    document.getElementById('blog-stats-bar').innerHTML =
+      `<span>共 <span class="count">${blogTotal}</span> 篇文章</span>`;
+  } catch (e) { showToast('加载博客失败: ' + e.message, 'error'); }
+}
+
+function renderBlogTable(items) {
+  const el = document.getElementById('blog-table');
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>暂无文章</p></div>';
+    return;
+  }
+  let html = '<div class="table-scroll"><table><thead><tr><th>ID</th><th>标题</th><th>摘要</th><th>标签</th><th>状态</th><th>排序</th><th>创建时间</th><th>操作</th></tr></thead><tbody>';
+  for (const p of items) {
+    const summary = p.summary ? (p.summary.length > 40 ? p.summary.substring(0, 40) + '...' : p.summary) : '-';
+    const tags = p.tags ? p.tags.split(',').map(t => t.trim()).filter(t => t).map(t => `<span class="type-badge type-badge-0">${escHtml(t)}</span>`).join(' ') : '-';
+    const status = p.published ? '<span class="enabled-badge enabled-true">已发布</span>' : '<span class="enabled-badge enabled-false">草稿</span>';
+    const date = p.created_at ? p.created_at.substring(0, 16) : '-';
+    html += `<tr>
+      <td>${p.id}</td>
+      <td><strong>${escHtml(p.title)}</strong></td>
+      <td>${escHtml(summary)}</td>
+      <td>${tags}</td>
+      <td>${status}</td>
+      <td>${p.sort_order || 0}</td>
+      <td>${date}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm btn-ghost" onclick="openBlogEditModal(${p.id})">编辑</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteBlogPost(${p.id})">删除</button>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function renderBlogPagination() {
+  const totalPages = Math.max(1, Math.ceil(blogTotal / blogPageSize));
+  const el = document.getElementById('blog-pagination');
+  let html = '';
+  html += `<select class="page-size-select" onchange="blogPageSize=+this.value;blogPage=1;loadBlogPosts()">${[10,20,50].map(s => `<option value="${s}" ${s===blogPageSize?'selected':''}>${s} 条/页</option>`).join('')}</select>`;
+  html += `<button ${blogPage<=1?'disabled':''} onclick="loadBlogPosts(1)">首页</button>`;
+  html += `<button ${blogPage<=1?'disabled':''} onclick="loadBlogPosts(${blogPage-1})">上一页</button>`;
+  const start = Math.max(1, blogPage - 2);
+  const end = Math.min(totalPages, blogPage + 2);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="${i===blogPage?'active':''}" onclick="loadBlogPosts(${i})">${i}</button>`;
+  }
+  html += `<button ${blogPage>=totalPages?'disabled':''} onclick="loadBlogPosts(${blogPage+1})">下一页</button>`;
+  html += `<button ${blogPage>=totalPages?'disabled':''} onclick="loadBlogPosts(${totalPages})">末页</button>`;
+  html += `<span class="page-info">第 ${blogPage}/${totalPages} 页，共 ${blogTotal} 篇</span>`;
+  html += `<span class="page-info">跳转到 <input type="number" id="blog-jump-page" min="1" max="${totalPages}" value="${blogPage}" style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:13px;text-align:center;" onkeydown="if(event.key==='Enter'){blogJumpToPage(${totalPages})}"> 页</span>`;
+  html += `<button class="btn btn-sm btn-ghost" onclick="blogJumpToPage(${totalPages})">GO</button>`;
+  el.innerHTML = html;
+}
+
+function blogJumpToPage(totalPages) {
+  const input = document.getElementById('blog-jump-page');
+  if (!input) return;
+  const page = parseInt(input.value);
+  if (isNaN(page) || page < 1 || page > totalPages) {
+    showToast('请输入有效页码 (1-' + totalPages + ')', 'error');
+    return;
+  }
+  loadBlogPosts(page);
+}
+
+let blogAllPosts = [];
+
+async function openBlogCreateModal() {
+  document.getElementById('blog-modal-title').textContent = '新建文章';
+  document.getElementById('blog-edit-id').value = '';
+  document.getElementById('blog-title').value = '';
+  document.getElementById('blog-summary').value = '';
+  document.getElementById('blog-tags').value = '';
+  document.getElementById('blog-sort-order').value = '0';
+  document.getElementById('blog-published').value = 'false';
+  document.getElementById('blog-content').value = '';
+  document.getElementById('blog-save-btn').textContent = '创建';
+  openModal('blog-modal');
+}
+
+async function openBlogEditModal(id) {
+  try {
+    const res = await fetch(`${API_BASE}/blog?page=1&size=999&search=`);
+    const json = await res.json();
+    const items = json.data || [];
+    const post = items.find(p => p.id == id);
+    if (!post) { showToast('文章未找到', 'error'); return; }
+
+    document.getElementById('blog-modal-title').textContent = '编辑文章';
+    document.getElementById('blog-edit-id').value = post.id;
+    document.getElementById('blog-title').value = post.title;
+    document.getElementById('blog-summary').value = post.summary || '';
+    document.getElementById('blog-tags').value = post.tags || '';
+    document.getElementById('blog-sort-order').value = post.sort_order || 0;
+    document.getElementById('blog-published').value = post.published ? 'true' : 'false';
+    document.getElementById('blog-content').value = post.content || '';
+    document.getElementById('blog-save-btn').textContent = '保存';
+    openModal('blog-modal');
+  } catch (e) { showToast('加载文章失败: ' + e.message, 'error'); }
+}
+
+async function handleBlogSave(e) {
+  e.preventDefault();
+  const id = document.getElementById('blog-edit-id').value;
+  const body = {
+    title: document.getElementById('blog-title').value.trim(),
+    content: document.getElementById('blog-content').value,
+    summary: document.getElementById('blog-summary').value.trim(),
+    tags: document.getElementById('blog-tags').value.trim(),
+    sort_order: parseInt(document.getElementById('blog-sort-order').value) || 0,
+    published: document.getElementById('blog-published').value === 'true',
+  };
+  if (!body.title) { showToast('请输入标题', 'error'); return false; }
+  const isEdit = !!id;
+  const url = isEdit ? `${API_BASE}/blog/${id}` : `${API_BASE}/blog`;
+  const method = isEdit ? 'PUT' : 'POST';
+  try {
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const json = await res.json();
+    if (json.success !== false) { showToast(isEdit ? '保存成功' : '创建成功'); closeModal('blog-modal'); loadBlogPosts(); }
+    else showToast('操作失败: ' + (json.error || ''), 'error');
+  } catch (err) { showToast('操作失败: ' + err.message, 'error'); }
+  return false;
+}
+
+async function deleteBlogPost(id) {
+  if (!confirm('确定要删除这篇文章吗？')) return;
+  try {
+    const res = await fetch(`${API_BASE}/blog/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) { showToast('已删除'); loadBlogPosts(); }
+    else showToast('删除失败', 'error');
+  } catch (e) { showToast('删除失败: ' + e.message, 'error'); }
+}
+
+function exportBlogPosts() {
+  window.open(`${API_BASE}/blog/export`, '_blank');
+}
+
+async function importBlogPosts(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await fetch(`${API_BASE}/blog/import`, { method: 'POST', body: formData });
+    const json = await res.json();
+    if (json.success) { showToast(`导入成功，共 ${json.imported || 0} 篇`); loadBlogPosts(); }
+    else showToast('导入失败: ' + (json.error || ''), 'error');
+  } catch (e) { showToast('导入失败: ' + e.message, 'error'); }
+  input.value = '';
+}
+
 // ===================== Init =====================
+checkLogin();
 switchTab('discoveries');
 </script>
 </body>
