@@ -227,6 +227,17 @@ class AppLocalizations {
   String get uniqueId => translate('uniqueId');
   String get uniqueIdCopied => translate('uniqueIdCopied');
   String get buildTime => translate('buildTime');
+  String get feedback => translate('feedback');
+  String get feedbackEmail => translate('feedbackEmail');
+  String get feedbackEmailRequired => translate('feedbackEmailRequired');
+  String get feedbackEmailInvalid => translate('feedbackEmailInvalid');
+  String get feedbackSubject => translate('feedbackSubject');
+  String get feedbackSubjectRequired => translate('feedbackSubjectRequired');
+  String get feedbackDescription => translate('feedbackDescription');
+  String get feedbackDescriptionRequired => translate('feedbackDescriptionRequired');
+  String get feedbackSubmit => translate('feedbackSubmit');
+  String get feedbackSubmitSuccess => translate('feedbackSubmitSuccess');
+  String get feedbackSubmitFailed => translate('feedbackSubmitFailed');
   String get fileConflictTitleCopy => translate('fileConflictTitleCopy');
   String get fileConflictTitleMove => translate('fileConflictTitleMove');
   String get fileConflictTitleUpload => translate('fileConflictTitleUpload');
@@ -514,6 +525,17 @@ class AppLocalizations {
     'uniqueId': 'Unique ID',
     'uniqueIdCopied': 'ID copied to clipboard',
     'buildTime': 'Build Time',
+    'feedback': 'Feedback',
+    'feedbackEmail': 'Email',
+    'feedbackEmailRequired': 'Email is required',
+    'feedbackEmailInvalid': 'Please enter a valid email',
+    'feedbackSubject': 'Subject',
+    'feedbackSubjectRequired': 'Subject is required',
+    'feedbackDescription': 'Description',
+    'feedbackDescriptionRequired': 'Description is required',
+    'feedbackSubmit': 'Submit Feedback',
+    'feedbackSubmitSuccess': 'Feedback submitted successfully',
+    'feedbackSubmitFailed': 'Failed to submit feedback',
     'fileConflictTitleCopy': 'File Conflict',
     'fileConflictTitleMove': 'File Conflict',
     'fileConflictTitleUpload': 'File Conflict',
@@ -794,6 +816,17 @@ class AppLocalizations {
     'uniqueId': '唯一 ID',
     'uniqueIdCopied': 'ID 已复制到剪贴板',
     'buildTime': '构建时间',
+    'feedback': '意见反馈',
+    'feedbackEmail': '邮箱',
+    'feedbackEmailRequired': '请输入邮箱',
+    'feedbackEmailInvalid': '请输入有效的邮箱地址',
+    'feedbackSubject': '主题',
+    'feedbackSubjectRequired': '请输入主题',
+    'feedbackDescription': '详细说明',
+    'feedbackDescriptionRequired': '请输入详细说明',
+    'feedbackSubmit': '提交反馈',
+    'feedbackSubmitSuccess': '反馈提交成功',
+    'feedbackSubmitFailed': '反馈提交失败',
     'fileConflictTitleCopy': '文件冲突',
     'fileConflictTitleMove': '文件冲突',
     'fileConflictTitleUpload': '文件冲突',

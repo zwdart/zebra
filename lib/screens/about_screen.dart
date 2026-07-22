@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import '../build_info.dart';
+import 'feedback_screen.dart';
 
 class AboutScreen extends StatelessWidget {
   final VoidCallback? onToggleApiServer;
@@ -132,6 +133,19 @@ class AboutScreen extends StatelessWidget {
                           applicationName: 'Zebra SSH',
                           applicationVersion: '1.0.0',
                         ),
+                      ),
+                      const Divider(height: 1),
+                      _buildInfoTile(
+                        context,
+                        icon: Icons.feedback_outlined,
+                        title: loc.feedback,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const FeedbackScreen(),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),

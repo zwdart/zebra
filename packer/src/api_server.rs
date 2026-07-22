@@ -271,6 +271,48 @@ pub struct BlogQuery {
     pub search: Option<String>,
 }
 
+// ============================================================
+// 反馈数据结构
+// ============================================================
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct FeedbackItem {
+    pub id: i64,
+    pub email: String,
+    pub subject: String,
+    pub description: String,
+    pub platform: String,
+    pub app_version: String,
+    pub tags: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Deserialize)]
+pub struct FeedbackCreateRequest {
+    pub email: String,
+    pub subject: String,
+    pub description: String,
+    pub platform: Option<String>,
+    pub app_version: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct FeedbackTagRequest {
+    pub tags: String,
+}
+
+#[derive(Deserialize)]
+pub struct FeedbackBatchDeleteRequest {
+    pub ids: Vec<i64>,
+}
+
+#[derive(Deserialize)]
+pub struct FeedbackQuery {
+    pub page: Option<u32>,
+    pub size: Option<u32>,
+    pub search: Option<String>,
+}
+
 struct AppState {
     db: Mutex<Connection>,
     uploads_dir: String,
@@ -281,6 +323,8 @@ struct AppState {
     admin_username: String,
     admin_password: String,
     static_dir: String,
+    /// Rate limiting for feedback: email -> last submit time
+    feedback_rate_limit: Mutex<std::collections::HashMap<String, Instant>>,
 }
 
 // ============================================================
@@ -565,6 +609,18 @@ fn init_db(db: &Connection) {
 
         CREATE INDEX IF NOT EXISTS idx_app_launches_unique_id ON app_launches(unique_id);
         CREATE INDEX IF NOT EXISTS idx_app_launches_launched_at ON app_launches(launched_at DESC);
+
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL DEFAULT '',
+            subject TEXT NOT NULL DEFAULT '',
+            description TEXT NOT NULL DEFAULT '',
+            platform TEXT NOT NULL DEFAULT '',
+            app_version TEXT NOT NULL DEFAULT '',
+            tags TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON feedback(created_at DESC);
         "
     ).expect("Failed to create table");
 
@@ -1323,7 +1379,7 @@ async fn admin_upload(
     db.execute(
         "INSERT INTO versions (platform, version, version_code, type, download_url, force_update,
                               changelog, file_size, file_hash, release_date, min_supported_version, file_name)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now', 'localtime'), ?10, ?11)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), ?10, ?11)",
         params![
             platform,
             version,
@@ -2044,6 +2100,136 @@ fn db_blog_get_all(db: &Connection) -> Vec<BlogPost> {
 }
 
 // ============================================================
+// Feedback DB Functions
+// ============================================================
+
+fn db_feedback_create(db: &Connection, req: &FeedbackCreateRequest) -> Result<FeedbackItem, String> {
+    db.execute(
+        "INSERT INTO feedback (email, subject, description, platform, app_version)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            req.email,
+            req.subject,
+            req.description,
+            req.platform.as_deref().unwrap_or(""),
+            req.app_version.as_deref().unwrap_or(""),
+        ],
+    ).map_err(|e| e.to_string())?;
+    let id = db.last_insert_rowid();
+    db_feedback_get_by_id(db, id).ok_or_else(|| "Failed to retrieve created feedback".to_string())
+}
+
+fn db_feedback_get_by_id(db: &Connection, id: i64) -> Option<FeedbackItem> {
+    db.query_row(
+        "SELECT id, email, subject, description, platform, app_version, tags, created_at
+         FROM feedback WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(FeedbackItem {
+                id: row.get(0)?,
+                email: row.get(1)?,
+                subject: row.get(2)?,
+                description: row.get(3)?,
+                platform: row.get(4)?,
+                app_version: row.get(5)?,
+                tags: row.get(6)?,
+                created_at: row.get(7)?,
+            })
+        },
+    ).ok()
+}
+
+fn db_feedback_get_paginated(
+    db: &Connection,
+    page: u32,
+    size: u32,
+    search: Option<&str>,
+) -> (Vec<FeedbackItem>, u64) {
+    let offset = (page.saturating_sub(1)) * size;
+
+    let mut conditions: Vec<String> = Vec::new();
+    let mut params_list: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(q) = search {
+        if !q.trim().is_empty() {
+            let pattern = format!("%{}%", q.trim());
+            conditions.push("(email LIKE ? OR subject LIKE ? OR description LIKE ? OR tags LIKE ?)".to_string());
+            params_list.push(Box::new(pattern.clone()));
+            params_list.push(Box::new(pattern.clone()));
+            params_list.push(Box::new(pattern.clone()));
+            params_list.push(Box::new(pattern));
+        }
+    }
+
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
+
+    let count_sql = format!("SELECT COUNT(*) FROM feedback {}", where_clause);
+    let count_params_list: Vec<&dyn rusqlite::types::ToSql> = params_list.iter().map(|p| p.as_ref()).collect();
+    let total: u64 = db.query_row(&count_sql, count_params_list.as_slice(), |row| row.get(0)).unwrap_or(0);
+
+    let list_sql = format!(
+        "SELECT id, email, subject, description, platform, app_version, tags, created_at
+         FROM feedback {} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        where_clause
+    );
+
+    params_list.push(Box::new(size as i64));
+    params_list.push(Box::new(offset as i64));
+
+    let mut stmt = match db.prepare(&list_sql) {
+        Ok(s) => s,
+        Err(_) => return (vec![], total),
+    };
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> = params_list.iter().map(|p| p.as_ref()).collect();
+    let rows = stmt.query_map(params_ref.as_slice(), |row| {
+        Ok(FeedbackItem {
+            id: row.get(0)?,
+            email: row.get(1)?,
+            subject: row.get(2)?,
+            description: row.get(3)?,
+            platform: row.get(4)?,
+            app_version: row.get(5)?,
+            tags: row.get(6)?,
+            created_at: row.get(7)?,
+        })
+    }).unwrap();
+    let items: Vec<FeedbackItem> = rows.filter_map(|r| r.ok()).collect();
+    (items, total)
+}
+
+fn db_feedback_delete(db: &Connection, id: i64) -> Result<(), String> {
+    if db_feedback_get_by_id(db, id).is_none() {
+        return Err("Feedback not found".to_string());
+    }
+    db.execute("DELETE FROM feedback WHERE id = ?1", params![id]).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn db_feedback_batch_delete(db: &Connection, ids: &[i64]) -> Result<u64, String> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let placeholders: Vec<String> = ids.iter().enumerate().map(|(i, _)| format!("?{}", i + 1)).collect();
+    let sql = format!("DELETE FROM feedback WHERE id IN ({})", placeholders.join(","));
+    let mut stmt = db.prepare(&sql).map_err(|e| e.to_string())?;
+    let params: Vec<&dyn rusqlite::types::ToSql> = ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+    let affected = stmt.execute(params.as_slice()).map_err(|e| e.to_string())?;
+    Ok(affected as u64)
+}
+
+fn db_feedback_update_tags(db: &Connection, id: i64, tags: &str) -> Result<FeedbackItem, String> {
+    if db_feedback_get_by_id(db, id).is_none() {
+        return Err("Feedback not found".to_string());
+    }
+    db.execute("UPDATE feedback SET tags = ?1 WHERE id = ?2", params![tags, id]).map_err(|e| e.to_string())?;
+    db_feedback_get_by_id(db, id).ok_or_else(|| "Failed to retrieve updated feedback".to_string())
+}
+
+// ============================================================
 // Blog API Handlers - 公开
 // ============================================================
 
@@ -2093,6 +2279,163 @@ async fn get_blog_post(
 }
 
 // ============================================================
+// Feedback API Handlers - 公开
+// ============================================================
+
+/// POST /api/feedback - 提交反馈（30分钟内同一邮箱只能提交一次）
+async fn submit_feedback(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<FeedbackCreateRequest>,
+) -> Result<Json<ApiResponse<FeedbackItem>>, (StatusCode, Json<ApiResponse<()>>)> {
+    if body.email.trim().is_empty() || body.subject.trim().is_empty() || body.description.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some("Email, subject and description are required".to_string()),
+            }),
+        ));
+    }
+
+    // Rate limiting: 30 minutes per email
+    {
+        let mut rate_limit = state.feedback_rate_limit.lock().unwrap();
+        let email = body.email.trim().to_lowercase();
+        if let Some(last_submit) = rate_limit.get(&email) {
+            let elapsed = last_submit.elapsed().as_secs();
+            if elapsed < 1800 {
+                let remaining = 1800 - elapsed;
+                let minutes = remaining / 60;
+                let seconds = remaining % 60;
+                return Err((
+                    StatusCode::TOO_MANY_REQUESTS,
+                    Json(ApiResponse {
+                        success: false,
+                        data: None,
+                        error: Some(format!(
+                            "请等待 {}分{}秒 后再提交",
+                            minutes, seconds
+                        )),
+                    }),
+                ));
+            }
+        }
+        rate_limit.insert(email, Instant::now());
+    }
+
+    let db = state.db.lock().unwrap();
+    match db_feedback_create(&db, &body) {
+        Ok(item) => Ok(Json(ApiResponse {
+            success: true,
+            data: Some(item),
+            error: None,
+        })),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse {
+                success: false,
+                data: None,
+                error: Some(e),
+            }),
+        )),
+    }
+}
+
+// ============================================================
+// Feedback API Handlers - Admin
+// ============================================================
+
+/// GET /api/admin/feedback - 反馈列表（分页+搜索）
+async fn admin_list_feedback(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(query): axum::extract::Query<FeedbackQuery>,
+) -> Json<PaginatedResponse<Vec<FeedbackItem>>> {
+    let page = query.page.unwrap_or(1).max(1);
+    let size = query.size.unwrap_or(20).min(100);
+    let search = query.search.as_deref();
+
+    let db = state.db.lock().unwrap();
+    let (items, total) = db_feedback_get_paginated(&db, page, size, search);
+
+    Json(PaginatedResponse {
+        success: true,
+        data: Some(items),
+        total,
+        page,
+        size,
+        error: None,
+    })
+}
+
+/// GET /api/admin/feedback/:id - 反馈详情
+async fn admin_get_feedback(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let db = state.db.lock().unwrap();
+    match db_feedback_get_by_id(&db, id) {
+        Some(item) => Ok(Json(serde_json::json!({ "success": true, "data": item }))),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "success": false, "error": "Feedback not found" })),
+        )),
+    }
+}
+
+/// DELETE /api/admin/feedback/:id - 删除单条反馈
+async fn admin_delete_feedback(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+) -> Result<Json<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let db = state.db.lock().unwrap();
+    match db_feedback_delete(&db, id) {
+        Ok(()) => Ok(Json(ApiResponse { success: true, data: None, error: None })),
+        Err(e) => {
+            let status = if e == "Feedback not found" { StatusCode::NOT_FOUND } else { StatusCode::INTERNAL_SERVER_ERROR };
+            Err((status, Json(ApiResponse { success: false, data: None, error: Some(e) })))
+        }
+    }
+}
+
+/// POST /api/admin/feedback/batch-delete - 批量删除反馈
+async fn admin_batch_delete_feedback(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<FeedbackBatchDeleteRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if body.ids.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "success": false, "error": "No IDs provided" })),
+        ));
+    }
+    let db = state.db.lock().unwrap();
+    match db_feedback_batch_delete(&db, &body.ids) {
+        Ok(count) => Ok(Json(serde_json::json!({ "success": true, "data": { "deleted": count } }))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "success": false, "error": e })),
+        )),
+    }
+}
+
+/// PUT /api/admin/feedback/:id/tags - 更新标签
+async fn admin_update_feedback_tags(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+    Json(body): Json<FeedbackTagRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let db = state.db.lock().unwrap();
+    match db_feedback_update_tags(&db, id, &body.tags) {
+        Ok(item) => Ok(Json(serde_json::json!({ "success": true, "data": item }))),
+        Err(e) => {
+            let status = if e == "Feedback not found" { StatusCode::NOT_FOUND } else { StatusCode::INTERNAL_SERVER_ERROR };
+            Err((status, Json(serde_json::json!({ "success": false, "error": e }))))
+        }
+    }
+}
+
+// ============================================================
 // Stats API Handlers
 // ============================================================
 
@@ -2110,24 +2453,24 @@ async fn admin_stats_data(
         .unwrap_or(0);
 
     let today_users: i64 = db
-        .query_row("SELECT COUNT(DISTINCT unique_id) FROM app_launches WHERE unique_id != '' AND date(launched_at) = date('now')", [], |r| r.get(0))
+        .query_row("SELECT COUNT(DISTINCT unique_id) FROM app_launches WHERE unique_id != '' AND date(launched_at, 'localtime') = date('now', 'localtime')", [], |r| r.get(0))
         .unwrap_or(0);
     let today_launches: i64 = db
-        .query_row("SELECT COUNT(*) FROM app_launches WHERE date(launched_at) = date('now')", [], |r| r.get(0))
+        .query_row("SELECT COUNT(*) FROM app_launches WHERE date(launched_at, 'localtime') = date('now', 'localtime')", [], |r| r.get(0))
         .unwrap_or(0);
 
     let week_users: i64 = db
-        .query_row("SELECT COUNT(DISTINCT unique_id) FROM app_launches WHERE unique_id != '' AND launched_at >= datetime('now', '-7 days')", [], |r| r.get(0))
+        .query_row("SELECT COUNT(DISTINCT unique_id) FROM app_launches WHERE unique_id != '' AND datetime(launched_at, 'localtime') >= datetime('now', 'localtime', '-7 days')", [], |r| r.get(0))
         .unwrap_or(0);
     let week_launches: i64 = db
-        .query_row("SELECT COUNT(*) FROM app_launches WHERE launched_at >= datetime('now', '-7 days')", [], |r| r.get(0))
+        .query_row("SELECT COUNT(*) FROM app_launches WHERE datetime(launched_at, 'localtime') >= datetime('now', 'localtime', '-7 days')", [], |r| r.get(0))
         .unwrap_or(0);
 
     let month_users: i64 = db
-        .query_row("SELECT COUNT(DISTINCT unique_id) FROM app_launches WHERE unique_id != '' AND launched_at >= datetime('now', '-30 days')", [], |r| r.get(0))
+        .query_row("SELECT COUNT(DISTINCT unique_id) FROM app_launches WHERE unique_id != '' AND datetime(launched_at, 'localtime') >= datetime('now', 'localtime', '-30 days')", [], |r| r.get(0))
         .unwrap_or(0);
     let month_launches: i64 = db
-        .query_row("SELECT COUNT(*) FROM app_launches WHERE launched_at >= datetime('now', '-30 days')", [], |r| r.get(0))
+        .query_row("SELECT COUNT(*) FROM app_launches WHERE datetime(launched_at, 'localtime') >= datetime('now', 'localtime', '-30 days')", [], |r| r.get(0))
         .unwrap_or(0);
 
     // 按平台统计
@@ -2435,6 +2778,7 @@ async fn main() {
         static_dir: static_dir.clone(),
         admin_username: config.admin_username().to_string(),
         admin_password: config.admin_password().to_string(),
+        feedback_rate_limit: Mutex::new(std::collections::HashMap::new()),
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port.unwrap_or(8686)));
@@ -2485,6 +2829,13 @@ async fn main() {
         // 统计 API
         .route("/api/admin/stats", get(move |State(s): State<Arc<AppState>>| async move { Html(stats_html(&s.static_dir)) }))
         .route("/api/admin/stats/data", get(admin_stats_data))
+        // 反馈 API
+        .route("/api/feedback", post(submit_feedback))
+        .route("/api/admin/feedback", get(admin_list_feedback))
+        .route("/api/admin/feedback/batch-delete", post(admin_batch_delete_feedback))
+        .route("/api/admin/feedback/{id}", get(admin_get_feedback))
+        .route("/api/admin/feedback/{id}", axum::routing::delete(admin_delete_feedback))
+        .route("/api/admin/feedback/{id}/tags", axum::routing::put(admin_update_feedback_tags))
         // 静态文件服务（上传的文件 + static 目录）
         .nest_service("/api/uploads", ServeDir::new(&uploads_dir))
         .nest_service("/static", ServeDir::new(&static_dir))

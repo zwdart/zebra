@@ -16,7 +16,8 @@ show_menu() {
     echo "  [4] Clean build artifacts"
     echo "  [5] Clean + Build"
     echo "  [6] Run"
-    echo "  [7] Exit"
+    echo "  [7] Pack release zip"
+    echo "  [8] Exit"
     echo ""
 }
 
@@ -169,6 +170,52 @@ DESKTOP
     echo "Desktop entry: $INSTALL_DIR/share/applications/xin.dart.zebra.desktop"
 }
 
+do_pack() {
+    cd "$SCRIPT_DIR"
+    echo ""
+    echo "========================================"
+    echo "  Zebra SSH - Pack Release Zip"
+    echo "========================================"
+    echo
+
+    local binary="packer/target/release/zebra"
+    local install_script="linux_install.sh"
+    local release_dir="packer/target/release"
+
+    if [ ! -f "$binary" ]; then
+        echo "[ERROR] Binary not found: $binary"
+        echo "  Please run Build first."
+        return 1
+    fi
+
+    if [ ! -f "$install_script" ]; then
+        echo "[ERROR] Install script not found: $install_script"
+        return 1
+    fi
+
+    local timestamp=$(date +"%Y%m%d%H%M")
+    local zip_name="linux_zebra_${timestamp}.zip"
+    local zip_path="$release_dir/$zip_name"
+
+    echo "  Binary:       $binary"
+    echo "  Install:      $install_script"
+    echo "  Output:       $zip_path"
+    echo
+
+    cd "$release_dir"
+    zip -j "$zip_name" "$SCRIPT_DIR/$install_script" "$(pwd)/zebra"
+
+    if [ $? -ne 0 ]; then
+        echo "[ERROR] Zip failed!"
+        cd "$SCRIPT_DIR"
+        return 1
+    fi
+
+    cd "$SCRIPT_DIR"
+    echo
+    echo "Done! Output: $zip_path"
+}
+
 # 兼容旧用法: ./build_linux.sh --clean 或 ./build_linux.sh
 if [ "$1" = "--clean" ]; then
     do_clean
@@ -181,10 +228,15 @@ if [ "$1" = "--run" ]; then
     exit 0
 fi
 
+if [ "$1" = "--pack" ]; then
+    do_pack
+    exit 0
+fi
+
 # 交互式菜单
 while true; do
     show_menu
-    read -p "  Select option [1-7]: " choice
+    read -p "  Select option [1-8]: " choice
 
     case $choice in
         1) do_build ;;
@@ -193,7 +245,8 @@ while true; do
         4) do_clean ;;
         5) do_clean; do_build ;;
         6) do_run ;;
-        7) exit 0 ;;
+        7) do_pack ;;
+        8) exit 0 ;;
         *) echo "Invalid option!" ;;
     esac
 

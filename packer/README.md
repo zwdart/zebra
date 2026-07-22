@@ -1,5 +1,11 @@
 # 启动运行zebra-api服务
 ```
+# 1. 进入项目目录
+cd zebra-api
+# 2. 上传zebra-api二进制文件
+scp packer/target/release/zebra-api root@your-server:/opt/zebraapi/zebra-api
+# 2.1 设置权限
+sudo chmod +x /opt/zebraapi/zebra-api
 # 3. 上传服务文件
 scp packer/zebra-api.service root@your-server:/etc/systemd/system/zebra-api.service
 # 4. 启动并设置开机自启

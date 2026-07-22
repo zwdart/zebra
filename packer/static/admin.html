@@ -161,6 +161,7 @@ td { font-size: 14px; }
       <button class="tab-btn" onclick="switchTab('versions')">版本管理</button>
       <button class="tab-btn active" onclick="switchTab('discoveries')">发现管理</button>
       <button class="tab-btn" onclick="switchTab('blog')">博客管理</button>
+      <button class="tab-btn" onclick="switchTab('feedback')">反馈管理</button>
     </div>
   </div>
 
@@ -233,6 +234,24 @@ td { font-size: 14px; }
         <div id="blog-table"></div>
       </div>
       <div class="pagination" id="blog-pagination"></div>
+    </div>
+  </div>
+
+  <!-- 反馈管理 Tab -->
+  <div class="tab-panel" id="tab-feedback">
+    <div class="card">
+      <div class="card-header">
+        <h2>反馈列表</h2>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="feedback-search" placeholder="搜索邮箱/主题/描述/标签..." style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:260px;" oninput="debounceFeedbackSearch()">
+          <button class="btn btn-danger" id="feedback-batch-delete-btn" style="display:none;" onclick="batchDeleteFeedback()">批量删除 (<span id="feedback-selected-count">0</span>)</button>
+        </div>
+      </div>
+      <div class="stats-bar" id="feedback-stats-bar"></div>
+      <div class="card-body" style="padding-bottom:0;">
+        <div id="feedback-table"></div>
+      </div>
+      <div class="pagination" id="feedback-pagination"></div>
     </div>
   </div>
 
@@ -480,6 +499,50 @@ td { font-size: 14px; }
   </div>
 </div>
 
+<!-- 反馈详情弹窗 -->
+<div class="modal-overlay" id="feedback-detail-modal">
+  <div class="modal" style="width:600px;">
+    <div class="modal-header">
+      <h3>反馈详情</h3>
+      <button class="modal-close" onclick="closeModal('feedback-detail-modal')">&times;</button>
+    </div>
+    <div class="modal-body" id="feedback-detail-body">
+    </div>
+  </div>
+</div>
+
+<!-- 反馈标签编辑弹窗 -->
+<div class="modal-overlay" id="feedback-tags-modal">
+  <div class="modal" style="width:420px;">
+    <div class="modal-header">
+      <h3>编辑标签</h3>
+      <button class="modal-close" onclick="closeModal('feedback-tags-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="feedback-tags-edit-id">
+      <div class="form-group">
+        <label>标签</label>
+        <input type="text" id="feedback-tags-input" placeholder="多个标签用逗号分隔，如: 重要,bug,已处理">
+      </div>
+      <div style="margin-top:12px;">
+        <label style="font-size:13px;color:#666;">快捷标签：</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+          <button class="btn btn-sm btn-ghost" onclick="addQuickTag('重要')">重要</button>
+          <button class="btn btn-sm btn-ghost" onclick="addQuickTag('bug')">bug</button>
+          <button class="btn btn-sm btn-ghost" onclick="addQuickTag('建议')">建议</button>
+          <button class="btn btn-sm btn-ghost" onclick="addQuickTag('已处理')">已处理</button>
+          <button class="btn btn-sm btn-ghost" onclick="addQuickTag('待处理')">待处理</button>
+          <button class="btn btn-sm btn-ghost" onclick="addQuickTag('重复')">重复</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('feedback-tags-modal')">取消</button>
+        <button type="button" class="btn btn-primary" onclick="saveFeedbackTags()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -517,6 +580,10 @@ function switchTab(tab) {
     document.querySelector('.tab-btn:nth-child(3)').classList.add('active');
     document.getElementById('tab-blog').classList.add('active');
     loadBlogPosts();
+  } else if (tab === 'feedback') {
+    document.querySelector('.tab-btn:nth-child(4)').classList.add('active');
+    document.getElementById('tab-feedback').classList.add('active');
+    loadFeedback();
   }
 }
 
@@ -1203,6 +1270,224 @@ async function importBlogPosts(input) {
     else showToast('导入失败: ' + (json.error || ''), 'error');
   } catch (e) { showToast('导入失败: ' + e.message, 'error'); }
   input.value = '';
+}
+
+// ===================== 反馈管理 =====================
+let feedbackPage = 1;
+let feedbackPageSize = 20;
+let feedbackTotal = 0;
+let feedbackData = [];
+let feedbackSearchQuery = '';
+let feedbackSearchTimer = null;
+let feedbackSelectedIds = new Set();
+
+function debounceFeedbackSearch() {
+  clearTimeout(feedbackSearchTimer);
+  feedbackSearchTimer = setTimeout(() => {
+    feedbackSearchQuery = document.getElementById('feedback-search').value.trim();
+    feedbackPage = 1;
+    loadFeedback();
+  }, 300);
+}
+
+async function loadFeedback(page) {
+  if (page !== undefined) feedbackPage = page;
+  feedbackSelectedIds.clear();
+  updateBatchDeleteBtn();
+  try {
+    const params = new URLSearchParams({ page: feedbackPage, size: feedbackPageSize });
+    if (feedbackSearchQuery) params.set('search', feedbackSearchQuery);
+    const res = await fetch(`${API_BASE}/feedback?${params}`);
+    const json = await res.json();
+    feedbackData = json.data || [];
+    feedbackTotal = json.total || 0;
+    renderFeedbackTable(feedbackData);
+    renderFeedbackPagination();
+    document.getElementById('feedback-stats-bar').innerHTML =
+      `<span>共 <span class="count">${feedbackTotal}</span> 条反馈</span>`;
+  } catch (e) {
+    showToast('加载反馈列表失败: ' + e.message, 'error');
+  }
+}
+
+function renderFeedbackTable(items) {
+  const container = document.getElementById('feedback-table');
+  if (items.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无反馈数据</p></div>';
+    return;
+  }
+  let html = `<div class="table-scroll"><table><thead><tr>
+    <th><input type="checkbox" id="feedback-select-all" onchange="toggleSelectAllFeedback(this)"></th>
+    <th>ID</th><th>邮箱</th><th>主题</th><th>描述</th><th>平台</th><th>版本</th><th>标签</th><th>时间</th><th>操作</th>
+  </tr></thead><tbody>`;
+  for (const f of items) {
+    const desc = f.description ? (f.description.length > 40 ? f.description.substring(0, 40) + '...' : f.description) : '-';
+    const tagsHtml = f.tags ? f.tags.split(',').map(t => t.trim()).filter(t => t).map(t => `<span class="type-badge type-badge-1" style="margin:1px;">${escHtml(t)}</span>`).join(' ') : '-';
+    const date = f.created_at ? f.created_at.substring(0, 16) : '-';
+    const checked = feedbackSelectedIds.has(f.id) ? 'checked' : '';
+    html += `<tr>
+      <td><input type="checkbox" ${checked} onchange="toggleFeedbackSelect(${f.id}, this)"></td>
+      <td>${f.id}</td>
+      <td>${escHtml(f.email)}</td>
+      <td><strong>${escHtml(f.subject)}</strong></td>
+      <td title="${escHtml(f.description)}">${escHtml(desc)}</td>
+      <td>${escHtml(f.platform || '-')}</td>
+      <td>${escHtml(f.app_version || '-')}</td>
+      <td>${tagsHtml}</td>
+      <td>${date}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm btn-ghost" onclick="openFeedbackDetail(${f.id})">详情</button>
+        <button class="btn btn-sm btn-ghost" onclick="openFeedbackTagsModal(${f.id}, '${escHtml(f.tags || '').replace(/'/g, "\\'")}')">标签</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteFeedback(${f.id})">删除</button>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+function renderFeedbackPagination() {
+  const totalPages = Math.max(1, Math.ceil(feedbackTotal / feedbackPageSize));
+  const container = document.getElementById('feedback-pagination');
+  let html = '';
+  html += `<select class="page-size-select" onchange="feedbackPageSize=+this.value;feedbackPage=1;loadFeedback()">${PAGE_SIZES.map(s => `<option value="${s}" ${s===feedbackPageSize?'selected':''}>${s} 条/页</option>`).join('')}</select>`;
+  html += `<button ${feedbackPage<=1?'disabled':''} onclick="loadFeedback(1)">首页</button>`;
+  html += `<button ${feedbackPage<=1?'disabled':''} onclick="loadFeedback(${feedbackPage-1})">上一页</button>`;
+  const start = Math.max(1, feedbackPage - 2);
+  const end = Math.min(totalPages, feedbackPage + 2);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="${i===feedbackPage?'active':''}" onclick="loadFeedback(${i})">${i}</button>`;
+  }
+  html += `<button ${feedbackPage>=totalPages?'disabled':''} onclick="loadFeedback(${feedbackPage+1})">下一页</button>`;
+  html += `<button ${feedbackPage>=totalPages?'disabled':''} onclick="loadFeedback(${totalPages})">末页</button>`;
+  html += `<span class="page-info">第 ${feedbackPage}/${totalPages} 页，共 ${feedbackTotal} 条</span>`;
+  container.innerHTML = html;
+}
+
+function toggleSelectAllFeedback(el) {
+  const checked = el.checked;
+  feedbackSelectedIds.clear();
+  if (checked) {
+    feedbackData.forEach(f => feedbackSelectedIds.add(f.id));
+  }
+  document.querySelectorAll('#feedback-table input[type="checkbox"]:not(#feedback-select-all)').forEach(cb => {
+    cb.checked = checked;
+  });
+  updateBatchDeleteBtn();
+}
+
+function toggleFeedbackSelect(id, el) {
+  if (el.checked) {
+    feedbackSelectedIds.add(id);
+  } else {
+    feedbackSelectedIds.delete(id);
+  }
+  updateBatchDeleteBtn();
+}
+
+function updateBatchDeleteBtn() {
+  const btn = document.getElementById('feedback-batch-delete-btn');
+  const count = document.getElementById('feedback-selected-count');
+  if (feedbackSelectedIds.size > 0) {
+    btn.style.display = '';
+    count.textContent = feedbackSelectedIds.size;
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+async function openFeedbackDetail(id) {
+  try {
+    const res = await fetch(`${API_BASE}/feedback/${id}`);
+    const json = await res.json();
+    if (!json.success || !json.data) { showToast('加载详情失败', 'error'); return; }
+    const f = json.data;
+    const tagsHtml = f.tags ? f.tags.split(',').map(t => t.trim()).filter(t => t).map(t => `<span class="type-badge type-badge-1" style="margin:2px;">${escHtml(t)}</span>`).join(' ') : '<span style="color:#999;">无标签</span>';
+    document.getElementById('feedback-detail-body').innerHTML = `
+      <div style="display:grid;grid-template-columns:100px 1fr;gap:12px;font-size:14px;">
+        <div style="color:#666;font-weight:500;">ID</div><div>${f.id}</div>
+        <div style="color:#666;font-weight:500;">邮箱</div><div>${escHtml(f.email)}</div>
+        <div style="color:#666;font-weight:500;">主题</div><div><strong>${escHtml(f.subject)}</strong></div>
+        <div style="color:#666;font-weight:500;">平台</div><div>${escHtml(f.platform || '-')}</div>
+        <div style="color:#666;font-weight:500;">版本</div><div>${escHtml(f.app_version || '-')}</div>
+        <div style="color:#666;font-weight:500;">标签</div><div>${tagsHtml}</div>
+        <div style="color:#666;font-weight:500;">时间</div><div>${f.created_at || '-'}</div>
+        <div style="color:#666;font-weight:500;">详细说明</div><div style="white-space:pre-wrap;line-height:1.6;background:#fafafa;padding:12px;border-radius:6px;">${escHtml(f.description)}</div>
+      </div>
+    `;
+    openModal('feedback-detail-modal');
+  } catch (e) { showToast('加载详情失败: ' + e.message, 'error'); }
+}
+
+function openFeedbackTagsModal(id, tags) {
+  document.getElementById('feedback-tags-edit-id').value = id;
+  document.getElementById('feedback-tags-input').value = tags || '';
+  openModal('feedback-tags-modal');
+}
+
+function addQuickTag(tag) {
+  const input = document.getElementById('feedback-tags-input');
+  const current = input.value.trim();
+  if (current) {
+    const tags = current.split(',').map(t => t.trim()).filter(t => t);
+    if (!tags.includes(tag)) {
+      tags.push(tag);
+      input.value = tags.join(', ');
+    }
+  } else {
+    input.value = tag;
+  }
+}
+
+async function saveFeedbackTags() {
+  const id = document.getElementById('feedback-tags-edit-id').value;
+  const tags = document.getElementById('feedback-tags-input').value.trim();
+  try {
+    const res = await fetch(`${API_BASE}/feedback/${id}/tags`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      showToast('标签已更新');
+      closeModal('feedback-tags-modal');
+      loadFeedback();
+    } else {
+      showToast('更新失败: ' + (json.error || ''), 'error');
+    }
+  } catch (e) { showToast('更新失败: ' + e.message, 'error'); }
+}
+
+async function deleteFeedback(id) {
+  const f = feedbackData.find(x => x.id === id);
+  if (!confirm(`确定要删除这条反馈吗？\n主题: ${f ? f.subject : id}`)) return;
+  try {
+    const res = await fetch(`${API_BASE}/feedback/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.success) { showToast('已删除'); loadFeedback(); }
+    else showToast('删除失败', 'error');
+  } catch (e) { showToast('删除失败: ' + e.message, 'error'); }
+}
+
+async function batchDeleteFeedback() {
+  const ids = Array.from(feedbackSelectedIds);
+  if (ids.length === 0) return;
+  if (!confirm(`确定要删除选中的 ${ids.length} 条反馈吗？`)) return;
+  try {
+    const res = await fetch(`${API_BASE}/feedback/batch-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      showToast(`已删除 ${json.data?.deleted || ids.length} 条反馈`);
+      loadFeedback();
+    } else {
+      showToast('批量删除失败: ' + (json.error || ''), 'error');
+    }
+  } catch (e) { showToast('批量删除失败: ' + e.message, 'error'); }
 }
 
 // ===================== Init =====================
