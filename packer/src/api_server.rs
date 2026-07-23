@@ -1,5 +1,7 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]  // 调试时暂时关闭
 
+pub mod rss_server;
+
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Multipart, State},
@@ -1134,7 +1136,7 @@ async fn health_check(
     let uptime = state.start_time.elapsed().as_secs();
     Json(HealthResponse {
         status: "ok".to_string(),
-        service: "zebra-update-api".to_string(),
+        service: "zebra-api".to_string(),
         version: "1.0.0".to_string(),
         uptime_secs: uptime,
         started_at: state.started_at.clone(),
@@ -2768,6 +2770,9 @@ async fn main() {
     let conn = Connection::open(&db_path).expect("Failed to open database");
     init_db(&conn);
 
+    // 初始化 RSS 独立数据库
+    let rss_db = Arc::new(rss_server::RssDb::open(runtimes_dir));
+
     let state = Arc::new(AppState {
         db: Mutex::new(conn),
         uploads_dir: uploads_dir.clone(),
@@ -2839,6 +2844,7 @@ async fn main() {
         // 静态文件服务（上传的文件 + static 目录）
         .nest_service("/api/uploads", ServeDir::new(&uploads_dir))
         .nest_service("/static", ServeDir::new(&static_dir))
+        .merge(rss_server::rss_routes().with_state(rss_db))
         .layer(LoggingLayer { log_max_bytes: config.log_max_bytes.unwrap_or(2048) })
         .layer(cors)
         .with_state(state);

@@ -10,8 +10,9 @@ import 'connection_form_screen.dart';
 import 'terminal_screen.dart';
 import 'sftp_screen.dart';
 import 'settings_screen.dart';
-import 'discovery_screen.dart';
 import 'monitor_screen.dart';
+import 'rss/rss_feed_list_screen.dart';
+import 'discovery_screen.dart';
 import 'update_dialog.dart';
 import 'diary_screen.dart';
 import 'blog_screen.dart';
@@ -60,6 +61,16 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Text(loc.appTitle),
         actions: [
           IconButton(
+            icon: const Icon(Icons.rss_feed),
+            tooltip: 'RSS',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RssFeedListScreen()),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.explore),
             tooltip: loc.discover,
             onPressed: () {
@@ -87,6 +98,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   context,
                   MaterialPageRoute(builder: (_) => const BlogScreen()),
                 );
+              } else if (value == 'discover') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const DiscoveryScreen()),
+                );
               } else if (value == 'about') {
                 Navigator.push(
                   context,
@@ -98,6 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
               PopupMenuItem(value: 'settings', child: Text(loc.settings)),
               PopupMenuItem(value: 'diary', child: Text(loc.diary)),
               PopupMenuItem(value: 'blog', child: Text(loc.blog)),
+              PopupMenuItem(value: 'discover', child: Text(loc.discover)),
               PopupMenuItem(value: 'about', child: Text(loc.aboutUs)),
             ],
           ),
@@ -109,6 +126,18 @@ class _HomeScreenState extends State<HomeScreen> {
             CustomTitleBar(
               title: loc.appTitle,
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.rss_feed, size: 18),
+                  tooltip: 'RSS',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const RssFeedListScreen()),
+                    );
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
                 IconButton(
                   icon: const Icon(Icons.explore, size: 18),
                   tooltip: loc.discover,
@@ -141,6 +170,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         context,
                         MaterialPageRoute(builder: (_) => const BlogScreen()),
                       );
+                    } else if (value == 'discover') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const DiscoveryScreen()),
+                      );
                     } else if (value == 'about') {
                       Navigator.push(
                         context,
@@ -152,6 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     PopupMenuItem(value: 'settings', child: Text(loc.settings)),
                     PopupMenuItem(value: 'diary', child: Text(loc.diary)),
                     PopupMenuItem(value: 'blog', child: Text(loc.blog)),
+                    PopupMenuItem(value: 'discover', child: Text(loc.discover)),
                     PopupMenuItem(value: 'about', child: Text(loc.aboutUs)),
                   ],
                 ),

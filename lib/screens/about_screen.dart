@@ -24,7 +24,6 @@ class AboutScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
-    final isZh = Localizations.localeOf(context).languageCode == 'zh';
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -55,7 +54,7 @@ class AboutScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  isZh ? '友好的 SSH 客户端' : 'A Helpful SSH Client',
+                  loc.aboutSlogan,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: colorScheme.onSurfaceVariant,
@@ -103,7 +102,7 @@ class AboutScreen extends StatelessWidget {
                         onTap: () {
                           Clipboard.setData(ClipboardData(text: strEmail));
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(isZh ? '邮箱已复制' : 'Email copied')),
+                            SnackBar(content: Text(loc.emailCopied)),
                           );
                         },
                       ),
@@ -155,9 +154,7 @@ class AboutScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      isZh
-                          ? 'Zebra SSH 是一款跨平台 SSH 客户端，支持终端、SFTP 文件管理、服务器监控、进程管理和磁盘清理等功能。支持 Linux、macOS、Windows、Android 和 iOS。'
-                          : 'Zebra SSH is a cross-platform SSH client with terminal, SFTP file management, server monitoring, process management and disk cleanup features. Supports Linux, macOS, Windows, Android and iOS.',
+                      loc.aboutDescription,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: colorScheme.onSurfaceVariant,

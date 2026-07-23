@@ -234,7 +234,7 @@ zebra-api --port 8080 --static-dir ./static
 ```json
 {
   "status": "ok",
-  "service": "zebra-update-api",
+  "service": "zebra-api",
   "version": "1.0.0",
   "uptime_secs": 3600,
   "started_at": "2024-01-01 10:00:00",

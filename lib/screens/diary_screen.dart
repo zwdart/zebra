@@ -158,7 +158,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
       if (!await file.exists()) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('请将 diary_import.csv 放到 ${dir.path}')),
+            SnackBar(content: Text(loc.diaryImportPath.replaceAll('{path}', dir.path))),
           );
         }
         return;
@@ -335,6 +335,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
   }
 
   Widget _buildEntryCard(DiaryEntry entry, ThemeData theme) {
+    final loc = AppLocalizations.of(context);
     final dateStr = '${entry.createdAt.year}-${entry.createdAt.month.toString().padLeft(2, '0')}-${entry.createdAt.day.toString().padLeft(2, '0')} ${entry.createdAt.hour.toString().padLeft(2, '0')}:${entry.createdAt.minute.toString().padLeft(2, '0')}';
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -353,7 +354,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      entry.title.isEmpty ? '(无标题)' : entry.title,
+                      entry.title.isEmpty ? loc.diaryNoTitle : entry.title,
                       style: theme.textTheme.titleSmall,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

@@ -17,7 +17,8 @@ show_menu() {
     echo "  [5] Clean + Build"
     echo "  [6] Run"
     echo "  [7] Pack release zip"
-    echo "  [8] Exit"
+    echo "  [8] Quick Build & Run (flutter only)"
+    echo "  [9] Exit"
     echo ""
 }
 
@@ -170,6 +171,37 @@ DESKTOP
     echo "Desktop entry: $INSTALL_DIR/share/applications/xin.dart.zebra.desktop"
 }
 
+do_quick_build_run() {
+    cd "$SCRIPT_DIR"
+    echo ""
+    echo "========================================"
+    echo "  Zebra SSH - Quick Build & Run"
+    echo "========================================"
+    echo
+
+    echo "[1/2] Building Flutter Linux release..."
+    cat > "$SCRIPT_DIR/lib/build_info.dart" << EOF
+// Auto-generated build info - overwritten by build scripts
+const String buildTime = '$BUILD_TIME';
+EOF
+    flutter build linux --release
+    if [ $? -ne 0 ]; then
+        echo "[ERROR] Flutter build failed!"
+        return 1
+    fi
+
+    local binary="build/linux/x64/release/bundle/zebra"
+    if [ ! -f "$binary" ]; then
+        echo "[ERROR] Binary not found: $binary"
+        return 1
+    fi
+
+    echo
+    echo "[2/2] Launching Zebra SSH..."
+    "$binary" &
+    echo "Done! PID: $!"
+}
+
 do_pack() {
     cd "$SCRIPT_DIR"
     echo ""
@@ -233,10 +265,15 @@ if [ "$1" = "--pack" ]; then
     exit 0
 fi
 
+if [ "$1" = "--quick" ]; then
+    do_quick_build_run
+    exit 0
+fi
+
 # 交互式菜单
 while true; do
     show_menu
-    read -p "  Select option [1-8]: " choice
+    read -p "  Select option [1-9]: " choice
 
     case $choice in
         1) do_build ;;
@@ -246,7 +283,8 @@ while true; do
         5) do_clean; do_build ;;
         6) do_run ;;
         7) do_pack ;;
-        8) exit 0 ;;
+        8) do_quick_build_run ;;
+        9) exit 0 ;;
         *) echo "Invalid option!" ;;
     esac
 

@@ -267,7 +267,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   child: TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: '搜索发现内容...',
+                      hintText: loc.discoverySearchHint,
                       prefixIcon: const Icon(Icons.search, size: 20),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
@@ -296,7 +296,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.search),
-                  tooltip: '搜索',
+                  tooltip: loc.discoverySearch,
                   onPressed: _onSearch,
                 ),
               ],
@@ -382,14 +382,14 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         if (_totalPages > 1) ...[
           IconButton(
             icon: const Icon(Icons.first_page, size: 20),
-            tooltip: '首页',
+            tooltip: loc.discoveryFirstPage,
             onPressed: _currentPage > 1 ? () => _goToPage(1) : null,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
           ),
           IconButton(
             icon: const Icon(Icons.chevron_left, size: 20),
-            tooltip: '上一页',
+            tooltip: loc.discoveryPrevPage,
             onPressed: _currentPage > 1 ? () => _goToPage(_currentPage - 1) : null,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
@@ -404,7 +404,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.chevron_right, size: 20),
-            tooltip: '下一页',
+            tooltip: loc.discoveryNextPage,
             onPressed: _currentPage < _totalPages
                 ? () => _goToPage(_currentPage + 1)
                 : null,
@@ -413,7 +413,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.last_page, size: 20),
-            tooltip: '末页',
+            tooltip: loc.discoveryLastPage,
             onPressed: _currentPage < _totalPages
                 ? () => _goToPage(_totalPages)
                 : null,
@@ -444,7 +444,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 ),
                 contentPadding: EdgeInsets.zero,
                 isDense: true,
-                hintText: '页',
+                hintText: loc.discoveryPage,
                 hintStyle: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
               ),
               onSubmitted: (_) => _jumpToPage(),
@@ -453,7 +453,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
           const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.arrow_forward, size: 18),
-            tooltip: '跳转',
+            tooltip: loc.discoveryJumpTo,
             onPressed: _jumpToPage,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),

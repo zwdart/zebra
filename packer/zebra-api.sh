@@ -53,11 +53,27 @@ run() {
 
     mkdir -p "$RUNTIMES_DIR/logs"
 
+    # 解析端口号，默认 8686
+    local port=8686
+    for ((i=1; i<=$#; i++)); do
+        if [ "${!i}" = "--port" ]; then
+            local next=$((i+1))
+            port="${!next}"
+        fi
+    done
+
     echo -e "${GREEN}启动 $BIN_NAME ...${NC}"
     cd "$SCRIPT_DIR"
     nohup "$BIN_PATH" "$@" > "$LOG_FILE" 2>&1 &
     echo $! > "$PID_FILE"
     echo -e "${GREEN}已启动 (PID: $!)${NC}"
+    echo ""
+    echo -e "${GREEN}常用链接:${NC}"
+    echo -e "  管理后台:   http://localhost:${port}/api/admin"
+    echo -e "  RSS 管理:   http://localhost:${port}/api/admin/rss"
+    echo -e "  数据统计:   http://localhost:${port}/api/admin/stats"
+    echo -e "  健康检查:   http://localhost:${port}/api/health"
+    echo ""
     echo "  日志: $LOG_FILE"
 }
 

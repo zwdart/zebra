@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zebra RSS - 数据源管理</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+.header { background: #1a1a2e; color: white; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 20px; }
+.container { max-width: 1400px; margin: 24px auto; padding: 0 24px; }
+.card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
+.card-header { padding: 16px 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.card-header h2 { font-size: 16px; }
+.card-body { padding: 20px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #eee; }
+th { background: #fafafa; font-weight: 600; font-size: 13px; color: #666; }
+td { font-size: 14px; }
+.btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; }
+.btn-primary { background: #1a73e8; color: white; }
+.btn-primary:hover { background: #1557b0; }
+.btn-success { background: #2e7d32; color: white; }
+.btn-success:hover { background: #1b5e20; }
+.btn-danger { background: #dc3545; color: white; }
+.btn-danger:hover { background: #c82333; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-ghost { background: transparent; color: #666; border: 1px solid #ddd; }
+.btn-ghost:hover { background: #f5f5f5; }
+.btn-filter { background: transparent; color: #666; border: 1px solid #ddd; padding: 6px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+.btn-filter:hover { background: #f5f5f5; }
+.btn-filter.active { background: #1a73e8; color: white; border-color: #1a73e8; }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: white; border-radius: 12px; width: 520px; max-height: 90vh; overflow-y: auto; }
+.modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.modal-header h3 { font-size: 18px; }
+.modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
+.modal-body { padding: 20px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: #555; }
+.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+.form-group textarea { min-height: 60px; resize: vertical; }
+.form-row { display: flex; gap: 16px; }
+.form-row .form-group { flex: 1; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.badge-rss1 { background: #e3f2fd; color: #1565c0; }
+.badge-rss2 { background: #e8f5e9; color: #2e7d32; }
+.badge-atom { background: #fff3e0; color: #e65100; }
+.enabled-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+.enabled-true { background: #e8f5e9; color: #2e7d32; }
+.enabled-false { background: #fafafa; color: #999; }
+.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.stats-bar { display: flex; gap: 24px; padding: 12px 20px; background: #fafafa; border-bottom: 1px solid #eee; font-size: 13px; color: #666; }
+.stats-bar span { display: flex; align-items: center; gap: 4px; }
+.stats-bar .count { font-weight: 600; color: #333; }
+.table-scroll { overflow-x: auto; }
+.pagination { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 16px 20px; border-top: 1px solid #eee; flex-wrap: wrap; }
+.pagination button { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+.pagination button:hover:not(:disabled) { background: #f5f5f5; border-color: #999; }
+.pagination button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
+.pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+.pagination .page-info { font-size: 13px; color: #666; margin: 0 8px; }
+.page-size-select { padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; }
+.toast { position: fixed; bottom: 24px; right: 24px; background: #333; color: white; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 2000; transform: translateY(100px); opacity: 0; transition: all 0.3s; }
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { background: #2e7d32; }
+.toast.error { background: #c62828; }
+.empty-state { text-align: center; padding: 48px; color: #999; }
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+.file-name { font-family: monospace; font-size: 12px; color: #555; }
+.tab-nav { display: flex; gap: 0; border-bottom: 2px solid #eee; background: white; border-radius: 8px 8px 0 0; overflow: hidden; }
+.tab-btn { padding: 12px 24px; border: none; background: transparent; font-size: 15px; font-weight: 500; color: #666; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+.tab-btn:hover { color: #333; }
+.tab-btn.active { color: #1a73e8; border-bottom-color: #1a73e8; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+@media (max-width: 768px) {
+  .header { padding: 12px 16px; }
+  .header h1 { font-size: 16px; }
+  .container { padding: 0 12px; margin: 12px auto; }
+  .card-header { flex-direction: column; align-items: flex-start; }
+  .card-header > div { width: 100%; }
+  .filter-bar { gap: 4px; }
+  .btn-filter { padding: 5px 10px; font-size: 11px; }
+  .card-body { padding: 12px; }
+  .stats-bar { flex-wrap: wrap; gap: 10px; padding: 10px 14px; font-size: 12px; }
+  .pagination { flex-wrap: wrap; gap: 4px; padding: 12px; }
+  .pagination button { padding: 5px 8px; font-size: 12px; }
+  .page-info { font-size: 12px; }
+  .page-size-select { font-size: 11px; }
+  .modal { width: 95%; max-width: 520px; }
+  .form-row { flex-direction: column; gap: 0; }
+  th, td { padding: 8px 10px; font-size: 12px; }
+  .btn-sm { padding: 4px 8px; font-size: 11px; }
+  .tab-btn { padding: 10px 14px; font-size: 13px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Zebra RSS - 数据源管理</h1>
+  <a href="/api/admin" class="btn btn-ghost" style="color:white;border-color:rgba(255,255,255,0.3);font-size:12px;">返回管理后台</a>
+</div>
+
+<div class="container">
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('sources')">订阅源管理</button>
+    <button class="tab-btn" onclick="switchTab('folders')">收藏夹管理</button>
+  </div>
+
+  <!-- 订阅源 Tab -->
+  <div class="tab-panel active" id="tab-sources">
+    <div class="card" style="border-radius:0 0 8px 8px;">
+      <div class="card-header">
+        <h2>订阅源列表</h2>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="searchInput" placeholder="搜索标题、URL、分类..." style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;" oninput="debounceSearch()">
+          <div class="filter-bar" id="filter-bar">
+            <button class="btn-filter active" data-type="all" onclick="filterType('all')">全部</button>
+            <button class="btn-filter" data-type="enabled" onclick="filterType('enabled')">已启用</button>
+            <button class="btn-filter" data-type="disabled" onclick="filterType('disabled')">已禁用</button>
+          </div>
+          <button class="btn btn-primary" onclick="showAddModal()">+ 新增订阅源</button>
+          <div style="position:relative;display:inline-block;">
+            <button class="btn btn-ghost" onclick="toggleDropdown('ioDropdown')" style="display:inline-flex;align-items:center;gap:4px;">导入 / 导出 <span style="font-size:10px;">▼</span></button>
+            <div id="ioDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:white;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;min-width:160px;overflow:hidden;">
+              <div style="padding:8px 14px;font-size:12px;color:#999;font-weight:600;border-bottom:1px solid #eee;">导出</div>
+              <a href="javascript:void(0)" onclick="exportCsv();closeDropdown('ioDropdown')" style="display:block;padding:8px 14px;font-size:13px;color:#333;text-decoration:none;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📄 导出 CSV</a>
+              <a href="javascript:void(0)" onclick="exportOpml();closeDropdown('ioDropdown')" style="display:block;padding:8px 14px;font-size:13px;color:#333;text-decoration:none;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📄 导出 OPML</a>
+              <div style="padding:8px 14px;font-size:12px;color:#999;font-weight:600;border-bottom:1px solid #eee;border-top:1px solid #eee;">导入</div>
+              <label style="display:block;padding:8px 14px;font-size:13px;color:#333;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📥 导入 CSV<input type="file" accept=".csv" style="display:none;" onchange="handleCsvImport(event);closeDropdown('ioDropdown')"></label>
+              <label style="display:block;padding:8px 14px;font-size:13px;color:#333;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📥 导入 OPML<input type="file" accept=".opml,.xml" style="display:none;" onchange="handleOpmlImport(event);closeDropdown('ioDropdown')"></label>
+            </div>
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="batchDelete()" id="batchDeleteBtn" style="display:none">批量删除</button>
+          <button class="btn btn-success btn-sm" onclick="showBatchAddToFolderModal()" id="addToFolderBtn" style="display:none">批量加入收藏夹</button>
+        </div>
+      </div>
+      <div class="stats-bar" id="stats-bar"></div>
+      <div class="card-body" style="padding-bottom:0;">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:40px"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                <th>标题</th>
+                <th>URL</th>
+                <th>类型</th>
+                <th>分类</th>
+                <th>状态</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="emptyState" style="display:none">
+          <div class="icon">📡</div>
+          <div>暂无 RSS 数据源</div>
+        </div>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <!-- 收藏夹 Tab -->
+  <div class="tab-panel" id="tab-folders">
+    <div class="card" style="border-radius:0 0 8px 8px;">
+      <div class="card-header">
+        <h2 id="folderViewTitle">收藏夹列表</h2>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="folderSearchInput" placeholder="搜索收藏夹名称..." style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:180px;display:none;" oninput="debounceFolderSearch()">
+          <button class="btn btn-ghost" id="backToFolderList" style="display:none" onclick="showFolderList()">← 返回列表</button>
+          <button class="btn btn-primary" id="createFolderBtn" onclick="showCreateFolderModal()">+ 新建收藏夹</button>
+          <button class="btn btn-danger btn-sm" onclick="batchDeleteFolders()" id="batchDeleteFolderBtn" style="display:none">批量删除</button>
+          <button class="btn btn-success btn-sm" onclick="showAddSourceToFolderModal()" id="addSourceToFolderBtn" style="display:none">添加订阅源到此收藏夹</button>
+          <button class="btn btn-danger btn-sm" onclick="batchRemoveFromFolder()" id="batchRemoveFolderBtn" style="display:none">批量移除</button>
+          <div id="folderIoBtnGroup" style="display:none;position:relative;display:inline-block;">
+            <button class="btn btn-ghost btn-sm" onclick="toggleDropdown('folderIoDropdown')" style="display:inline-flex;align-items:center;gap:4px;">导入 / 导出 <span style="font-size:10px;">▼</span></button>
+            <div id="folderIoDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:white;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;min-width:160px;overflow:hidden;">
+              <div style="padding:8px 14px;font-size:12px;color:#999;font-weight:600;border-bottom:1px solid #eee;">导出</div>
+              <a href="javascript:void(0)" onclick="exportFolderCsv();closeDropdown('folderIoDropdown')" style="display:block;padding:8px 14px;font-size:13px;color:#333;text-decoration:none;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📄 导出 CSV</a>
+              <a href="javascript:void(0)" onclick="exportFolderOpml();closeDropdown('folderIoDropdown')" style="display:block;padding:8px 14px;font-size:13px;color:#333;text-decoration:none;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📄 导出 OPML</a>
+              <div style="padding:8px 14px;font-size:12px;color:#999;font-weight:600;border-bottom:1px solid #eee;border-top:1px solid #eee;">导入</div>
+              <label style="display:block;padding:8px 14px;font-size:13px;color:#333;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📥 导入 CSV<input type="file" accept=".csv" style="display:none;" onchange="handleFolderCsvImport(event);closeDropdown('folderIoDropdown')"></label>
+              <label style="display:block;padding:8px 14px;font-size:13px;color:#333;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📥 导入 OPML<input type="file" accept=".opml,.xml" style="display:none;" onchange="handleFolderOpmlImport(event);closeDropdown('folderIoDropdown')"></label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="folderListView">
+        <div class="stats-bar" id="folderStatsBar"></div>
+        <div class="card-body" style="padding-bottom:0;">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:40px"><input type="checkbox" id="selectAllFolders" onchange="toggleSelectAllFolders()"></th>
+                  <th>名称</th>
+                  <th>描述</th>
+                  <th>订阅源数</th>
+                  <th>创建时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="folderTableBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="folderEmptyState" style="display:none">
+            <div class="icon">📂</div>
+            <div>暂无收藏夹</div>
+          </div>
+        </div>
+        <div class="pagination" id="folderPagination"></div>
+      </div>
+      <div id="folderSourcesView" style="display:none;">
+        <div class="stats-bar" id="folderSourcesStatsBar"></div>
+        <div class="card-body" style="padding-bottom:0;">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:40px"><input type="checkbox" id="selectAllFolderSources" onchange="toggleSelectAllFolderSources()"></th>
+                  <th>标题</th>
+                  <th>URL</th>
+                  <th>类型</th>
+                  <th>分类</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="folderSourcesBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="folderSourcesEmpty" style="display:none">
+            <div class="icon">📂</div>
+            <div>收藏夹内暂无订阅源</div>
+          </div>
+        </div>
+        <div class="pagination" id="folderSourcesPagination"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 新增/编辑订阅源弹窗 -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">新增订阅源</h3>
+      <button class="modal-close" onclick="closeModal('modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>标题 *</label>
+        <input type="text" id="formTitle" placeholder="例如：Hacker News">
+      </div>
+      <div class="form-group">
+        <label>URL *</label>
+        <input type="text" id="formUrl" placeholder="https://hnrss.org/best">
+      </div>
+      <div class="form-group">
+        <label>网站 URL</label>
+        <input type="text" id="formSiteUrl" placeholder="https://news.ycombinator.com">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>类型</label>
+          <select id="formFeedType">
+            <option value="rss2">RSS 2.0</option>
+            <option value="rss1">RSS 1.0</option>
+            <option value="atom">Atom</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>分类</label>
+          <input type="text" id="formCategory" placeholder="tech, news...">
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="formEnabled" checked> 启用
+        </label>
+      </div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-ghost" onclick="closeModal('modal')">取消</button>
+        <button class="btn btn-primary" onclick="saveSource()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 收藏夹弹窗 -->
+<div class="modal-overlay" id="folderModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="folderModalTitle">新建收藏夹</h3>
+      <button class="modal-close" onclick="closeModal('folderModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>收藏夹名称 *</label>
+        <input type="text" id="folderName" placeholder="例如：科技新闻">
+      </div>
+      <div class="form-group">
+        <label>描述</label>
+        <textarea id="folderDesc" placeholder="收藏夹描述（可选）"></textarea>
+      </div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-ghost" onclick="closeModal('folderModal')">取消</button>
+        <button class="btn btn-primary" onclick="saveFolder()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 从订阅源列表加入收藏夹弹窗 -->
+<div class="modal-overlay" id="addToFolderModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>加入收藏夹</h3>
+      <button class="modal-close" onclick="closeModal('addToFolderModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#666;margin-bottom:12px;">选择要将选中的订阅源加入的收藏夹：</p>
+      <div id="folderSelectList"></div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-ghost" onclick="closeModal('addToFolderModal')">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 从订阅源列表添加到当前收藏夹弹窗 -->
+<div class="modal-overlay" id="addSourceToFolderModal">
+  <div class="modal" style="width:600px;">
+    <div class="modal-header">
+      <h3>添加订阅源到「<span id="addSourceFolderName"></span>」</h3>
+      <button class="modal-close" onclick="closeModal('addSourceToFolderModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="addSourceSearch" placeholder="搜索订阅源..." style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;margin-bottom:12px;" oninput="debounceAddSourceSearch()">
+      <div style="max-height:400px;overflow-y:auto;" id="addSourceList"></div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px;">
+        <button class="btn btn-ghost" onclick="closeModal('addSourceToFolderModal')">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const PAGE_SIZES = [10, 20, 50, 100];
+let currentPage = 1;
+let pageSize = 20;
+let totalCount = 0;
+let editingId = null;
+let searchTimer = null;
+let currentFilter = 'all';
+let sourceData = [];
+
+// Folder state
+let folderData = [];
+let folderPage = 1;
+let folderPageSize = 20;
+let folderTotal = 0;
+let folderSearchQuery = '';
+let folderSearchTimer = null;
+let currentFolderId = null;
+let currentFolderName = '';
+let folderSourcePage = 1;
+let folderSourceTotal = 0;
+let folderSourcePageSize = 20;
+
+// ===================== Tab =====================
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+  if (tab === 'sources') {
+    document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+    document.getElementById('tab-sources').classList.add('active');
+  } else if (tab === 'folders') {
+    document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+    document.getElementById('tab-folders').classList.add('active');
+    showFolderList();
+  }
+}
+
+// ===================== Sources =====================
+function getPageFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const p = parseInt(params.get('page'));
+  return (isNaN(p) || p < 1) ? 1 : p;
+}
+
+function updateUrlPage(page) {
+  const url = new URL(window.location);
+  url.searchParams.set('page', page);
+  window.history.pushState({}, '', url);
+}
+
+async function loadSources(page) {
+  if (page !== undefined) currentPage = page;
+  const search = document.getElementById('searchInput').value;
+  const params = new URLSearchParams({ page: currentPage, size: pageSize });
+  if (search) params.set('search', search);
+
+  try {
+    const resp = await fetch(`/api/admin/rss/sources?${params}`);
+    const data = await resp.json();
+    sourceData = data.data || [];
+    totalCount = data.total || 0;
+    currentPage = data.page || 1;
+
+    renderTable(sourceData);
+    renderPagination();
+    updateStats();
+    updateUrlPage(currentPage);
+  } catch (e) {
+    showToast('加载失败: ' + e.message, 'error');
+  }
+}
+
+function updateStats() {
+  const enabledCount = sourceData.filter(s => s.enabled).length;
+  document.getElementById('stats-bar').innerHTML = `
+    <span>共 <span class="count">${totalCount}</span> 个订阅源</span>
+    <span>本页启用: <span class="count">${enabledCount}</span></span>
+  `;
+}
+
+function filterType(type) {
+  currentFilter = type;
+  document.querySelectorAll('#filter-bar .btn-filter').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === type);
+  });
+  currentPage = 1;
+  loadSources();
+}
+
+function renderTable(sources) {
+  const tbody = document.getElementById('tableBody');
+  const empty = document.getElementById('emptyState');
+  let filtered = sources;
+  if (currentFilter === 'enabled') filtered = sources.filter(s => s.enabled);
+  else if (currentFilter === 'disabled') filtered = sources.filter(s => !s.enabled);
+
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = filtered.map(s => `
+    <tr>
+      <td><input type="checkbox" class="row-check" value="${s.id}"></td>
+      <td><strong>${esc(s.title)}</strong></td>
+      <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="file-name" title="${esc(s.url)}" style="cursor:pointer;" onclick="copyToClipboard('${esc(s.url).replace(/'/g, "\\'")}')">${esc(s.url)}</span></td>
+      <td><span class="badge badge-${s.feed_type}">${s.feed_type.toUpperCase()}</span></td>
+      <td>${esc(s.category || '-')}</td>
+      <td><span class="enabled-badge ${s.enabled ? 'enabled-true' : 'enabled-false'}">${s.enabled ? '启用' : '禁用'}</span></td>
+      <td style="font-size:12px;color:#888">${s.created_at || '-'}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm btn-ghost" onclick='editSource(${JSON.stringify(s)})'>编辑</button>
+        <button class="btn btn-sm btn-success" onclick='showSingleAddToFolder(${s.id}, "${esc(s.title)}")'>收藏夹</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteSource(${s.id}, '${esc(s.title).replace(/'/g, "\\'")}', '${esc(s.url).replace(/'/g, "\\'")}')">删除</button>
+      </td>
+    </tr>
+  `).join('');
+  updateBatchBtn();
+}
+
+function renderPagination() {
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const container = document.getElementById('pagination');
+  let html = '';
+  html += `<select class="page-size-select" onchange="pageSize=+this.value;currentPage=1;loadSources()">${PAGE_SIZES.map(s => `<option value="${s}" ${s===pageSize?'selected':''}>${s} 条/页</option>`).join('')}</select>`;
+  html += `<button ${currentPage<=1?'disabled':''} onclick="loadSources(1)">首页</button>`;
+  html += `<button ${currentPage<=1?'disabled':''} onclick="loadSources(${currentPage-1})">上一页</button>`;
+  const start = Math.max(1, currentPage - 2);
+  const end = Math.min(totalPages, currentPage + 2);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="${i===currentPage?'active':''}" onclick="loadSources(${i})">${i}</button>`;
+  }
+  html += `<button ${currentPage>=totalPages?'disabled':''} onclick="loadSources(${currentPage+1})">下一页</button>`;
+  html += `<button ${currentPage>=totalPages?'disabled':''} onclick="loadSources(${totalPages})">末页</button>`;
+  html += `<span class="page-info">第 ${currentPage}/${totalPages} 页，共 ${totalCount} 条</span>`;
+  html += `<span class="page-info">跳转到 <input type="number" id="jumpPageInput" min="1" max="${totalPages}" value="${currentPage}" style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:13px;text-align:center;" onkeydown="if(event.key==='Enter'){jumpToPage(${totalPages})}"> 页</span>`;
+  html += `<button class="btn btn-sm btn-ghost" onclick="jumpToPage(${totalPages})">GO</button>`;
+  container.innerHTML = html;
+}
+
+function jumpToPage(totalPages) {
+  const input = document.getElementById('jumpPageInput');
+  if (!input) return;
+  const page = parseInt(input.value);
+  if (isNaN(page) || page < 1 || page > totalPages) {
+    showToast('请输入有效页码 (1-' + totalPages + ')', 'error');
+    return;
+  }
+  loadSources(page);
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => showToast('已复制', 'success')).catch(() => showToast('复制失败', 'error'));
+}
+
+function showAddModal() {
+  editingId = null;
+  document.getElementById('modalTitle').textContent = '新增订阅源';
+  document.getElementById('formTitle').value = '';
+  document.getElementById('formUrl').value = '';
+  document.getElementById('formSiteUrl').value = '';
+  document.getElementById('formFeedType').value = 'rss2';
+  document.getElementById('formCategory').value = '';
+  document.getElementById('formEnabled').checked = true;
+  document.getElementById('modal').classList.add('active');
+}
+
+function editSource(s) {
+  editingId = s.id;
+  document.getElementById('modalTitle').textContent = '编辑订阅源';
+  document.getElementById('formTitle').value = s.title;
+  document.getElementById('formUrl').value = s.url;
+  document.getElementById('formSiteUrl').value = s.site_url || '';
+  document.getElementById('formFeedType').value = s.feed_type;
+  document.getElementById('formCategory').value = s.category || '';
+  document.getElementById('formEnabled').checked = s.enabled;
+  document.getElementById('modal').classList.add('active');
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+async function saveSource() {
+  const data = {
+    title: document.getElementById('formTitle').value.trim(),
+    url: document.getElementById('formUrl').value.trim(),
+    site_url: document.getElementById('formSiteUrl').value.trim(),
+    feed_type: document.getElementById('formFeedType').value,
+    category: document.getElementById('formCategory').value.trim(),
+    enabled: document.getElementById('formEnabled').checked,
+  };
+  if (!data.title || !data.url) { showToast('请填写标题和URL', 'error'); return; }
+  try {
+    const method = editingId ? 'PUT' : 'POST';
+    const url = editingId ? `/api/admin/rss/sources/${editingId}` : '/api/admin/rss/sources';
+    const resp = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+    });
+    const json = await resp.json();
+    if (json.success) {
+      closeModal('modal');
+      loadSources(currentPage);
+      showToast(editingId ? '更新成功' : '添加成功');
+    } else { showToast('操作失败', 'error'); }
+  } catch (e) { showToast('错误: ' + e.message, 'error'); }
+}
+
+async function deleteSource(id, title, url) {
+  if (!confirm(`确定删除订阅源？\n\n名称：${title}\nURL：${url}`)) return;
+  try {
+    const resp = await fetch(`/api/admin/rss/sources/${id}`, { method: 'DELETE' });
+    const json = await resp.json();
+    if (json.success) { loadSources(currentPage); showToast('删除成功'); }
+    else showToast('删除失败', 'error');
+  } catch (e) { showToast('删除失败', 'error'); }
+}
+
+function toggleSelectAll() {
+  const checked = document.getElementById('selectAll').checked;
+  document.querySelectorAll('.row-check').forEach(c => c.checked = checked);
+  updateBatchBtn();
+}
+
+function updateBatchBtn() {
+  const count = document.querySelectorAll('.row-check:checked').length;
+  document.getElementById('batchDeleteBtn').style.display = count > 0 ? 'inline-block' : 'none';
+  document.getElementById('addToFolderBtn').style.display = count > 0 ? 'inline-block' : 'none';
+}
+
+async function batchDelete() {
+  const ids = [...document.querySelectorAll('.row-check:checked')].map(c => parseInt(c.value));
+  if (!ids.length || !confirm(`确定删除 ${ids.length} 项？`)) return;
+  try {
+    const resp = await fetch('/api/admin/rss/sources/batch-delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids })
+    });
+    const json = await resp.json();
+    if (json.success) { loadSources(currentPage); showToast('批量删除成功'); }
+    else showToast('删除失败', 'error');
+  } catch (e) { showToast('删除失败', 'error'); }
+}
+
+function exportCsv() { window.open('/api/admin/rss/sources/export', '_blank'); }
+function exportOpml() { window.open('/api/admin/rss/sources/export/opml', '_blank'); }
+
+async function handleCsvImport(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const form = new FormData(); form.append('file', file);
+  try {
+    const resp = await fetch('/api/admin/rss/sources/import', { method: 'POST', body: form });
+    const data = await resp.json();
+    showToast(`导入完成，新增 ${data.imported || 0} 项`);
+    loadSources(1);
+  } catch (e) { showToast('导入失败', 'error'); }
+  e.target.value = '';
+}
+
+async function handleOpmlImport(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const form = new FormData(); form.append('file', file);
+  try {
+    const resp = await fetch('/api/admin/rss/sources/import/opml', { method: 'POST', body: form });
+    const data = await resp.json();
+    showToast(`导入完成，新增 ${data.imported || 0} 项`);
+    loadSources(1);
+  } catch (e) { showToast('导入失败', 'error'); }
+  e.target.value = '';
+}
+
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { currentPage = 1; loadSources(); }, 300);
+}
+
+// ===================== Folders (Table View) =====================
+async function loadFolders(page) {
+  if (page !== undefined) folderPage = page;
+  const params = new URLSearchParams({ page: folderPage, size: folderPageSize });
+  if (folderSearchQuery) params.set('search', folderSearchQuery);
+  try {
+    const resp = await fetch(`/api/admin/rss/folders?${params}`);
+    const data = await resp.json();
+    folderData = data.data || [];
+    folderTotal = data.total || 0;
+    folderPage = data.page || 1;
+    renderFolderTable();
+    renderFolderPagination();
+    updateFolderStats();
+  } catch (e) {
+    showToast('加载收藏夹失败: ' + e.message, 'error');
+  }
+}
+
+function updateFolderStats() {
+  document.getElementById('folderStatsBar').innerHTML = `<span>共 <span class="count">${folderTotal}</span> 个收藏夹</span>`;
+}
+
+function renderFolderTable() {
+  const tbody = document.getElementById('folderTableBody');
+  const empty = document.getElementById('folderEmptyState');
+  if (!folderData.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = folderData.map(f => `
+    <tr>
+      <td><input type="checkbox" class="folder-check" value="${f.id}"></td>
+      <td><strong style="cursor:pointer;color:#1a73e8;" onclick="openFolder(${f.id}, '${esc(f.name)}')">${esc(f.name)}</strong></td>
+      <td style="color:#666;">${esc(f.description || '-')}</td>
+      <td><span class="badge badge-rss2">${f.source_count || 0}</span></td>
+      <td style="font-size:12px;color:#888">${f.created_at || '-'}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm btn-primary" onclick="openFolder(${f.id}, '${esc(f.name)}')">查看</button>
+        <button class="btn btn-sm btn-ghost" onclick='editFolder(${JSON.stringify(f)})'>编辑</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteFolder(${f.id}, '${esc(f.name)}')">删除</button>
+      </td>
+    </tr>
+  `).join('');
+  updateFolderBatchBtn();
+}
+
+function renderFolderPagination() {
+  const totalPages = Math.max(1, Math.ceil(folderTotal / folderPageSize));
+  const container = document.getElementById('folderPagination');
+  let html = '';
+  html += `<select class="page-size-select" onchange="folderPageSize=+this.value;folderPage=1;loadFolders()">${PAGE_SIZES.map(s => `<option value="${s}" ${s===folderPageSize?'selected':''}>${s} 条/页</option>`).join('')}</select>`;
+  html += `<button ${folderPage<=1?'disabled':''} onclick="loadFolders(1)">首页</button>`;
+  html += `<button ${folderPage<=1?'disabled':''} onclick="loadFolders(${folderPage-1})">上一页</button>`;
+  const start = Math.max(1, folderPage - 2);
+  const end = Math.min(totalPages, folderPage + 2);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="${i===folderPage?'active':''}" onclick="loadFolders(${i})">${i}</button>`;
+  }
+  html += `<button ${folderPage>=totalPages?'disabled':''} onclick="loadFolders(${folderPage+1})">下一页</button>`;
+  html += `<button ${folderPage>=totalPages?'disabled':''} onclick="loadFolders(${totalPages})">末页</button>`;
+  html += `<span class="page-info">第 ${folderPage}/${totalPages} 页，共 ${folderTotal} 条</span>`;
+  html += `<span class="page-info">跳转到 <input type="number" id="folderJumpPageInput" min="1" max="${totalPages}" value="${folderPage}" style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:13px;text-align:center;" onkeydown="if(event.key==='Enter'){folderJumpToPage(${totalPages})}"> 页</span>`;
+  html += `<button class="btn btn-sm btn-ghost" onclick="folderJumpToPage(${totalPages})">GO</button>`;
+  container.innerHTML = html;
+}
+
+function folderJumpToPage(totalPages) {
+  const input = document.getElementById('folderJumpPageInput');
+  if (!input) return;
+  const page = parseInt(input.value);
+  if (isNaN(page) || page < 1 || page > totalPages) {
+    showToast('请输入有效页码 (1-' + totalPages + ')', 'error');
+    return;
+  }
+  loadFolders(page);
+}
+
+function debounceFolderSearch() {
+  clearTimeout(folderSearchTimer);
+  folderSearchTimer = setTimeout(() => { folderPage = 1; loadFolders(); }, 300);
+}
+
+function toggleSelectAllFolders() {
+  const checked = document.getElementById('selectAllFolders').checked;
+  document.querySelectorAll('.folder-check').forEach(c => c.checked = checked);
+  updateFolderBatchBtn();
+}
+
+function updateFolderBatchBtn() {
+  const count = document.querySelectorAll('.folder-check:checked').length;
+  document.getElementById('batchDeleteFolderBtn').style.display = count > 0 ? 'inline-block' : 'none';
+}
+
+async function batchDeleteFolders() {
+  const ids = [...document.querySelectorAll('.folder-check:checked')].map(c => parseInt(c.value));
+  if (!ids.length || !confirm(`确定删除 ${ids.length} 个收藏夹？`)) return;
+  try {
+    for (const id of ids) {
+      await fetch(`/api/admin/rss/folders/${id}`, { method: 'DELETE' });
+    }
+    loadFolders(folderPage);
+    showToast('批量删除成功');
+  } catch (e) { showToast('删除失败', 'error'); }
+}
+
+function showFolderList() {
+  document.getElementById('folderListView').style.display = '';
+  document.getElementById('folderSourcesView').style.display = 'none';
+  document.getElementById('backToFolderList').style.display = 'none';
+  document.getElementById('folderSearchInput').style.display = '';
+  document.getElementById('createFolderBtn').style.display = '';
+  document.getElementById('addSourceToFolderBtn').style.display = 'none';
+  document.getElementById('folderIoBtnGroup').style.display = 'none';
+  document.getElementById('folderViewTitle').textContent = '收藏夹列表';
+  currentFolderId = null;
+  loadFolders();
+}
+
+async function openFolder(id, name) {
+  currentFolderId = id;
+  currentFolderName = name;
+  document.getElementById('folderListView').style.display = 'none';
+  document.getElementById('folderSourcesView').style.display = '';
+  document.getElementById('backToFolderList').style.display = '';
+  document.getElementById('folderSearchInput').style.display = 'none';
+  document.getElementById('createFolderBtn').style.display = 'none';
+  document.getElementById('addSourceToFolderBtn').style.display = '';
+  document.getElementById('folderIoBtnGroup').style.display = '';
+  document.getElementById('folderViewTitle').textContent = `📁 ${name}`;
+  await loadFolderSources(id);
+}
+
+async function loadFolderSources(folderId, page = 1) {
+  folderSourcePage = page;
+  try {
+    const resp = await fetch(`/api/admin/rss/folders/${folderId}/sources?page=${page}&size=${folderSourcePageSize}`);
+    const data = await resp.json();
+    folderSourceTotal = data.total || 0;
+    const sources = data.data || [];
+
+    const tbody = document.getElementById('folderSourcesBody');
+    const empty = document.getElementById('folderSourcesEmpty');
+    if (!sources.length) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+    } else {
+      empty.style.display = 'none';
+      tbody.innerHTML = sources.map(s => `
+        <tr>
+          <td><input type="checkbox" class="folder-source-check" value="${s.id}" onchange="updateFolderSourceBatchBtn()"></td>
+          <td><strong>${esc(s.title)}</strong></td>
+          <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="file-name">${esc(s.url)}</span></td>
+          <td><span class="badge badge-${s.feed_type}">${s.feed_type.toUpperCase()}</span></td>
+          <td>${esc(s.category || '-')}</td>
+          <td><span class="enabled-badge ${s.enabled ? 'enabled-true' : 'enabled-false'}">${s.enabled ? '启用' : '禁用'}</span></td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-sm btn-danger" onclick="removeFromFolder(${folderId}, ${s.id})">移除</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    document.getElementById('folderSourcesStatsBar').innerHTML = `<span>共 <span class="count">${folderSourceTotal}</span> 个订阅源</span>`;
+    renderFolderSourcesPagination(folderId, page);
+  } catch (e) {
+    showToast('加载失败', 'error');
+  }
+}
+
+function renderFolderSourcesPagination(folderId, page) {
+  const totalPages = Math.max(1, Math.ceil(folderSourceTotal / folderSourcePageSize));
+  const container = document.getElementById('folderSourcesPagination');
+  let html = '';
+  html += `<select class="page-size-select" onchange="folderSourcePageSize=+this.value;loadFolderSources(${folderId},1)">${PAGE_SIZES.map(s => `<option value="${s}" ${s===folderSourcePageSize?'selected':''}>${s} 条/页</option>`).join('')}</select>`;
+  html += `<button ${page<=1?'disabled':''} onclick="loadFolderSources(${folderId},${page-1})">上一页</button>`;
+  const start = Math.max(1, page - 2);
+  const end = Math.min(totalPages, page + 2);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="${i===page?'active':''}" onclick="loadFolderSources(${folderId},${i})">${i}</button>`;
+  }
+  html += `<button ${page>=totalPages?'disabled':''} onclick="loadFolderSources(${folderId},${page+1})">下一页</button>`;
+  html += `<span class="page-info">第 ${page}/${totalPages} 页，共 ${folderSourceTotal} 条</span>`;
+  container.innerHTML = html;
+}
+
+function toggleSelectAllFolderSources() {
+  const checked = document.getElementById('selectAllFolderSources').checked;
+  document.querySelectorAll('.folder-source-check').forEach(c => c.checked = checked);
+  updateFolderSourceBatchBtn();
+}
+
+function updateFolderSourceBatchBtn() {
+  const count = document.querySelectorAll('.folder-source-check:checked').length;
+  document.getElementById('batchRemoveFolderBtn').style.display = count > 0 ? 'inline-block' : 'none';
+}
+
+async function removeFromFolder(folderId, sourceId) {
+  if (!confirm('确定从收藏夹移除？')) return;
+  try {
+    await fetch(`/api/admin/rss/folders/${folderId}/sources/${sourceId}`, { method: 'DELETE' });
+    loadFolderSources(folderId, folderSourcePage);
+    showToast('已移除');
+  } catch (e) { showToast('移除失败', 'error'); }
+}
+
+async function batchRemoveFromFolder() {
+  const ids = [...document.querySelectorAll('.folder-source-check:checked')].map(c => parseInt(c.value));
+  if (!ids.length) { showToast('请先选择订阅源', 'error'); return; }
+  if (!confirm(`确定从收藏夹移除 ${ids.length} 个订阅源？`)) return;
+
+  try {
+    const resp = await fetch(`/api/admin/rss/folders/${currentFolderId}/sources/batch-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_ids: ids })
+    });
+    const json = await resp.json();
+    if (json.success) {
+      showToast(`已移除 ${json.removed || ids.length} 个订阅源`);
+      loadFolderSources(currentFolderId, folderSourcePage);
+    } else {
+      showToast('移除失败', 'error');
+    }
+  } catch (e) { showToast('移除失败', 'error'); }
+}
+
+function showCreateFolderModal() {
+  document.getElementById('folderModalTitle').textContent = '新建收藏夹';
+  document.getElementById('folderName').value = '';
+  document.getElementById('folderDesc').value = '';
+  document.getElementById('folderModal').dataset.editId = '';
+  document.getElementById('folderModal').classList.add('active');
+}
+
+function editFolder(f) {
+  document.getElementById('folderModalTitle').textContent = '编辑收藏夹';
+  document.getElementById('folderName').value = f.name;
+  document.getElementById('folderDesc').value = f.description || '';
+  document.getElementById('folderModal').dataset.editId = f.id;
+  document.getElementById('folderModal').classList.add('active');
+}
+
+async function saveFolder() {
+  const name = document.getElementById('folderName').value.trim();
+  const description = document.getElementById('folderDesc').value.trim();
+  const editId = document.getElementById('folderModal').dataset.editId;
+  if (!name) { showToast('请输入名称', 'error'); return; }
+  try {
+    const method = editId ? 'PUT' : 'POST';
+    const url = editId ? `/api/admin/rss/folders/${editId}` : '/api/admin/rss/folders';
+    const resp = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, description })
+    });
+    const json = await resp.json();
+    if (json.success) {
+      closeModal('folderModal');
+      loadFolders(folderPage);
+      showToast(editId ? '更新成功' : '创建成功');
+    } else { showToast('操作失败', 'error'); }
+  } catch (e) { showToast('错误: ' + e.message, 'error'); }
+}
+
+async function deleteFolder(id, name) {
+  if (!confirm(`确定删除收藏夹「${name}」？`)) return;
+  try {
+    await fetch(`/api/admin/rss/folders/${id}`, { method: 'DELETE' });
+    loadFolders(folderPage);
+    showToast('删除成功');
+  } catch (e) { showToast('删除失败', 'error'); }
+}
+
+// ===================== Add Single Source to Folder =====================
+let singleSourceToAdd = null;
+
+async function showSingleAddToFolder(sourceId, title) {
+  singleSourceToAdd = sourceId;
+  try {
+    const resp = await fetch('/api/admin/rss/folders?size=100');
+    const data = await resp.json();
+    const folders = data.data || [];
+    const container = document.getElementById('folderSelectList');
+    if (!folders.length) {
+      container.innerHTML = '<p style="color:#999;text-align:center;padding:20px;">暂无收藏夹，请先创建</p>';
+    } else {
+      container.innerHTML = folders.map(f => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid #eee;border-radius:6px;margin-bottom:8px;cursor:pointer;" onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background=''" onclick="addSingleToFolder(${f.id}, '${esc(f.name)}')">
+          <div><strong>${esc(f.name)}</strong> <span style="font-size:12px;color:#999;margin-left:8px;">${f.source_count || 0} 个源</span></div>
+          <button class="btn btn-sm btn-primary">添加</button>
+        </div>
+      `).join('');
+    }
+    document.getElementById('addToFolderModal').querySelector('h3').textContent = `将「${title}」加入收藏夹`;
+    document.getElementById('addToFolderModal').classList.add('active');
+  } catch (e) { showToast('加载收藏夹失败', 'error'); }
+}
+
+async function addSingleToFolder(folderId, folderName) {
+  if (!singleSourceToAdd) return;
+  try {
+    const resp = await fetch(`/api/admin/rss/folders/${folderId}/sources`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source_id: singleSourceToAdd })
+    });
+    const json = await resp.json();
+    closeModal('addToFolderModal');
+    if (json.success) {
+      showToast(`已添加到「${folderName}」`);
+    } else { showToast('添加失败', 'error'); }
+  } catch (e) { showToast('错误: ' + e.message, 'error'); }
+}
+
+// ===================== Add to Folder (batch from source list) =====================
+async function showBatchAddToFolderModal() {
+  const ids = [...document.querySelectorAll('.row-check:checked')].map(c => parseInt(c.value));
+  if (!ids.length) { showToast('请先选择订阅源', 'error'); return; }
+  singleSourceToAdd = null; // Clear single mode
+  try {
+    const resp = await fetch('/api/admin/rss/folders?size=100');
+    const data = await resp.json();
+    const folders = data.data || [];
+    const container = document.getElementById('folderSelectList');
+    if (!folders.length) {
+      container.innerHTML = '<p style="color:#999;text-align:center;padding:20px;">暂无收藏夹，请先创建</p>';
+    } else {
+      container.innerHTML = `<p style="font-size:13px;color:#666;margin-bottom:12px;">将选中的 <strong>${ids.length}</strong> 个订阅源加入：</p>` + folders.map(f => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid #eee;border-radius:6px;margin-bottom:8px;cursor:pointer;" onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background=''" onclick="addBatchToFolder(${f.id}, '${esc(f.name)}')">
+          <div><strong>${esc(f.name)}</strong> <span style="font-size:12px;color:#999;margin-left:8px;">${f.source_count || 0} 个源</span></div>
+          <button class="btn btn-sm btn-primary">添加</button>
+        </div>
+      `).join('');
+    }
+    document.getElementById('addToFolderModal').querySelector('h3').textContent = '批量加入收藏夹';
+    document.getElementById('addToFolderModal').classList.add('active');
+  } catch (e) { showToast('加载收藏夹失败', 'error'); }
+}
+
+async function addBatchToFolder(folderId, folderName) {
+  const ids = [...document.querySelectorAll('.row-check:checked')].map(c => parseInt(c.value));
+  if (!ids.length) return;
+  try {
+    const resp = await fetch(`/api/admin/rss/folders/${folderId}/sources/batch`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source_ids: ids })
+    });
+    const json = await resp.json();
+    closeModal('addToFolderModal');
+    if (json.success) {
+      showToast(`已添加 ${json.added || 0} 个订阅源到「${folderName}」`);
+      document.querySelectorAll('.row-check').forEach(c => c.checked = false);
+      updateBatchBtn();
+    } else { showToast('添加失败', 'error'); }
+  } catch (e) { showToast('错误: ' + e.message, 'error'); }
+}
+
+// ===================== Folder Import/Export =====================
+function exportFolderCsv() {
+  if (!currentFolderId) { showToast('请先选择收藏夹', 'error'); return; }
+  window.open(`/api/admin/rss/folders/${currentFolderId}/export`, '_blank');
+}
+
+function exportFolderOpml() {
+  if (!currentFolderId) { showToast('请先选择收藏夹', 'error'); return; }
+  window.open(`/api/admin/rss/folders/${currentFolderId}/export/opml`, '_blank');
+}
+
+async function handleFolderCsvImport(e) {
+  const file = e.target.files[0]; if (!file) return;
+  if (!currentFolderId) { showToast('请先选择收藏夹', 'error'); return; }
+  const form = new FormData(); form.append('file', file);
+  try {
+    const resp = await fetch(`/api/admin/rss/folders/${currentFolderId}/import`, { method: 'POST', body: form });
+    const data = await resp.json();
+    showToast(`导入完成，新增 ${data.imported || 0} 项`);
+    loadFolderSources(currentFolderId, folderSourcePage);
+  } catch (e) { showToast('导入失败', 'error'); }
+  e.target.value = '';
+}
+
+async function handleFolderOpmlImport(e) {
+  const file = e.target.files[0]; if (!file) return;
+  if (!currentFolderId) { showToast('请先选择收藏夹', 'error'); return; }
+  const form = new FormData(); form.append('file', file);
+  try {
+    const resp = await fetch(`/api/admin/rss/folders/${currentFolderId}/import/opml`, { method: 'POST', body: form });
+    const data = await resp.json();
+    showToast(`导入完成，新增 ${data.imported || 0} 项`);
+    loadFolderSources(currentFolderId, folderSourcePage);
+  } catch (e) { showToast('导入失败', 'error'); }
+  e.target.value = '';
+}
+
+// ===================== Add Source to Current Folder =====================
+let addSourceSearchTimer = null;
+let allSourceCache = [];
+
+async function showAddSourceToFolderModal() {
+  if (!currentFolderId) return;
+  document.getElementById('addSourceFolderName').textContent = currentFolderName;
+  document.getElementById('addSourceSearch').value = '';
+  document.getElementById('addSourceToFolderModal').classList.add('active');
+  await loadAllSourcesForFolder();
+}
+
+async function loadAllSourcesForFolder(search = '') {
+  const params = new URLSearchParams({ page: 1, size: 100 });
+  if (search) params.set('search', search);
+  try {
+    const resp = await fetch(`/api/admin/rss/sources?${params}`);
+    const data = await resp.json();
+    allSourceCache = data.data || [];
+    // Get existing source IDs in folder
+    const folderResp = await fetch(`/api/admin/rss/folders/${currentFolderId}/sources?size=1000`);
+    const folderData = await folderResp.json();
+    const existingIds = new Set((folderData.data || []).map(s => s.id));
+
+    const container = document.getElementById('addSourceList');
+    if (!allSourceCache.length) {
+      container.innerHTML = '<p style="color:#999;text-align:center;padding:20px;">暂无订阅源</p>';
+      return;
+    }
+    container.innerHTML = allSourceCache.map(s => {
+      const inFolder = existingIds.has(s.id);
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #f0f0f0;${inFolder ? 'background:#f5f5f5;opacity:0.7;' : ''}">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${inFolder ? 'color:#999;' : ''}">${esc(s.title)}</div>
+            <div style="font-size:12px;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(s.url)}</div>
+          </div>
+          ${inFolder
+            ? '<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#2e7d32;background:#e8f5e9;padding:3px 10px;border-radius:12px;font-weight:500;white-space:nowrap;"><span style="font-size:14px;">✓</span> 已添加</span>'
+            : `<button class="btn btn-sm btn-primary" onclick="addSourceToCurrentFolder(${s.id}, '${esc(s.title)}')">添加</button>`
+          }
+        </div>
+      `;
+    }).join('');
+  } catch (e) { showToast('加载失败', 'error'); }
+}
+
+function debounceAddSourceSearch() {
+  clearTimeout(addSourceSearchTimer);
+  addSourceSearchTimer = setTimeout(() => {
+    loadAllSourcesForFolder(document.getElementById('addSourceSearch').value.trim());
+  }, 300);
+}
+
+async function addSourceToCurrentFolder(sourceId, title) {
+  try {
+    const resp = await fetch(`/api/admin/rss/folders/${currentFolderId}/sources`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source_id: sourceId })
+    });
+    const json = await resp.json();
+    if (json.success) {
+      showToast(`已添加「${title}」`);
+      loadAllSourcesForFolder(document.getElementById('addSourceSearch').value.trim());
+      loadFolderSources(currentFolderId, folderSourcePage);
+    } else { showToast('添加失败', 'error'); }
+  } catch (e) { showToast('错误: ' + e.message, 'error'); }
+}
+
+// ===================== Dropdown =====================
+function toggleDropdown(id) {
+  const el = document.getElementById(id);
+  const isOpen = el.style.display === 'block';
+  // Close all dropdowns first
+  document.querySelectorAll('[id$="Dropdown"]').forEach(d => d.style.display = 'none');
+  if (!isOpen) el.style.display = 'block';
+}
+
+function closeDropdown(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('[onclick*="toggleDropdown"]')) {
+    document.querySelectorAll('[id$="Dropdown"]').forEach(d => d.style.display = 'none');
+  }
+});
+
+// ===================== Toast =====================
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+});
+
+loadSources(getPageFromUrl());
+window.addEventListener('popstate', function() { loadSources(getPageFromUrl()); });
+</script>
+</body>
+</html>

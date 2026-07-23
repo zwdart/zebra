@@ -105,7 +105,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isZh ? '请填写以下信息，帮助我们改进产品' : 'Please fill in the following to help us improve',
+                      loc.feedbackHint,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
@@ -135,7 +135,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                       controller: _subjectController,
                       decoration: InputDecoration(
                         labelText: loc.feedbackSubject,
-                        hintText: isZh ? '简要描述您的反馈' : 'Brief description of your feedback',
+                        hintText: loc.feedbackSubject,
                         border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.subject),
                       ),
@@ -152,9 +152,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                       maxLines: 8,
                       decoration: InputDecoration(
                         labelText: loc.feedbackDescription,
-                        hintText: isZh
-                            ? '请详细描述您的问题或建议，包括操作步骤、期望结果等...'
-                            : 'Please describe your issue or suggestion in detail, including steps, expected results, etc.',
+                        hintText: loc.feedbackDescriptionHint,
                         border: const OutlineInputBorder(),
                         alignLabelWithHint: true,
                       ),
@@ -188,9 +186,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      isZh
-                          ? '提示：30分钟内同一邮箱只能提交一次反馈。'
-                          : 'Note: Only one feedback per email every 30 minutes.',
+                      loc.feedbackNote,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),

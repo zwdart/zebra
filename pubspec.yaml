@@ -30,6 +30,7 @@ dependencies:
   window_manager: ^0.5.2
   contextmenu: ^3.0.0
   http: ^1.2.0
+  xml: ^6.5.0
   package_info_plus: ^8.0.0
 
 dev_dependencies:

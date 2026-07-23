@@ -46,10 +46,11 @@ rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 sha2 = { version = "0.10", optional = true }
 hex = { version = "0.4", optional = true }
 chrono = { version = "0.4", optional = true }
+futures-util = { version = "0.3", optional = true }
 
 [features]
 default = []
-api-server = ["axum", "tokio", "serde", "serde_json", "toml", "tower-http", "tower", "http", "http-body-util", "bytes", "rusqlite", "sha2", "hex", "chrono"]
+api-server = ["axum", "tokio", "serde", "serde_json", "toml", "tower-http", "tower", "http", "http-body-util", "bytes", "rusqlite", "sha2", "hex", "chrono", "futures-util"]
 
 [build-dependencies]
 winres = "0.1"

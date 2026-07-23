@@ -97,6 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const Divider(),
                 ],
+                const Divider(),
                 _buildSectionHeader(context, loc.about),
                 Consumer<UpdateProvider>(
                   builder: (context, updateProvider, _) {
@@ -351,24 +352,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showFeaturesDialog(BuildContext context) {
     final loc = AppLocalizations.of(context);
-    final isZh = Localizations.localeOf(context).languageCode == 'zh';
 
-    final features = isZh ? <Map<String, String>>[
-      {'icon': 'terminal', 'title': 'SSH 终端', 'desc': '连接远程服务器，执行命令。支持密码和密钥认证，多标签页管理。'},
-      {'icon': 'folder', 'title': 'SFTP 文件管理', 'desc': '可视化浏览、上传、下载、删除、重命名、压缩远程文件。支持拖拽上传和批量操作。'},
-      {'icon': 'monitor', 'title': '服务器监控', 'desc': '实时查看 CPU、内存、磁盘、网络等系统信息，支持自动刷新。'},
-      {'icon': 'process', 'title': '进程管理', 'desc': '查看和管理系统进程，支持按 CPU/内存排序，可终止进程。'},
-      {'icon': 'cleanup', 'title': '磁盘清理', 'desc': '扫描并清理服务器上的临时文件、日志和缓存。'},
-      {'icon': 'theme', 'title': '主题与语言', 'desc': '支持浅色/深色/跟随系统主题，可选择主题颜色，支持中英文切换。'},
-      {'icon': 'share', 'title': '数据库备份', 'desc': '在移动端可分享数据库文件进行备份。'},
-    ] : <Map<String, String>>[
-      {'icon': 'terminal', 'title': 'SSH Terminal', 'desc': 'Connect to remote servers and execute commands. Supports password and key authentication with multi-tab management.'},
-      {'icon': 'folder', 'title': 'SFTP File Manager', 'desc': 'Browse, upload, download, delete, rename, and compress remote files visually. Supports drag-and-drop and batch operations.'},
-      {'icon': 'monitor', 'title': 'Server Monitor', 'desc': 'View real-time CPU, memory, disk, network and other system info with auto-refresh support.'},
-      {'icon': 'process', 'title': 'Process Manager', 'desc': 'View and manage system processes. Sort by CPU/memory, kill processes.'},
-      {'icon': 'cleanup', 'title': 'Disk Cleanup', 'desc': 'Scan and clean temporary files, logs, and cache on the server.'},
-      {'icon': 'theme', 'title': 'Theme & Language', 'desc': 'Light/Dark/System theme, custom theme colors, Chinese/English language support.'},
-      {'icon': 'share', 'title': 'Database Backup', 'desc': 'Share database file for backup on mobile devices.'},
+    final features = <Map<String, String>>[
+      {'icon': 'terminal', 'title': loc.featureSshTerminal, 'desc': loc.featureSshTerminalDesc},
+      {'icon': 'folder', 'title': loc.featureSftp, 'desc': loc.featureSftpDesc},
+      {'icon': 'monitor', 'title': loc.featureMonitor, 'desc': loc.featureMonitorDesc},
+      {'icon': 'process', 'title': loc.featureProcess, 'desc': loc.featureProcessDesc},
+      {'icon': 'cleanup', 'title': loc.featureCleanup, 'desc': loc.featureCleanupDesc},
+      {'icon': 'theme', 'title': loc.featureTheme, 'desc': loc.featureThemeDesc},
+      {'icon': 'share', 'title': loc.featureBackup, 'desc': loc.featureBackupDesc},
     ];
 
     final iconMap = <String, IconData>{
@@ -434,6 +426,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showApiUrlDialog(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final controller = TextEditingController(text: UpdateService.apiBaseUrl);
     showDialog(
       context: context,
@@ -464,7 +457,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               }
             },
-            child: const Text('重置默认'),
+            child: Text(loc.resetToDefault),
           ),
           TextButton(
             onPressed: () async {

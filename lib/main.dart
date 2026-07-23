@@ -18,12 +18,15 @@ import 'providers/monitor_provider.dart';
 import 'providers/process_provider.dart';
 import 'providers/cleanup_provider.dart';
 import 'providers/update_provider.dart';
+import 'providers/rss_provider.dart';
+import 'database/rss_database_service.dart';
 import 'services/update_service.dart';
 import 'services/window_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseService.init();
+  await RssDatabaseService.init();
   await UpdateService.init();
 
   // Initialize desktop services
@@ -57,6 +60,7 @@ class ZebraApp extends StatelessWidget {
           update: (_, ssh, provider) => provider!..updateSsh(ssh),
         ),
         ChangeNotifierProvider(create: (_) => UpdateProvider()),
+        ChangeNotifierProvider(create: (_) => RssProvider()..init()),
       ],
       child: Consumer2<ThemeProvider, LocaleProvider>(
         builder: (ctx, themeProvider, localeProvider, _) {

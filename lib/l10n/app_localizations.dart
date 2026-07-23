@@ -335,6 +335,215 @@ class AppLocalizations {
   String get copyLink => translate('copyLink');
   String get linkCopied => translate('linkCopied');
 
+  // RSS
+  String get rssSubscription => translate('rssSubscription');
+  String get rssFeedManagement => translate('rssFeedManagement');
+  String get rssFolderManagement => translate('rssFolderManagement');
+  String get rssSettings => translate('rssSettings');
+  String get rssSyncAll => translate('rssSyncAll');
+  String get rssSyncing => translate('rssSyncing');
+  String get rssSyncComplete => translate('rssSyncComplete');
+  String get rssNoSources => translate('rssNoSources');
+  String get rssAddSource => translate('rssAddSource');
+  String get rssAddSourceHint => translate('rssAddSourceHint');
+  String get rssNoArticles => translate('rssNoArticles');
+  String get rssNoArticlesHint => translate('rssNoArticlesHint');
+  String get rssSyncNow => translate('rssSyncNow');
+  String get rssRecommended => translate('rssRecommended');
+  String get rssManualAdd => translate('rssManualAdd');
+  String get rssImportCsv => translate('rssImportCsv');
+  String get rssImportOpml => translate('rssImportOpml');
+  String get rssExportCsv => translate('rssExportCsv');
+  String get rssExportOpml => translate('rssExportOpml');
+  String get rssImportCsvDesc => translate('rssImportCsvDesc');
+  String get rssImportOpmlDesc => translate('rssImportOpmlDesc');
+  String get rssExportCsvDesc => translate('rssExportCsvDesc');
+  String get rssExportOpmlDesc => translate('rssExportOpmlDesc');
+  String get rssImportComplete => translate('rssImportComplete');
+  String get rssExportSuccess => translate('rssExportSuccess');
+  String get rssFileSavedTo => translate('rssFileSavedTo');
+  String get rssClose => translate('rssClose');
+  String get rssCreateFolder => translate('rssCreateFolder');
+  String get rssEditFolder => translate('rssEditFolder');
+  String get rssDeleteFolder => translate('rssDeleteFolder');
+  String get rssDeleteFolderConfirm => translate('rssDeleteFolderConfirm');
+  String get rssFolderName => translate('rssFolderName');
+  String get rssFolderDesc => translate('rssFolderDesc');
+  String get rssFolderDescOptional => translate('rssFolderDescOptional');
+  String get rssFolderEmpty => translate('rssFolderEmpty');
+  String get rssFolderEmptyHint => translate('rssFolderEmptyHint');
+  String get rssNoFolders => translate('rssNoFolders');
+  String get rssNoFoldersHint => translate('rssNoFoldersHint');
+  String get rssSourcesCount => translate('rssSourcesCount');
+  String get rssSelectedCount => translate('rssSelectedCount');
+  String get rssSelectAll => translate('rssSelectAll');
+  String get rssRemoveFromFolder => translate('rssRemoveFromFolder');
+  String get rssRemoveConfirm => translate('rssRemoveConfirm');
+  String get rssBatchRemove => translate('rssBatchRemove');
+  String get rssBatchRemoveConfirm => translate('rssBatchRemoveConfirm');
+  String get rssRemoved => translate('rssRemoved');
+  String get rssAddToLocal => translate('rssAddToLocal');
+  String get rssAddByUrl => translate('rssAddByUrl');
+  String get rssBatchDelete => translate('rssBatchDelete');
+  String get rssRefreshList => translate('rssRefreshList');
+  String get rssSourceEmpty => translate('rssSourceEmpty');
+  String get rssSourceEmptyHint => translate('rssSourceEmptyHint');
+  String get rssViewArticle => translate('rssViewArticle');
+  String get rssArticleDetail => translate('rssArticleDetail');
+  String get rssCopyLink => translate('rssCopyLink');
+  String get rssLinkCopied => translate('rssLinkCopied');
+  String get rssMarkAsRead => translate('rssMarkAsRead');
+  String get rssMarkAsUnread => translate('rssMarkAsUnread');
+  String get rssDeleteArticle => translate('rssDeleteArticle');
+  String get rssDeleteArticleConfirm => translate('rssDeleteArticleConfirm');
+  String get rssArticleDeleted => translate('rssArticleDeleted');
+  String get rssOriginal => translate('rssOriginal');
+  String get rssRendered => translate('rssRendered');
+  String get rssHidden => translate('rssHidden');
+  String get rssRaw => translate('rssRaw');
+  String get rssExpand => translate('rssExpand');
+  String get rssCollapse => translate('rssCollapse');
+  String get rssOriginalLink => translate('rssOriginalLink');
+  String get rssViewInBrowser => translate('rssViewInBrowser');
+  String get rssNoLink => translate('rssNoLink');
+  String get rssRecommendedSources => translate('rssRecommendedSources');
+  String get rssBatchAdd => translate('rssBatchAdd');
+  String get rssMaxSelect => translate('rssMaxSelect');
+  String get rssViewingFolder => translate('rssViewingFolder');
+  String get rssFetchFromServer => translate('rssFetchFromServer');
+  String get rssTotalCount => translate('rssTotalCount');
+  String get rssAddToFolder => translate('rssAddToFolder');
+  String get rssAddedToFolder => translate('rssAddedToFolder');
+  String get rssNoFoldersAvailable => translate('rssNoFoldersAvailable');
+  String get rssHistoryCleanup => translate('rssHistoryCleanup');
+  String get rssClean7Days => translate('rssClean7Days');
+  String get rssClean7DaysDesc => translate('rssClean7DaysDesc');
+  String get rssClean30Days => translate('rssClean30Days');
+  String get rssClean30DaysDesc => translate('rssClean30DaysDesc');
+  String get rssCleanAll => translate('rssCleanAll');
+  String get rssCleanAllDesc => translate('rssCleanAllDesc');
+  String get rssCleanConfirm => translate('rssCleanConfirm');
+  String get rssCleanDaysAgo => translate('rssCleanDaysAgo');
+  String get rssCleanedAll => translate('rssCleanedAll');
+  String get rssMarkAllRead => translate('rssMarkAllRead');
+  String get rssMarkedAllRead => translate('rssMarkedAllRead');
+  String get rssClearArticles => translate('rssClearArticles');
+  String get rssClearArticlesConfirm => translate('rssClearArticlesConfirm');
+  String get rssArticlesCleared => translate('rssArticlesCleared');
+  String get rssBackToHome => translate('rssBackToHome');
+  String get rssUnread => translate('rssUnread');
+  String get rssSyncingAll => translate('rssSyncingAll');
+  String get rssSyncingFolder => translate('rssSyncingFolder');
+  String get rssSyncingSource => translate('rssSyncingSource');
+  String get rssSyncedCount => translate('rssSyncedCount');
+  String get rssAddToFolderTitle => translate('rssAddToFolderTitle');
+  String get rssFeedUrl => translate('rssFeedUrl');
+  String get rssFeedTitle => translate('rssFeedTitle');
+  String get rssFeedTitleHint => translate('rssFeedTitleHint');
+  String get rssFeedType => translate('rssFeedType');
+  String get rssFeedCategory => translate('rssFeedCategory');
+  String get rssFeedEnabled => translate('rssFeedEnabled');
+  String get rssSave => translate('rssSave');
+  String get rssEditSource => translate('rssEditSource');
+  String get rssDeleteSource => translate('rssDeleteSource');
+  String get rssDeleteSourceConfirm => translate('rssDeleteSourceConfirm');
+  String get rssDeleteSourceArticles => translate('rssDeleteSourceArticles');
+  String get rssSourceInFolders => translate('rssSourceInFolders');
+  String get rssSourceRemovedFromFolders => translate('rssSourceRemovedFromFolders');
+  String get rssSourceDeleted => translate('rssSourceDeleted');
+  String get rssSyncSource => translate('rssSyncSource');
+  String get rssSourceInfo => translate('rssSourceInfo');
+  String get rssType => translate('rssType');
+  String get rssSite => translate('rssSite');
+  String get rssLastSync => translate('rssLastSync');
+  String get rssSyncError => translate('rssSyncError');
+  String get rssSearchSources => translate('rssSearchSources');
+  String get rssNoAddableSources => translate('rssNoAddableSources');
+  String get rssAddFromLocal => translate('rssAddFromLocal');
+  String get rssAddCount => translate('rssAddCount');
+  String get rssAddedCount => translate('rssAddedCount');
+  String get rssMarkAllReadConfirm => translate('rssMarkAllReadConfirm');
+
+  // About
+  String get aboutSlogan => translate('aboutSlogan');
+  String get aboutDescription => translate('aboutDescription');
+  String get emailCopied => translate('emailCopied');
+  String get featureSshTerminal => translate('featureSshTerminal');
+  String get featureSshTerminalDesc => translate('featureSshTerminalDesc');
+  String get featureSftp => translate('featureSftp');
+  String get featureSftpDesc => translate('featureSftpDesc');
+  String get featureMonitor => translate('featureMonitor');
+  String get featureMonitorDesc => translate('featureMonitorDesc');
+  String get featureProcess => translate('featureProcess');
+  String get featureProcessDesc => translate('featureProcessDesc');
+  String get featureCleanup => translate('featureCleanup');
+  String get featureCleanupDesc => translate('featureCleanupDesc');
+  String get featureTheme => translate('featureTheme');
+  String get featureThemeDesc => translate('featureThemeDesc');
+  String get featureBackup => translate('featureBackup');
+  String get featureBackupDesc => translate('featureBackupDesc');
+
+  // Starred/Favorites
+  String get rssFavorites => translate('rssFavorites');
+
+  // Discovery pagination
+  String get discoverySearchHint => translate('discoverySearchHint');
+  String get discoverySearch => translate('discoverySearch');
+  String get discoveryFirstPage => translate('discoveryFirstPage');
+  String get discoveryPrevPage => translate('discoveryPrevPage');
+  String get discoveryNextPage => translate('discoveryNextPage');
+  String get discoveryLastPage => translate('discoveryLastPage');
+  String get discoveryPage => translate('discoveryPage');
+  String get discoveryJumpTo => translate('discoveryJumpTo');
+
+  // Image error
+  String get imageLoadFailed => translate('imageLoadFailed');
+
+  // RSS Settings
+  String get rssCleanDaysConfirm => translate('rssCleanDaysConfirm');
+  String get rssCleanAllConfirm => translate('rssCleanAllConfirm');
+
+  // Feedback
+  String get feedbackDescriptionHint => translate('feedbackDescriptionHint');
+  String get feedbackHint => translate('feedbackHint');
+  String get feedbackNote => translate('feedbackNote');
+
+  // Blog
+  String get blogPage => translate('blogPage');
+
+  // Diary
+  String get diaryImportPath => translate('diaryImportPath');
+  String get diaryNoTitle => translate('diaryNoTitle');
+
+  // Parameterized RSS helpers
+  String rssDeleteFolderConfirmValue(String name) {
+    return translate('rssDeleteFolderConfirm').replaceAll('{name}', name);
+  }
+  String rssSourcesCountValue(int count) {
+    return translate('rssSourcesCount').replaceAll('{count}', '$count');
+  }
+  String rssSelectedCountValue(int count) {
+    return translate('rssSelectedCount').replaceAll('{count}', '$count');
+  }
+  String rssSyncedCountValue(int count) {
+    return translate('rssSyncedCount').replaceAll('{count}', '$count');
+  }
+  String rssSyncingSourceValue(String name) {
+    return translate('rssSyncingSource').replaceAll('{name}', name);
+  }
+  String rssRemoveConfirmValue(String name) {
+    return translate('rssRemoveConfirm').replaceAll('{name}', name);
+  }
+  String rssBatchRemoveConfirmValue(int count) {
+    return translate('rssBatchRemoveConfirm').replaceAll('{count}', '$count');
+  }
+  String rssAddedCountValue(int count) {
+    return translate('rssAddedCount').replaceAll('{count}', '$count');
+  }
+  String rssBatchAddValue(int count) {
+    return translate('rssBatchAdd').replaceAll('{count}', '$count');
+  }
+
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
     'connections': 'Connections',
@@ -624,6 +833,177 @@ class AppLocalizations {
     'openInBrowser': 'Open in Browser',
     'copyLink': 'Copy Link',
     'linkCopied': 'Link copied',
+    // RSS
+    'rssSubscription': 'RSS',
+    'rssFeedManagement': 'Feed Management',
+    'rssFolderManagement': 'Folders',
+    'rssSettings': 'Settings',
+    'rssSyncAll': 'Sync All',
+    'rssSyncing': 'Syncing...',
+    'rssSyncComplete': 'Sync complete',
+    'rssNoSources': 'No feeds yet',
+    'rssAddSource': 'Add Feed',
+    'rssAddSourceHint': 'Add feeds to see articles here',
+    'rssNoArticles': 'No articles',
+    'rssNoArticlesHint': 'Tap button to fetch latest',
+    'rssSyncNow': 'Sync Now',
+    'rssRecommended': 'Recommended',
+    'rssManualAdd': 'Add URL',
+    'rssImportCsv': 'Import CSV',
+    'rssImportOpml': 'Import OPML',
+    'rssExportCsv': 'Export CSV',
+    'rssExportOpml': 'Export OPML',
+    'rssImportCsvDesc': 'Import feeds from CSV file',
+    'rssImportOpmlDesc': 'Import feeds from OPML file',
+    'rssExportCsvDesc': 'Export feeds to CSV file',
+    'rssExportOpmlDesc': 'Export feeds to OPML file',
+    'rssImportComplete': 'Imported {count} feeds',
+    'rssExportSuccess': 'Export successful',
+    'rssFileSavedTo': 'Saved to:',
+    'rssClose': 'Close',
+    'rssCreateFolder': 'New Folder',
+    'rssEditFolder': 'Edit Folder',
+    'rssDeleteFolder': 'Delete Folder',
+    'rssDeleteFolderConfirm': 'Delete "{name}"? Feeds inside will not be deleted.',
+    'rssFolderName': 'Name *',
+    'rssFolderDesc': 'Description',
+    'rssFolderDescOptional': 'Description (optional)',
+    'rssFolderEmpty': 'No feeds in this folder',
+    'rssFolderEmptyHint': 'Add feeds from local list',
+    'rssNoFolders': 'No folders yet',
+    'rssNoFoldersHint': 'Create folders to organize feeds',
+    'rssSourcesCount': '{count} feeds',
+    'rssSelectedCount': '{count} selected',
+    'rssSelectAll': 'Select All',
+    'rssRemoveFromFolder': 'Remove from folder',
+    'rssRemoveConfirm': 'Remove "{name}" from folder?',
+    'rssBatchRemove': 'Batch Remove',
+    'rssBatchRemoveConfirm': 'Remove {count} feeds from folder?',
+    'rssRemoved': 'Removed',
+    'rssAddToLocal': 'Add from Local',
+    'rssAddByUrl': 'Add URL',
+    'rssBatchDelete': 'Batch Delete',
+    'rssRefreshList': 'Refresh',
+    'rssSourceEmpty': 'No feeds',
+    'rssSourceEmptyHint': 'Add from recommended or manually',
+    'rssViewArticle': 'View Articles',
+    'rssArticleDetail': 'Article Detail',
+    'rssCopyLink': 'Copy Link',
+    'rssLinkCopied': 'Link copied',
+    'rssMarkAsRead': 'Mark as Read',
+    'rssMarkAsUnread': 'Mark as Unread',
+    'rssDeleteArticle': 'Delete Article',
+    'rssDeleteArticleConfirm': 'Delete "{title}"?',
+    'rssArticleDeleted': 'Article deleted',
+    'rssOriginal': 'Original',
+    'rssRendered': 'Rendered',
+    'rssHidden': 'Hidden',
+    'rssRaw': 'Raw',
+    'rssExpand': 'Show More',
+    'rssCollapse': 'Show Less',
+    'rssOriginalLink': 'Original Link',
+    'rssViewInBrowser': 'Open in Browser',
+    'rssNoLink': 'No link available',
+    'rssRecommendedSources': 'Recommended Feeds',
+    'rssBatchAdd': 'Add ({count})',
+    'rssMaxSelect': 'Max 10 sources',
+    'rssViewingFolder': 'Viewing "{name}"',
+    'rssFetchFromServer': 'Fetch from server',
+    'rssTotalCount': 'Total: {count}',
+    'rssAddToFolder': 'Add to Folder',
+    'rssAddedToFolder': 'Added to "{name}"',
+    'rssNoFoldersAvailable': 'No folders, create one first',
+    'rssHistoryCleanup': 'History Cleanup',
+    'rssClean7Days': 'Clean 7-day old',
+    'rssClean7DaysDesc': 'Delete articles older than 7 days',
+    'rssClean30Days': 'Clean 30-day old',
+    'rssClean30DaysDesc': 'Delete articles older than 30 days',
+    'rssCleanAll': 'Clean All',
+    'rssCleanAllDesc': 'Delete all cached articles',
+    'rssCleanConfirm': 'Confirm Cleanup',
+    'rssCleanDaysAgo': 'Delete articles older than {days} days? This cannot be undone.',
+    'rssCleanedAll': 'Cleaned articles older than {days} days',
+    'rssMarkAllRead': 'Mark All Read',
+    'rssMarkedAllRead': 'All marked as read',
+    'rssClearArticles': 'Clear Articles',
+    'rssClearArticlesConfirm': 'Clear all articles from "{name}"? This cannot be undone.',
+    'rssArticlesCleared': 'Articles cleared',
+    'rssBackToHome': 'Back to Home',
+    'rssUnread': 'Unread',
+    'rssSyncingAll': 'Syncing all feeds...',
+    'rssSyncingFolder': 'Syncing folder feeds...',
+    'rssSyncingSource': 'Syncing "{name}"...',
+    'rssSyncedCount': 'Synced {count} feeds',
+    'rssAddToFolderTitle': 'Add to Folder',
+    'rssFeedUrl': 'RSS URL *',
+    'rssFeedTitle': 'Title',
+    'rssFeedTitleHint': 'Leave empty to auto-fetch',
+    'rssFeedType': 'Type',
+    'rssFeedCategory': 'Category',
+    'rssFeedEnabled': 'Enabled',
+    'rssSave': 'Save',
+    'rssEditSource': 'Edit Feed',
+    'rssDeleteSource': 'Delete Feed',
+    'rssDeleteSourceConfirm': 'Delete "{title}"? This will also delete all related articles.',
+    'rssDeleteSourceArticles': 'This will also delete all related articles.',
+    'rssSourceInFolders': 'This feed is also in folders:',
+    'rssSourceRemovedFromFolders': 'It will be removed from these folders.',
+    'rssSourceDeleted': 'Feed deleted',
+    'rssSyncSource': 'Sync',
+    'rssSourceInfo': 'Info',
+    'rssType': 'Type',
+    'rssSite': 'Site',
+    'rssLastSync': 'Last Sync',
+    'rssSyncError': 'Sync Error',
+    'rssSearchSources': 'Search feeds...',
+    'rssNoAddableSources': 'No feeds to add',
+    'rssAddFromLocal': 'Add from Local',
+    'rssAddCount': 'Add ({count})',
+    'rssAddedCount': 'Added {count} feeds to folder',
+    'rssMarkAllReadConfirm': 'All marked as read',
+    // About
+    'aboutSlogan': 'A Helpful SSH Client',
+    'aboutDescription': 'Zebra SSH is a cross-platform SSH client with terminal, SFTP file management, server monitoring, process management and disk cleanup features. Supports Linux, macOS, Windows, Android and iOS.',
+    'emailCopied': 'Email copied',
+    'featureSshTerminal': 'SSH Terminal',
+    'featureSshTerminalDesc': 'Connect to remote servers and execute commands. Supports password and key authentication with multi-tab management.',
+    'featureSftp': 'SFTP File Manager',
+    'featureSftpDesc': 'Browse, upload, download, delete, rename, and compress remote files visually. Supports drag-and-drop and batch operations.',
+    'featureMonitor': 'Server Monitor',
+    'featureMonitorDesc': 'View real-time CPU, memory, disk, network and other system info with auto-refresh support.',
+    'featureProcess': 'Process Manager',
+    'featureProcessDesc': 'View and manage system processes. Sort by CPU/memory, kill processes.',
+    'featureCleanup': 'Disk Cleanup',
+    'featureCleanupDesc': 'Scan and clean temporary files, logs, and cache on the server.',
+    'featureTheme': 'Theme & Language',
+    'featureThemeDesc': 'Light/Dark/System theme, custom theme colors, Chinese/English language support.',
+    'featureBackup': 'Database Backup',
+    'featureBackupDesc': 'Share database file for backup on mobile devices.',
+    // Starred/Favorites
+    'rssFavorites': 'Favorites',
+    // Discovery pagination
+    'discoverySearchHint': 'Search discovery content...',
+    'discoverySearch': 'Search',
+    'discoveryFirstPage': 'First',
+    'discoveryPrevPage': 'Previous',
+    'discoveryNextPage': 'Next',
+    'discoveryLastPage': 'Last',
+    'discoveryPage': 'Page',
+    'discoveryJumpTo': 'Go',
+    // Image error
+    'imageLoadFailed': 'Image failed to load',
+    // RSS Settings
+    'rssCleanDaysConfirm': 'Delete all articles older than {days} days? This cannot be undone.',
+    'rssCleanAllConfirm': 'Delete all articles? This cannot be undone.',
+    // Feedback
+    'feedbackDescriptionHint': 'Please describe your issue or suggestion in detail, including steps, expected results...',
+    'feedbackHint': 'Briefly describe your feedback',
+    'feedbackNote': 'Note: Only one feedback per email every 30 minutes.',
+    // Blog
+    'blogPage': 'Page',
+    // Diary
+    'diaryImportPath': 'Please place diary_import.csv at {path}',
+    'diaryNoTitle': '(No title)',
   };
 
   static const Map<String, String> _zh = {
@@ -915,6 +1295,177 @@ class AppLocalizations {
     'openInBrowser': '浏览器打开',
     'copyLink': '复制链接',
     'linkCopied': '链接已复制',
+    // RSS
+    'rssSubscription': 'RSS',
+    'rssFeedManagement': '订阅源管理',
+    'rssFolderManagement': '收藏夹管理',
+    'rssSettings': '设置',
+    'rssSyncAll': '同步全部',
+    'rssSyncing': '同步中...',
+    'rssSyncComplete': '同步完成',
+    'rssNoSources': '暂无订阅源',
+    'rssAddSource': '添加订阅源',
+    'rssAddSourceHint': '添加订阅源后，文章将在此显示',
+    'rssNoArticles': '暂无文章',
+    'rssNoArticlesHint': '点击下方按钮获取最新内容',
+    'rssSyncNow': '同步最新',
+    'rssRecommended': '推荐订阅源',
+    'rssManualAdd': '手动添加',
+    'rssImportCsv': '从 CSV 导入',
+    'rssImportOpml': '从 OPML 导入',
+    'rssExportCsv': '导出为 CSV',
+    'rssExportOpml': '导出为 OPML',
+    'rssImportCsvDesc': '导入 CSV 格式的订阅源列表',
+    'rssImportOpmlDesc': '导入 OPML 格式的订阅源列表',
+    'rssExportCsvDesc': '将订阅源导出为 CSV 文件',
+    'rssExportOpmlDesc': '将订阅源导出为 OPML 文件',
+    'rssImportComplete': '导入完成，新增 {count} 个订阅源',
+    'rssExportSuccess': '导出成功',
+    'rssFileSavedTo': '文件已保存到：',
+    'rssClose': '关闭',
+    'rssCreateFolder': '新建收藏夹',
+    'rssEditFolder': '编辑收藏夹',
+    'rssDeleteFolder': '删除收藏夹',
+    'rssDeleteFolderConfirm': '确定删除「{name}」？收藏夹内的订阅源不会被删除。',
+    'rssFolderName': '名称 *',
+    'rssFolderDesc': '描述',
+    'rssFolderDescOptional': '描述（可选）',
+    'rssFolderEmpty': '收藏夹内暂无订阅源',
+    'rssFolderEmptyHint': '从本地订阅源列表添加到收藏夹',
+    'rssNoFolders': '暂无收藏夹',
+    'rssNoFoldersHint': '创建收藏夹来组织你的订阅源',
+    'rssSourcesCount': '{count} 个订阅源',
+    'rssSelectedCount': '已选 {count} 项',
+    'rssSelectAll': '全选',
+    'rssRemoveFromFolder': '从收藏夹移除',
+    'rssRemoveConfirm': '确定将「{name}」从收藏夹中移除？',
+    'rssBatchRemove': '批量移除',
+    'rssBatchRemoveConfirm': '确定将选中的 {count} 个订阅源从收藏夹中移除？',
+    'rssRemoved': '已移除',
+    'rssAddToLocal': '从本地添加',
+    'rssAddByUrl': '手动添加 URL',
+    'rssBatchDelete': '批量删除',
+    'rssRefreshList': '刷新列表',
+    'rssSourceEmpty': '暂无订阅源',
+    'rssSourceEmptyHint': '可以从推荐列表一键添加，或手动输入 URL',
+    'rssViewArticle': '查看文章',
+    'rssArticleDetail': '文章详情',
+    'rssCopyLink': '复制链接',
+    'rssLinkCopied': '链接已复制',
+    'rssMarkAsRead': '标为已读',
+    'rssMarkAsUnread': '标为未读',
+    'rssDeleteArticle': '删除文章',
+    'rssDeleteArticleConfirm': '确定删除「{title}」？',
+    'rssArticleDeleted': '文章已删除',
+    'rssOriginal': '原文',
+    'rssRendered': '渲染',
+    'rssHidden': '隐藏',
+    'rssRaw': '原文',
+    'rssExpand': '展开全文',
+    'rssCollapse': '收起',
+    'rssOriginalLink': '原文链接',
+    'rssViewInBrowser': '在浏览器中查看',
+    'rssNoLink': '没有可用的链接',
+    'rssRecommendedSources': '推荐订阅源',
+    'rssBatchAdd': '批量添加 ({count})',
+    'rssMaxSelect': '最多选择 10 个订阅源',
+    'rssViewingFolder': '正在查看「{name}」内的订阅源',
+    'rssFetchFromServer': '从服务器获取推荐订阅源，已存在的会自动标记（最多选 10 个）',
+    'rssTotalCount': '共 {count} 个',
+    'rssAddToFolder': '加入收藏夹',
+    'rssAddedToFolder': '已加入「{name}」',
+    'rssNoFoldersAvailable': '暂无收藏夹，请先创建',
+    'rssHistoryCleanup': '历史数据清理',
+    'rssClean7Days': '清理 7 天前的文章',
+    'rssClean7DaysDesc': '删除 7 天以前的所有文章',
+    'rssClean30Days': '清理 30 天前的文章',
+    'rssClean30DaysDesc': '删除 30 天以前的所有文章',
+    'rssCleanAll': '清理所有文章',
+    'rssCleanAllDesc': '删除所有已缓存的文章',
+    'rssCleanConfirm': '确认清理',
+    'rssCleanDaysAgo': '确定删除 {days} 天前的所有文章？此操作不可撤销。',
+    'rssCleanedAll': '已清理 {days} 天前的文章',
+    'rssMarkAllRead': '全部标为已读',
+    'rssMarkedAllRead': '已全部标为已读',
+    'rssClearArticles': '清空文章',
+    'rssClearArticlesConfirm': '确定清空「{name}」的所有文章？此操作不可撤销。',
+    'rssArticlesCleared': '文章已清空',
+    'rssBackToHome': '返回首页',
+    'rssUnread': '未读',
+    'rssSyncingAll': '正在同步所有订阅源...',
+    'rssSyncingFolder': '正在同步收藏夹内所有订阅源...',
+    'rssSyncingSource': '正在同步「{name}」...',
+    'rssSyncedCount': '已同步 {count} 个订阅源',
+    'rssAddToFolderTitle': '加入收藏夹',
+    'rssFeedUrl': 'RSS URL *',
+    'rssFeedTitle': '标题',
+    'rssFeedTitleHint': '留空则自动获取',
+    'rssFeedType': '类型',
+    'rssFeedCategory': '分类',
+    'rssFeedEnabled': '启用',
+    'rssSave': '保存',
+    'rssEditSource': '编辑订阅源',
+    'rssDeleteSource': '删除订阅源',
+    'rssDeleteSourceConfirm': '确定删除「{title}」？该操作将同时删除所有相关文章。',
+    'rssDeleteSourceArticles': '该操作将同时删除所有相关文章。',
+    'rssSourceInFolders': '此源还在以下收藏夹中：',
+    'rssSourceRemovedFromFolders': '删除后将从这些收藏夹中移除。',
+    'rssSourceDeleted': '订阅源已删除',
+    'rssSyncSource': '同步',
+    'rssSourceInfo': '详情',
+    'rssType': '类型',
+    'rssSite': '站点',
+    'rssLastSync': '上次同步',
+    'rssSyncError': '同步错误',
+    'rssSearchSources': '搜索订阅源...',
+    'rssNoAddableSources': '没有可添加的订阅源',
+    'rssAddFromLocal': '从本地添加',
+    'rssAddCount': '添加 ({count})',
+    'rssAddedCount': '已添加 {count} 个订阅源到收藏夹',
+    'rssMarkAllReadConfirm': '已全部标为已读',
+    // About
+    'aboutSlogan': '友好的 SSH 客户端',
+    'aboutDescription': 'Zebra SSH 是一款跨平台 SSH 客户端，支持终端、SFTP 文件管理、服务器监控、进程管理和磁盘清理等功能。支持 Linux、macOS、Windows、Android 和 iOS。',
+    'emailCopied': '邮箱已复制',
+    'featureSshTerminal': 'SSH 终端',
+    'featureSshTerminalDesc': '连接远程服务器，执行命令。支持密码和密钥认证，多标签页管理。',
+    'featureSftp': 'SFTP 文件管理',
+    'featureSftpDesc': '可视化浏览、上传、下载、删除、重命名、压缩远程文件。支持拖拽上传和批量操作。',
+    'featureMonitor': '服务器监控',
+    'featureMonitorDesc': '实时查看 CPU、内存、磁盘、网络等系统信息，支持自动刷新。',
+    'featureProcess': '进程管理',
+    'featureProcessDesc': '查看和管理系统进程，支持按 CPU/内存排序，可终止进程。',
+    'featureCleanup': '磁盘清理',
+    'featureCleanupDesc': '扫描并清理服务器上的临时文件、日志和缓存。',
+    'featureTheme': '主题与语言',
+    'featureThemeDesc': '支持浅色/深色/跟随系统主题，可选择主题颜色，支持中英文切换。',
+    'featureBackup': '数据库备份',
+    'featureBackupDesc': '在移动端可分享数据库文件进行备份。',
+    // Starred/Favorites
+    'rssFavorites': '收藏文章',
+    // Discovery pagination
+    'discoverySearchHint': '搜索发现内容...',
+    'discoverySearch': '搜索',
+    'discoveryFirstPage': '首页',
+    'discoveryPrevPage': '上一页',
+    'discoveryNextPage': '下一页',
+    'discoveryLastPage': '末页',
+    'discoveryPage': '页',
+    'discoveryJumpTo': '跳转',
+    // Image error
+    'imageLoadFailed': '图片加载失败',
+    // RSS Settings
+    'rssCleanDaysConfirm': '确定删除 {days} 天前的所有文章？此操作不可撤销。',
+    'rssCleanAllConfirm': '确定删除所有文章？此操作不可撤销。',
+    // Feedback
+    'feedbackDescriptionHint': '请详细描述您的问题或建议，包括操作步骤、期望结果等...',
+    'feedbackHint': '简要描述您的反馈',
+    'feedbackNote': '提示：30分钟内同一邮箱只能提交一次反馈。',
+    // Blog
+    'blogPage': '页',
+    // Diary
+    'diaryImportPath': '请将 diary_import.csv 放到 {path}',
+    'diaryNoTitle': '(无标题)',
   };
 }
 

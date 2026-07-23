@@ -303,7 +303,7 @@ class _BlogScreenState extends State<BlogScreen> {
                 ),
                 contentPadding: EdgeInsets.zero,
                 isDense: true,
-                hintText: '页',
+                hintText: loc.blogPage,
                 hintStyle: TextStyle(fontSize: 11, color: theme.colorScheme.outline),
               ),
               onSubmitted: (_) => _jumpToPage(),
