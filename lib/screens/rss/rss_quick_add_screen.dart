@@ -6,6 +6,8 @@ import '../../providers/rss_provider.dart';
 import '../../services/rss_api_service.dart';
 import '../../widgets/custom_title_bar.dart';
 
+const int _maxBatchSelect = 10;
+
 class RssQuickAddScreen extends StatefulWidget {
   const RssQuickAddScreen({super.key});
 
@@ -261,7 +263,7 @@ class _RssQuickAddScreenState extends State<RssQuickAddScreen> {
                                 : (value) {
                                     setState(() {
                                       if (value == true) {
-                                        if (_selected.length >= 10) {
+                                        if (_selected.length >= _maxBatchSelect) {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(content: Text(loc.rssMaxSelect)),
                                           );

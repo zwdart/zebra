@@ -73,6 +73,26 @@ class _SftpScreenState extends State<SftpScreen> {
     return list;
   }
 
+  void _handleAppBarMenu(BuildContext context, String value) {
+    switch (value) {
+      case 'sort':
+        _showSortMenu(context);
+        break;
+      case 'new_folder':
+        _createFolder(context);
+        break;
+      case 'upload':
+        _uploadFiles(context);
+        break;
+      case 'terminal':
+        _openTerminalHere(context);
+        break;
+      case 'navigate':
+        _navigateToPath(context);
+        break;
+    }
+  }
+
   void _showSortMenu(BuildContext context) {
     final loc = AppLocalizations.of(context);
     showModalBottomSheet(
@@ -184,30 +204,15 @@ class _SftpScreenState extends State<SftpScreen> {
               tooltip: _showRawValues ? loc.showConverted : loc.showRaw,
               onPressed: () => setState(() => _showRawValues = !_showRawValues),
             ),
-            IconButton(
-              icon: const Icon(Icons.sort),
-              tooltip: loc.sort,
-              onPressed: () => _showSortMenu(context),
-            ),
-            IconButton(
-              icon: const Icon(Icons.create_new_folder),
-              tooltip: loc.newFolder,
-              onPressed: () => _createFolder(context),
-            ),
-            IconButton(
-              icon: const Icon(Icons.upload_file),
-              tooltip: loc.upload,
-              onPressed: () => _uploadFiles(context),
-            ),
-            IconButton(
-              icon: const Icon(Icons.terminal),
-              tooltip: loc.openTerminalHere,
-              onPressed: () => _openTerminalHere(context),
-            ),
-            IconButton(
-              icon: const Icon(Icons.folder_special),
-              tooltip: loc.navigateToPath,
-              onPressed: () => _navigateToPath(context),
+            PopupMenuButton<String>(
+              onSelected: (value) => _handleAppBarMenu(context, value),
+              itemBuilder: (context) => [
+                PopupMenuItem(value: 'sort', child: Text(loc.sort)),
+                PopupMenuItem(value: 'new_folder', child: Text(loc.newFolder)),
+                PopupMenuItem(value: 'upload', child: Text(loc.upload)),
+                PopupMenuItem(value: 'terminal', child: Text(loc.openTerminalHere)),
+                PopupMenuItem(value: 'navigate', child: Text(loc.navigateToPath)),
+              ],
             ),
           ],
         ],
@@ -452,10 +457,7 @@ class _SftpScreenState extends State<SftpScreen> {
     ),
   ],
 ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _uploadFiles(context),
-        child: const Icon(Icons.upload),
-      ),
+
     );
   }
 

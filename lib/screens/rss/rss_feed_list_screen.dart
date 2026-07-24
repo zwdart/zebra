@@ -145,7 +145,7 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
           if (isDesktop)
             CustomTitleBar(
               title: _title(loc),
-              showBackButton: true,
+              showBackButton: false,
               actions: [
                 IconButton(
                   icon: AnimatedBuilder(

@@ -441,11 +441,11 @@ class _TerminalScreenState extends State<TerminalScreen> {
           children: [
             const Icon(Icons.error_outline, size: 48),
             const SizedBox(height: 16),
-            const Text('Terminal not available'),
+            Text(AppLocalizations.of(context).terminalNotAvailable),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _reconnect,
-              child: const Text('Retry'),
+              child: Text(AppLocalizations.of(context).retry),
             ),
           ],
         ),
@@ -717,9 +717,9 @@ class _TerminalWidgetState extends State<_TerminalWidget> {
     if (text.isNotEmpty) {
       Clipboard.setData(ClipboardData(text: text));
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Copied to clipboard'),
-          duration: Duration(seconds: 1),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).copiedToClipboard),
+          duration: const Duration(seconds: 1),
         ),
       );
     }

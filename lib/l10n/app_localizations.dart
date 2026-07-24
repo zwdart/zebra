@@ -544,6 +544,12 @@ class AppLocalizations {
   String rssBatchAddValue(int count) {
     return translate('rssBatchAdd').replaceAll('{count}', '$count');
   }
+  String get terminalNotAvailable => translate('terminalNotAvailable');
+  String get copiedToClipboard => translate('copiedToClipboard');
+  String get importExport => translate('importExport');
+  String get importFeeds => translate('importFeeds');
+  String get exportFeeds => translate('exportFeeds');
+  String get more => translate('more');
 
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
@@ -908,7 +914,7 @@ class AppLocalizations {
     'rssNoLink': 'No link available',
     'rssRecommendedSources': 'Recommended Feeds',
     'rssBatchAdd': 'Add ({count})',
-    'rssMaxSelect': 'Max 10 sources',
+    'rssMaxSelect': 'Max 10',
     'rssViewingFolder': 'Viewing "{name}"',
     'rssFetchFromServer': 'Fetch from server',
     'rssTotalCount': 'Total: {count}',
@@ -1006,6 +1012,12 @@ class AppLocalizations {
     // Diary
     'diaryImportPath': 'Please place diary_import.csv at {path}',
     'diaryNoTitle': '(No title)',
+    'terminalNotAvailable': 'Terminal not available',
+    'copiedToClipboard': 'Copied to clipboard',
+    'importExport': 'Import/Export',
+    'importFeeds': 'Import Feeds',
+    'exportFeeds': 'Export Feeds',
+    'more': 'More',
   };
 
   static const Map<String, String> _zh = {
@@ -1371,9 +1383,9 @@ class AppLocalizations {
     'rssNoLink': '没有可用的链接',
     'rssRecommendedSources': '推荐订阅源',
     'rssBatchAdd': '批量添加 ({count})',
-    'rssMaxSelect': '最多选择 10 个订阅源',
+    'rssMaxSelect': '最多选 10 个',
     'rssViewingFolder': '正在查看「{name}」内的订阅源',
-    'rssFetchFromServer': '从服务器获取推荐订阅源，已存在的会自动标记（最多选 10 个）',
+    'rssFetchFromServer': '从服务器获取推荐订阅源',
     'rssTotalCount': '共 {count} 个',
     'rssAddToFolder': '加入收藏夹',
     'rssAddedToFolder': '已加入「{name}」',
@@ -1469,6 +1481,12 @@ class AppLocalizations {
     // Diary
     'diaryImportPath': '请将 diary_import.csv 放到 {path}',
     'diaryNoTitle': '(无标题)',
+    'terminalNotAvailable': '终端不可用',
+    'copiedToClipboard': '已复制到剪贴板',
+    'importExport': '导入/导出',
+    'importFeeds': '导入订阅源',
+    'exportFeeds': '导出订阅源',
+    'more': '更多',
   };
 }
 

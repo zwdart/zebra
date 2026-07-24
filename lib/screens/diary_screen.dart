@@ -295,6 +295,11 @@ class _DiaryScreenState extends State<DiaryScreen> {
           : AppBar(
               title: Text(loc.diary),
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  tooltip: loc.diaryNew,
+                  onPressed: () => _createOrEdit(),
+                ),
                 PopupMenuButton<String>(
                   onSelected: (v) {
                     if (v == 'export') _exportCsv();
@@ -312,8 +317,15 @@ class _DiaryScreenState extends State<DiaryScreen> {
           if (CustomTitleBar.isDesktop)
             CustomTitleBar(
               title: loc.diary,
-              showBackButton: true,
+              showBackButton: false,
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.add, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  tooltip: loc.diaryNew,
+                  onPressed: () => _createOrEdit(),
+                ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert, size: 18),
                   padding: EdgeInsets.zero,
@@ -370,11 +382,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _createOrEdit(),
-        icon: const Icon(Icons.add),
-        label: Text(loc.diaryNew),
-      ),
+
     );
   }
 
@@ -498,58 +506,80 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
       ('excited', '🤩', 'diaryMoodExcited'),
     ];
 
+    final title = widget.existing != null ? loc.diaryEdit : loc.diaryNew;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.existing != null ? loc.diaryEdit : loc.diaryNew),
+      appBar: CustomTitleBar.isDesktop ? null : AppBar(
+        title: Text(title),
         actions: [
           IconButton(
             icon: const Icon(Icons.check),
+            tooltip: loc.save,
             onPressed: _save,
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Mood selector
-            Text(loc.diaryMood, style: theme.textTheme.titleSmall),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: moods.map((m) {
-                final isSelected = _mood == m.$1;
-                return ChoiceChip(
-                  label: Text('${m.$2} ${loc.translate(m.$3)}'),
-                  selected: isSelected,
-                  onSelected: (_) => setState(() => _mood = m.$1),
-                );
-              }).toList(),
+      body: Column(
+        children: [
+          if (CustomTitleBar.isDesktop)
+            CustomTitleBar(
+              title: title,
+              showBackButton: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.check, size: 18),
+                  tooltip: loc.save,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  onPressed: _save,
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            // Title
-            TextField(
-              controller: _titleController,
-              decoration: InputDecoration(
-                labelText: loc.diaryTitle,
-                border: const OutlineInputBorder(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Mood selector
+                  Text(loc.diaryMood, style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: moods.map((m) {
+                      final isSelected = _mood == m.$1;
+                      return ChoiceChip(
+                        label: Text('${m.$2} ${loc.translate(m.$3)}'),
+                        selected: isSelected,
+                        onSelected: (_) => setState(() => _mood = m.$1),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  // Title
+                  TextField(
+                    controller: _titleController,
+                    decoration: InputDecoration(
+                      labelText: loc.diaryTitle,
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Content
+                  TextField(
+                    controller: _contentController,
+                    decoration: InputDecoration(
+                      labelText: loc.diaryContent,
+                      border: const OutlineInputBorder(),
+                      alignLabelWithHint: true,
+                    ),
+                    maxLines: 10,
+                    minLines: 5,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            // Content
-            TextField(
-              controller: _contentController,
-              decoration: InputDecoration(
-                labelText: loc.diaryContent,
-                border: const OutlineInputBorder(),
-                alignLabelWithHint: true,
-              ),
-              maxLines: 10,
-              minLines: 5,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

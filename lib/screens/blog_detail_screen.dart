@@ -188,8 +188,8 @@ class BlogDetailScreen extends StatelessWidget {
                       color: theme.colorScheme.primary,
                     ),
                     "pre": Style(
-                      backgroundColor: const Color(0xFF1a1a2e),
-                      color: const Color(0xFFe8e8e8),
+                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                      color: theme.colorScheme.onSurface,
                       padding: HtmlPaddings.all(16),
                     ),
                     "code": Style(
@@ -201,7 +201,7 @@ class BlogDetailScreen extends StatelessWidget {
                     "pre code": Style(
                       backgroundColor: Colors.transparent,
                       padding: HtmlPaddings.zero,
-                      color: const Color(0xFFe8e8e8),
+                      color: theme.colorScheme.onSurface,
                     ),
                     "blockquote": Style(
                       border: Border(

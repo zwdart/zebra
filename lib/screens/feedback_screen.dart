@@ -54,7 +54,6 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context).feedbackSubmitSuccess),
-            backgroundColor: Colors.green,
           ),
         );
         Navigator.of(context).pop();
@@ -63,7 +62,6 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(error),
-            backgroundColor: Colors.red,
           ),
         );
       }
@@ -72,7 +70,6 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${AppLocalizations.of(context).feedbackSubmitFailed}: $e'),
-          backgroundColor: Colors.red,
         ),
       );
     } finally {
@@ -98,7 +95,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             CustomTitleBar(title: loc.feedback, showBackButton: true),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(16),
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -170,12 +167,12 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                       child: ElevatedButton(
                         onPressed: _isSubmitting ? null : _submitFeedback,
                         child: _isSubmitting
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: Colors.white,
+                                  color: colorScheme.onPrimary,
                                 ),
                               )
                             : Text(

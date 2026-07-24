@@ -13,6 +13,8 @@ import '../services/update_service.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'about_screen.dart';
+import 'blog_screen.dart';
+import 'discovery_screen.dart';
 import 'update_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -44,7 +46,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: Column(
         children: [
           if (CustomTitleBar.isDesktop)
-            CustomTitleBar(title: loc.settings, showBackButton: true),
+            CustomTitleBar(title: loc.settings, showBackButton: false),
           Expanded(
             child: ListView(
               children: [
@@ -98,6 +100,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const Divider(),
                 ],
                 const Divider(),
+                _buildSectionHeader(context, loc.more),
+                ListTile(
+                  leading: const Icon(Icons.article_outlined),
+                  title: Text(loc.blog),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const BlogScreen()),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.explore_outlined),
+                  title: Text(loc.discover),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DiscoveryScreen()),
+                    );
+                  },
+                ),
+                const Divider(),
                 _buildSectionHeader(context, loc.about),
                 Consumer<UpdateProvider>(
                   builder: (context, updateProvider, _) {
@@ -129,12 +155,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           : () => _checkForUpdates(context),
                     );
                   },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: Text(loc.featuresAndUsage),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _showFeaturesDialog(context),
                 ),
                 ListTile(
                   leading: const Icon(Icons.people_outline),
@@ -185,7 +205,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Language'),
+        title: Text(AppLocalizations.of(context).language),
         children: LocaleProvider.localeNames.entries.map((e) {
           return SimpleDialogOption(
             onPressed: () {
@@ -348,73 +368,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
     await Share.shareXFiles([XFile(dbFile.path)], text: 'zebra.db');
-  }
-
-  void _showFeaturesDialog(BuildContext context) {
-    final loc = AppLocalizations.of(context);
-
-    final features = <Map<String, String>>[
-      {'icon': 'terminal', 'title': loc.featureSshTerminal, 'desc': loc.featureSshTerminalDesc},
-      {'icon': 'folder', 'title': loc.featureSftp, 'desc': loc.featureSftpDesc},
-      {'icon': 'monitor', 'title': loc.featureMonitor, 'desc': loc.featureMonitorDesc},
-      {'icon': 'process', 'title': loc.featureProcess, 'desc': loc.featureProcessDesc},
-      {'icon': 'cleanup', 'title': loc.featureCleanup, 'desc': loc.featureCleanupDesc},
-      {'icon': 'theme', 'title': loc.featureTheme, 'desc': loc.featureThemeDesc},
-      {'icon': 'share', 'title': loc.featureBackup, 'desc': loc.featureBackupDesc},
-    ];
-
-    final iconMap = <String, IconData>{
-      'terminal': Icons.terminal,
-      'folder': Icons.folder,
-      'monitor': Icons.monitor_heart,
-      'process': Icons.list_alt,
-      'cleanup': Icons.cleaning_services,
-      'theme': Icons.palette,
-      'share': Icons.share,
-    };
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(loc.featuresAndUsage),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: features.length,
-            itemBuilder: (_, i) {
-              final f = features[i];
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(iconMap[f['icon']], size: 24, color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(f['title']!, style: Theme.of(context).textTheme.titleSmall),
-                          const SizedBox(height: 4),
-                          Text(f['desc']!, style: Theme.of(context).textTheme.bodySmall),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(loc.confirm),
-          ),
-        ],
-      ),
-    );
   }
 
   void _checkForUpdates(BuildContext context) {

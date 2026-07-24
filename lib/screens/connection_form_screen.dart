@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/ssh_connection.dart';
 import '../providers/connection_provider.dart';
+import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 
 class ConnectionFormScreen extends StatefulWidget {
@@ -61,9 +62,10 @@ class _ConnectionFormScreenState extends State<ConnectionFormScreen> {
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
+    final title = isEditing ? loc.editConnection : loc.addConnection;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isEditing ? loc.editConnection : loc.addConnection),
+      appBar: CustomTitleBar.isDesktop ? null : AppBar(
+        title: Text(title),
         actions: [
           TextButton(
             onPressed: _save,
@@ -71,102 +73,119 @@ class _ConnectionFormScreenState extends State<ConnectionFormScreen> {
           ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            TextFormField(
-              controller: _nameCtrl,
-              decoration: InputDecoration(labelText: loc.connectionName),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _hostCtrl,
-              decoration: InputDecoration(labelText: loc.host),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _portCtrl,
-              decoration: InputDecoration(labelText: loc.port),
-              keyboardType: TextInputType.number,
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'Required';
-                final port = int.tryParse(v);
-                if (port == null || port < 1 || port > 65535) return 'Invalid port';
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _userCtrl,
-              decoration: InputDecoration(labelText: loc.username),
-              validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-            ),
-            const SizedBox(height: 16),
-            Text(loc.authType, style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            SegmentedButton<String>(
-              segments: [
-                ButtonSegment(value: 'password', label: Text(loc.passwordAuth)),
-                ButtonSegment(value: 'key', label: Text(loc.keyAuth)),
-              ],
-              selected: {_authType},
-              onSelectionChanged: (v) => setState(() => _authType = v.first),
-            ),
-            const SizedBox(height: 16),
-            if (_authType == 'password') ...[
-              TextFormField(
-                controller: _passwordCtrl,
-                decoration: InputDecoration(
-                  labelText: loc.password,
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                  ),
+      body: Column(
+        children: [
+          if (CustomTitleBar.isDesktop)
+            CustomTitleBar(
+              title: title,
+              showBackButton: true,
+              actions: [
+                TextButton(
+                  onPressed: _save,
+                  child: Text(loc.save, style: const TextStyle(fontSize: 16)),
                 ),
-                obscureText: _obscurePassword,
-              ),
-            ] else ...[
-              TextFormField(
-                controller: _keyPathCtrl,
-                decoration: InputDecoration(
-                  labelText: loc.privateKey,
-                  hintText: '/home/user/.ssh/id_rsa',
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.folder_open),
-                    onPressed: () async {
-                      final result = await FilePicker.platform.pickFiles();
-                      if (result != null && result.files.single.path != null) {
-                        setState(() => _keyPathCtrl.text = result.files.single.path!);
-                      }
+              ],
+            ),
+          Expanded(
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  TextFormField(
+                    controller: _nameCtrl,
+                    decoration: InputDecoration(labelText: loc.connectionName),
+                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _hostCtrl,
+                    decoration: InputDecoration(labelText: loc.host),
+                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _portCtrl,
+                    decoration: InputDecoration(labelText: loc.port),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Required';
+                      final port = int.tryParse(v);
+                      if (port == null || port < 1 || port > 65535) return 'Invalid port';
+                      return null;
                     },
                   ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _passphraseCtrl,
-                decoration: InputDecoration(
-                  labelText: loc.passphrase,
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassphrase ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscurePassphrase = !_obscurePassphrase),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _userCtrl,
+                    decoration: InputDecoration(labelText: loc.username),
+                    validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                   ),
-                ),
-                obscureText: _obscurePassphrase,
+                  const SizedBox(height: 16),
+                  Text(loc.authType, style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  SegmentedButton<String>(
+                    segments: [
+                      ButtonSegment(value: 'password', label: Text(loc.passwordAuth)),
+                      ButtonSegment(value: 'key', label: Text(loc.keyAuth)),
+                    ],
+                    selected: {_authType},
+                    onSelectionChanged: (v) => setState(() => _authType = v.first),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_authType == 'password') ...[
+                    TextFormField(
+                      controller: _passwordCtrl,
+                      decoration: InputDecoration(
+                        labelText: loc.password,
+                        suffixIcon: IconButton(
+                          icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        ),
+                      ),
+                      obscureText: _obscurePassword,
+                    ),
+                  ] else ...[
+                    TextFormField(
+                      controller: _keyPathCtrl,
+                      decoration: InputDecoration(
+                        labelText: loc.privateKey,
+                        hintText: '/home/user/.ssh/id_rsa',
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.folder_open),
+                          onPressed: () async {
+                            final result = await FilePicker.platform.pickFiles();
+                            if (result != null && result.files.single.path != null) {
+                              setState(() => _keyPathCtrl.text = result.files.single.path!);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _passphraseCtrl,
+                      decoration: InputDecoration(
+                        labelText: loc.passphrase,
+                        suffixIcon: IconButton(
+                          icon: Icon(_obscurePassphrase ? Icons.visibility_off : Icons.visibility),
+                          onPressed: () => setState(() => _obscurePassphrase = !_obscurePassphrase),
+                        ),
+                      ),
+                      obscureText: _obscurePassphrase,
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _remarkCtrl,
+                    decoration: InputDecoration(labelText: loc.remark),
+                    maxLines: 3,
+                  ),
+                ],
               ),
-            ],
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _remarkCtrl,
-              decoration: InputDecoration(labelText: loc.remark),
-              maxLines: 3,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

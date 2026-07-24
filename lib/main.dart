@@ -8,7 +8,7 @@ import 'providers/ssh_provider.dart';
 import 'providers/sftp_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/locale_provider.dart';
-import 'screens/home_screen.dart';
+import 'screens/shell_screen.dart';
 import 'screens/terminal_screen.dart';
 import 'screens/sftp_screen.dart';
 import 'screens/monitor_screen.dart';
@@ -78,7 +78,7 @@ class ZebraApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            home: const HomeScreen(),
+            home: const ShellScreen(),
             routes: {
               '/terminal': (_) => const TerminalScreen(),
               '/sftp': (_) => const SftpScreen(),

@@ -19,10 +19,10 @@ class RssImportExportScreen extends StatelessWidget {
     return Scaffold(
       appBar: isDesktop
           ? null
-          : AppBar(title: const Text('Import/Export')),
+          : AppBar(title: Text(loc.importExport)),
       body: Column(
         children: [
-          if (isDesktop) CustomTitleBar(title: 'Import/Export', showBackButton: true),
+          if (isDesktop) CustomTitleBar(title: loc.importExport, showBackButton: true),
           Expanded(child: _buildBody(context)),
         ],
       ),
@@ -36,7 +36,7 @@ class RssImportExportScreen extends StatelessWidget {
       children: [
         _buildSection(
           context,
-          title: 'Import Feeds',
+          title: loc.importFeeds,
           children: [
             _buildActionTile(
               context,
@@ -57,7 +57,7 @@ class RssImportExportScreen extends StatelessWidget {
         const SizedBox(height: 24),
         _buildSection(
           context,
-          title: 'Export Feeds',
+          title: loc.exportFeeds,
           children: [
             _buildActionTile(
               context,

@@ -646,7 +646,7 @@ class _FailedLoginRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          const Icon(Icons.close, size: 10, color: Colors.red),
+          Icon(Icons.close, size: 10, color: theme.colorScheme.error),
           const SizedBox(width: 8),
           SizedBox(width: 80, child: Text(r.user, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold, fontFamily: 'monospace'), overflow: TextOverflow.ellipsis)),
           const SizedBox(width: 8),
