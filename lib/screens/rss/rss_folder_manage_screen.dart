@@ -1,8 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/feed_source.dart';
 import '../../providers/rss_provider.dart';
+import '../../utils/zebra_paths.dart';
 import '../../widgets/custom_title_bar.dart';
 import 'rss_article_list_screen.dart';
 
@@ -357,6 +361,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                       PopupMenuItem(value: 'add_url', child: Text(loc.rssAddByUrl)),
                       PopupMenuItem(value: 'batch_delete', child: Text(loc.rssBatchDelete)),
                       const PopupMenuDivider(),
+                      PopupMenuItem(value: 'export_csv', child: Text(loc.rssExportCsv)),
+                      PopupMenuItem(value: 'export_opml', child: Text(loc.rssExportOpml)),
+                      PopupMenuItem(value: 'import_csv', child: Text(loc.rssImportCsv)),
+                      PopupMenuItem(value: 'import_opml', child: Text(loc.rssImportOpml)),
+                      const PopupMenuDivider(),
                       PopupMenuItem(value: 'refresh', child: Text(loc.rssRefreshList)),
                     ],
                   ),
@@ -400,6 +409,11 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                       PopupMenuItem(value: 'add_local', child: Text(loc.rssAddToLocal)),
                       PopupMenuItem(value: 'add_url', child: Text(loc.rssAddByUrl)),
                       PopupMenuItem(value: 'batch_delete', child: Text(loc.rssBatchDelete)),
+                      const PopupMenuDivider(),
+                      PopupMenuItem(value: 'export_csv', child: Text(loc.rssExportCsv)),
+                      PopupMenuItem(value: 'export_opml', child: Text(loc.rssExportOpml)),
+                      PopupMenuItem(value: 'import_csv', child: Text(loc.rssImportCsv)),
+                      PopupMenuItem(value: 'import_opml', child: Text(loc.rssImportOpml)),
                       const PopupMenuDivider(),
                       PopupMenuItem(value: 'refresh', child: Text(loc.rssRefreshList)),
                     ],
@@ -459,7 +473,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
     final unread = context.read<RssProvider>().getUnreadCountForFeed(source.id!);
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
         leading: CircleAvatar(
           child: source.iconUrl.isNotEmpty
@@ -514,7 +528,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
 
   Widget _buildSelectableSourceTile(FeedSource source, bool isSelected) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       color: isSelected ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3) : null,
       child: ListTile(
         leading: CircleAvatar(
@@ -572,6 +586,18 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
           _selectMode = true;
           _selectedIds.clear();
         });
+        break;
+      case 'export_csv':
+        _exportCsv(context);
+        break;
+      case 'export_opml':
+        _exportOpml(context);
+        break;
+      case 'import_csv':
+        _importCsv(context);
+        break;
+      case 'import_opml':
+        _importOpml(context);
         break;
       case 'refresh':
         _loadSources();
@@ -856,6 +882,180 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
         ],
       ),
     );
+  }
+
+  // ==================== Import / Export ====================
+
+  Future<void> _exportCsv(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+    final provider = context.read<RssProvider>();
+    final sources = provider.getFolderSources(_folderId);
+    if (sources.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.rssFolderEmpty)),
+      );
+      return;
+    }
+    final csv = provider.exportToCsvForSources(sources);
+    final folderName = widget.folder['name'] as String;
+    final safeName = folderName.replaceAll(RegExp(r'[/\\:*?"<>|]'), '_');
+    final ts = _timestamp();
+    final filename = '${safeName}_$ts.csv';
+    await _exportAndShowDialog(context, csv, filename);
+  }
+
+  Future<void> _exportOpml(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+    final provider = context.read<RssProvider>();
+    final sources = provider.getFolderSources(_folderId);
+    if (sources.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.rssFolderEmpty)),
+      );
+      return;
+    }
+    final opml = provider.exportToOpmlForSources(sources);
+    final folderName = widget.folder['name'] as String;
+    final safeName = folderName.replaceAll(RegExp(r'[/\\:*?"<>|]'), '_');
+    final ts = _timestamp();
+    final filename = '${safeName}_$ts.opml';
+    await _exportAndShowDialog(context, opml, filename);
+  }
+
+  String _timestamp() {
+    final now = DateTime.now();
+    return '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _importCsv(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final file = File(result.files.first.path!);
+    final content = await file.readAsString();
+    final provider = context.read<RssProvider>();
+    final sources = provider.importFromCsv(content);
+    var added = 0;
+    for (final source in sources) {
+      final existing = provider.getFeedSourceByUrl(source.url);
+      if (existing == null) {
+        final success = await provider.addFeedSource(source);
+        if (success) {
+          final saved = provider.getFeedSourceByUrl(source.url);
+          if (saved != null) {
+            provider.addSourceToFolder(_folderId, saved.id!);
+            added++;
+          }
+        }
+      } else {
+        provider.addSourceToFolder(_folderId, existing.id!);
+        added++;
+      }
+    }
+    _loadSources();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.rssImportComplete.replaceAll('{count}', '$added'))),
+      );
+    }
+  }
+
+  Future<void> _importOpml(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['opml', 'xml'],
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final file = File(result.files.first.path!);
+    final content = await file.readAsString();
+    final provider = context.read<RssProvider>();
+    final sources = provider.importFromOpml(content);
+    var added = 0;
+    for (final source in sources) {
+      final existing = provider.getFeedSourceByUrl(source.url);
+      if (existing == null) {
+        final success = await provider.addFeedSource(source);
+        if (success) {
+          final saved = provider.getFeedSourceByUrl(source.url);
+          if (saved != null) {
+            provider.addSourceToFolder(_folderId, saved.id!);
+            added++;
+          }
+        }
+      } else {
+        provider.addSourceToFolder(_folderId, existing.id!);
+        added++;
+      }
+    }
+    _loadSources();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.rssImportComplete.replaceAll('{count}', '$added'))),
+      );
+    }
+  }
+
+  Future<void> _exportAndShowDialog(BuildContext context, String content, String filename) async {
+    final loc = AppLocalizations.of(context);
+    try {
+      final path = await ZebraPaths.filePath('rss', filename);
+      final file = File(path);
+      await file.writeAsString(content);
+
+      if (context.mounted) {
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(loc.rssExportSuccess),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(loc.rssFileSavedTo),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: SelectableText(
+                    file.path,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(loc.rssClose),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Share.shareXFiles([XFile(file.path)], subject: filename);
+                  Navigator.pop(context);
+                },
+                child: Text(loc.share),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${loc.rssExportFailed}: $e')),
+        );
+      }
+    }
   }
 
 }

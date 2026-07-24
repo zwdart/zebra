@@ -465,7 +465,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
   Widget _buildItemCard(DiscoveryItem item, ThemeData theme) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => _onItemTap(item),

@@ -272,6 +272,12 @@ class RssRepository {
 
   // ==================== Import / Export ====================
 
+  /// 导出指定订阅源列表为 CSV
+  String exportToCsvForSources(List<FeedSource> sources) => exportToCsv(sources);
+
+  /// 导出指定订阅源列表为 OPML
+  String exportToOpmlForSources(List<FeedSource> sources) => exportToOpml(sources);
+
   /// 导出订阅源为 CSV
   String exportToCsv(List<FeedSource> sources) {
     final buffer = StringBuffer();

@@ -157,7 +157,7 @@ class _RssArticleListScreenState extends State<RssArticleListScreen> {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.error,
           borderRadius: BorderRadius.circular(12),
@@ -190,7 +190,7 @@ class _RssArticleListScreenState extends State<RssArticleListScreen> {
         );
       },
       child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: ListTile(
           leading: Container(
             width: 40,
@@ -245,13 +245,15 @@ class _RssArticleListScreenState extends State<RssArticleListScreen> {
               ],
             ),
           ),
-          trailing: IconButton(
-            icon: Icon(
-              article.isStarred ? Icons.star : Icons.star_border,
-              color: article.isStarred ? Colors.amber : null,
-            ),
-            onPressed: () => context.read<RssProvider>().toggleStar(article.id!),
-          ),
+          trailing: CustomTitleBar.isDesktop
+              ? IconButton(
+                  icon: Icon(
+                    article.isStarred ? Icons.star : Icons.star_border,
+                    color: article.isStarred ? Colors.amber : null,
+                  ),
+                  onPressed: () => context.read<RssProvider>().toggleStar(article.id!),
+                )
+              : null,
           onTap: () {
             context.read<RssProvider>().markAsRead(article.id!);
             Navigator.push(

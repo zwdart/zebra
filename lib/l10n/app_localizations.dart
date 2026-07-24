@@ -363,6 +363,7 @@ class AppLocalizations {
   String get rssExportSuccess => translate('rssExportSuccess');
   String get rssFileSavedTo => translate('rssFileSavedTo');
   String get rssClose => translate('rssClose');
+  String get rssExportFailed => translate('rssExportFailed');
   String get rssCreateFolder => translate('rssCreateFolder');
   String get rssEditFolder => translate('rssEditFolder');
   String get rssDeleteFolder => translate('rssDeleteFolder');
@@ -834,8 +835,8 @@ class AppLocalizations {
     'copyLink': 'Copy Link',
     'linkCopied': 'Link copied',
     // RSS
-    'rssSubscription': 'RSS',
-    'rssFeedManagement': 'Feed Management',
+    'rssSubscription': 'Zebra RSS',
+    'rssFeedManagement': 'Feeds',
     'rssFolderManagement': 'Folders',
     'rssSettings': 'Settings',
     'rssSyncAll': 'Sync All',
@@ -861,6 +862,7 @@ class AppLocalizations {
     'rssExportSuccess': 'Export successful',
     'rssFileSavedTo': 'Saved to:',
     'rssClose': 'Close',
+    'rssExportFailed': 'Export failed',
     'rssCreateFolder': 'New Folder',
     'rssEditFolder': 'Edit Folder',
     'rssDeleteFolder': 'Delete Folder',
@@ -1296,9 +1298,9 @@ class AppLocalizations {
     'copyLink': '复制链接',
     'linkCopied': '链接已复制',
     // RSS
-    'rssSubscription': 'RSS',
-    'rssFeedManagement': '订阅源管理',
-    'rssFolderManagement': '收藏夹管理',
+    'rssSubscription': 'Zebra RSS',
+    'rssFeedManagement': '订阅源',
+    'rssFolderManagement': '收藏夹',
     'rssSettings': '设置',
     'rssSyncAll': '同步全部',
     'rssSyncing': '同步中...',
@@ -1323,6 +1325,7 @@ class AppLocalizations {
     'rssExportSuccess': '导出成功',
     'rssFileSavedTo': '文件已保存到：',
     'rssClose': '关闭',
+    'rssExportFailed': '导出失败',
     'rssCreateFolder': '新建收藏夹',
     'rssEditFolder': '编辑收藏夹',
     'rssDeleteFolder': '删除收藏夹',
@@ -1364,7 +1367,7 @@ class AppLocalizations {
     'rssExpand': '展开全文',
     'rssCollapse': '收起',
     'rssOriginalLink': '原文链接',
-    'rssViewInBrowser': '在浏览器中查看',
+    'rssViewInBrowser': '浏览器打开',
     'rssNoLink': '没有可用的链接',
     'rssRecommendedSources': '推荐订阅源',
     'rssBatchAdd': '批量添加 ({count})',

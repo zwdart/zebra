@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../database/database_service.dart';
 import '../models/diary_entry.dart';
+import '../utils/zebra_paths.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 
@@ -132,13 +133,51 @@ class _DiaryScreenState extends State<DiaryScreen> {
         csv.write('${_csvEscape(e.title)},${_csvEscape(e.content)},${e.mood},${e.createdAt.toIso8601String()},${e.updatedAt.toIso8601String()}\n');
       }
 
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/diary_export.csv');
+      final ts = _timestamp();
+      final filename = 'diary_export_$ts.csv';
+      final path = await ZebraPaths.filePath('diary', filename);
+      final file = File(path);
       await file.writeAsString(csv.toString());
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${loc.diaryExportSuccess}\n${file.path}')),
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(loc.diaryExportSuccess),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(loc.rssFileSavedTo),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: SelectableText(
+                    file.path,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(loc.rssClose),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Share.shareXFiles([XFile(file.path)], subject: filename);
+                  Navigator.pop(context);
+                },
+                child: Text(loc.share),
+              ),
+            ],
+          ),
         );
       }
     } catch (e) {
@@ -150,15 +189,20 @@ class _DiaryScreenState extends State<DiaryScreen> {
     }
   }
 
+  String _timestamp() {
+    final now = DateTime.now();
+    return '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+  }
+
   Future<void> _importCsv() async {
     final loc = AppLocalizations.of(context);
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File('${dir.path}/diary_import.csv');
+      final path = await ZebraPaths.filePath('diary', 'diary_import.csv');
+      final file = File(path);
       if (!await file.exists()) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(loc.diaryImportPath.replaceAll('{path}', dir.path))),
+            SnackBar(content: Text(loc.diaryImportPath.replaceAll('{path}', path))),
           );
         }
         return;
@@ -338,7 +382,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
     final loc = AppLocalizations.of(context);
     final dateStr = '${entry.createdAt.year}-${entry.createdAt.month.toString().padLeft(2, '0')}-${entry.createdAt.day.toString().padLeft(2, '0')} ${entry.createdAt.hour.toString().padLeft(2, '0')}:${entry.createdAt.minute.toString().padLeft(2, '0')}';
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => _createOrEdit(existing: entry),

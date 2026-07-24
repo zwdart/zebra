@@ -323,7 +323,7 @@ class _BlogScreenState extends State<BlogScreen> {
 
   Widget _buildItemCard(BlogPost post, ThemeData theme) {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => _openPostDetail(post),

@@ -345,9 +345,13 @@ class RssProvider extends ChangeNotifier {
 
   String exportToCsv() => _repository.exportToCsv(_feeds);
 
+  String exportToCsvForSources(List<FeedSource> sources) => _repository.exportToCsv(sources);
+
   List<FeedSource> importFromCsv(String csv) => _repository.importFromCsv(csv);
 
   String exportToOpml() => _repository.exportToOpml(_feeds);
+
+  String exportToOpmlForSources(List<FeedSource> sources) => _repository.exportToOpml(sources);
 
   List<FeedSource> importFromOpml(String opml) => _repository.importFromOpml(opml);
 

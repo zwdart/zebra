@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 import '../../l10n/app_localizations.dart';
 import '../../providers/rss_provider.dart';
+import '../../utils/zebra_paths.dart';
 import '../../widgets/custom_title_bar.dart';
 
 class RssImportExportScreen extends StatelessWidget {
@@ -154,24 +153,76 @@ class RssImportExportScreen extends StatelessWidget {
   Future<void> _exportCsv(BuildContext context) async {
     final provider = context.read<RssProvider>();
     final csv = provider.exportToCsv();
-    await _shareFile(context, csv, 'rss_subscriptions.csv');
+    final ts = _timestamp();
+    await _exportAndShowDialog(context, csv, 'rss_subscriptions_$ts.csv');
   }
 
   Future<void> _exportOpml(BuildContext context) async {
     final provider = context.read<RssProvider>();
     final opml = provider.exportToOpml();
-    await _shareFile(context, opml, 'rss_subscriptions.opml');
+    final ts = _timestamp();
+    await _exportAndShowDialog(context, opml, 'rss_subscriptions_$ts.opml');
   }
 
-  Future<void> _shareFile(BuildContext context, String content, String filename) async {
-    // Use application documents directory (no permissions needed, cross-platform)
-    final dir = await getApplicationDocumentsDirectory();
-    final exportDir = Directory(p.join(dir.path, 'exports'));
-    if (!await exportDir.exists()) {
-      await exportDir.create(recursive: true);
+  String _timestamp() {
+    final now = DateTime.now();
+    return '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _exportAndShowDialog(BuildContext context, String content, String filename) async {
+    final loc = AppLocalizations.of(context);
+    try {
+      final path = await ZebraPaths.filePath('rss', filename);
+      final file = File(path);
+      await file.writeAsString(content);
+
+      if (context.mounted) {
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(loc.rssExportSuccess),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(loc.rssFileSavedTo),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: SelectableText(
+                    file.path,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(loc.rssClose),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Share.shareXFiles([XFile(file.path)], subject: filename);
+                  Navigator.pop(context);
+                },
+                child: Text(loc.share),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${loc.rssExportFailed}: $e')),
+        );
+      }
     }
-    final file = File(p.join(exportDir.path, filename));
-    await file.writeAsString(content);
-    await Share.shareXFiles([XFile(file.path)], subject: filename);
   }
 }

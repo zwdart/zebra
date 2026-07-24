@@ -28,6 +28,7 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
   bool _summaryExpanded = false;
   bool _contentExpanded = false;
   bool _summaryModeDetected = false;
+  bool _isStarred = false;
 
   // Cached built widgets to avoid re-parsing HTML on setState.
   Widget? _cachedSummaryHtml;
@@ -65,6 +66,13 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
           : AppBar(
               title: Text(article.title, maxLines: 1, overflow: TextOverflow.ellipsis),
               actions: [
+                IconButton(
+                  icon: Icon(
+                    _isStarred ? Icons.star : Icons.star_border,
+                    color: _isStarred ? Colors.amber : null,
+                  ),
+                  onPressed: () => _toggleStar(context),
+                ),
                 PopupMenuButton<String>(
                   onSelected: (action) => _handleAction(context, action),
                   itemBuilder: (context) => [
@@ -74,6 +82,8 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
                       value: 'read',
                       child: Text(article.isRead ? loc.rssMarkAsUnread : loc.rssMarkAsRead),
                     ),
+                    if (article.link.isNotEmpty)
+                      PopupMenuItem(value: 'browser', child: Text(loc.rssViewInBrowser)),
                   ],
                 ),
               ],
@@ -85,6 +95,14 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
               title: article.title,
               showBackButton: true,
               actions: [
+                IconButton(
+                  icon: Icon(
+                    _isStarred ? Icons.star : Icons.star_border,
+                    color: _isStarred ? Colors.amber : null,
+                    size: 18,
+                  ),
+                  onPressed: () => _toggleStar(context),
+                ),
                 PopupMenuButton<String>(
                   onSelected: (action) => _handleAction(context, action),
                   itemBuilder: (context) => [
@@ -94,6 +112,8 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
                       value: 'read',
                       child: Text(article.isRead ? loc.rssMarkAsUnread : loc.rssMarkAsRead),
                     ),
+                    if (article.link.isNotEmpty)
+                      PopupMenuItem(value: 'browser', child: Text(loc.rssViewInBrowser)),
                   ],
                 ),
               ],
@@ -129,7 +149,9 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
       if (!mounted) return article;
       final provider = context.read<RssProvider>();
       final full = provider.getArticle(article.id!);
-      return full ?? article;
+      final result = full ?? article;
+      if (mounted) _isStarred = result.isStarred;
+      return result;
     });
     return _fullArticleFuture!;
   }
@@ -264,27 +286,6 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
                   ],
                 ),
               const SizedBox(height: 16),
-
-              // Action buttons below title
-              if (fullArticle.link.isNotEmpty) ...[
-                isWide
-                    ? Row(
-                        children: [
-                          Expanded(child: _buildLinkButton(context)),
-                          const SizedBox(width: 12),
-                          Expanded(child: _buildBrowserButton(context)),
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildLinkButton(context),
-                          const SizedBox(height: 8),
-                          _buildBrowserButton(context),
-                        ],
-                      ),
-                const SizedBox(height: 20),
-              ],
 
               // Summary
               if (fullArticle.summary.isNotEmpty && _summaryMode != null) ...[
@@ -686,31 +687,6 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
     );
   }
 
-  // ==================== Action buttons ====================
-
-  Widget _buildLinkButton(BuildContext context) {
-    final loc = AppLocalizations.of(context);
-    return OutlinedButton.icon(
-      onPressed: () {
-        Clipboard.setData(ClipboardData(text: article.link));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(loc.rssLinkCopied), duration: Duration(seconds: 1)),
-        );
-      },
-      icon: const Icon(Icons.link, size: 18),
-      label: Text(loc.rssOriginalLink),
-    );
-  }
-
-  Widget _buildBrowserButton(BuildContext context) {
-    final loc = AppLocalizations.of(context);
-    return FilledButton.icon(
-      onPressed: () => _openInBrowser(context),
-      icon: const Icon(Icons.open_in_browser, size: 18),
-      label: Text(loc.rssViewInBrowser),
-    );
-  }
-
   void _openInBrowser(BuildContext context) async {
     final loc = AppLocalizations.of(context);
     if (article.link.isEmpty) {
@@ -723,6 +699,11 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+  }
+
+  void _toggleStar(BuildContext context) {
+    context.read<RssProvider>().toggleStar(article.id!);
+    setState(() => _isStarred = !_isStarred);
   }
 
   void _handleAction(BuildContext context, String action) {
@@ -739,6 +720,9 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
         break;
       case 'read':
         context.read<RssProvider>().markAsRead(article.id!);
+        break;
+      case 'browser':
+        _openInBrowser(context);
         break;
     }
   }

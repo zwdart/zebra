@@ -143,7 +143,7 @@ class _LinuxCommandsScreenState extends State<LinuxCommandsScreen> {
     final loc = AppLocalizations.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
         leading: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
