@@ -125,6 +125,13 @@ td { font-size: 14px; }
           </div>
           <button class="btn btn-primary" onclick="showAddModal()">+ 新增订阅源</button>
           <div style="position:relative;display:inline-block;">
+            <button class="btn btn-success" onclick="toggleDropdown('generateDropdown')" style="display:inline-flex;align-items:center;gap:4px;">生成 RSS 源 <span style="font-size:10px;">▼</span></button>
+            <div id="generateDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:white;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;min-width:220px;overflow:hidden;">
+              <a href="javascript:void(0)" onclick="generateFromBlog();closeDropdown('generateDropdown')" style="display:block;padding:10px 14px;font-size:13px;color:#333;text-decoration:none;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📝 从博客生成 RSS 源</a>
+              <a href="javascript:void(0)" onclick="generateFromDiscovery();closeDropdown('generateDropdown')" style="display:block;padding:10px 14px;font-size:13px;color:#333;text-decoration:none;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">🔍 从发现生成 RSS 源</a>
+            </div>
+          </div>
+          <div style="position:relative;display:inline-block;">
             <button class="btn btn-ghost" onclick="toggleDropdown('ioDropdown')" style="display:inline-flex;align-items:center;gap:4px;">导入 / 导出 <span style="font-size:10px;">▼</span></button>
             <div id="ioDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:white;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;min-width:160px;overflow:hidden;">
               <div style="padding:8px 14px;font-size:12px;color:#999;font-weight:600;border-bottom:1px solid #eee;">导出</div>
@@ -347,6 +354,29 @@ td { font-size: 14px; }
       <div style="max-height:400px;overflow-y:auto;" id="addSourceList"></div>
       <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px;">
         <button class="btn btn-ghost" onclick="closeModal('addSourceToFolderModal')">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RSS 地址弹窗 -->
+<div class="modal-overlay" id="rss-modal">
+  <div class="modal" style="width:480px;">
+    <div class="modal-header">
+      <h3 id="rss-modal-title">RSS 源地址</h3>
+      <button class="modal-close" onclick="closeModal('rss-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:#555;">RSS 订阅地址</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="rss-url-input" readonly style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:monospace;background:#f9f9f9;">
+          <button class="btn btn-primary" onclick="copyRssUrl()">复制</button>
+        </div>
+      </div>
+      <div id="rss-modal-status" style="font-size:12px;color:#666;"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+        <button class="btn btn-ghost" onclick="closeModal('rss-modal')">关闭</button>
       </div>
     </div>
   </div>
@@ -1109,6 +1139,61 @@ document.addEventListener('click', function(e) {
     document.querySelectorAll('[id$="Dropdown"]').forEach(d => d.style.display = 'none');
   }
 });
+
+// ===================== Generate RSS from Blog/Discovery =====================
+function showRssModal(title, url, status) {
+  document.getElementById('rss-modal-title').textContent = title;
+  document.getElementById('rss-url-input').value = url;
+  document.getElementById('rss-modal-status').textContent = status || '';
+  document.getElementById('rss-modal').classList.add('active');
+}
+
+function copyRssUrl() {
+  const input = document.getElementById('rss-url-input');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(input.value).then(() => showToast('已复制到剪贴板')).catch(() => {
+      input.select();
+      document.execCommand('copy');
+      showToast('已复制');
+    });
+  } else {
+    input.select();
+    document.execCommand('copy');
+    showToast('已复制');
+  }
+}
+
+async function generateFromBlog() {
+  try {
+    const resp = await fetch('/api/admin/rss/generate-from-blog', { method: 'POST' });
+    const json = await resp.json();
+    if (json.success) {
+      const data = json.data;
+      showRssModal('博客 RSS 源', data.rss_url, '博客 RSS 源已生成并添加到订阅源列表。');
+      loadSources(1);
+    } else {
+      showToast('生成失败: ' + (json.error || '未知错误'), 'error');
+    }
+  } catch (e) {
+    showToast('生成失败: ' + e.message, 'error');
+  }
+}
+
+async function generateFromDiscovery() {
+  try {
+    const resp = await fetch('/api/admin/rss/generate-from-discovery', { method: 'POST' });
+    const json = await resp.json();
+    if (json.success) {
+      const data = json.data;
+      showRssModal('发现 RSS 源', data.rss_url, '发现 RSS 源已生成并添加到订阅源列表。');
+      loadSources(1);
+    } else {
+      showToast('生成失败: ' + (json.error || '未知错误'), 'error');
+    }
+  } catch (e) {
+    showToast('生成失败: ' + e.message, 'error');
+  }
+}
 
 // ===================== Toast =====================
 function showToast(msg, type = 'success') {

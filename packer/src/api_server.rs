@@ -317,6 +317,7 @@ pub struct FeedbackQuery {
 
 struct AppState {
     db: Mutex<Connection>,
+    rss_db: Arc<rss_server::RssDb>,
     uploads_dir: String,
     domain: String,
     start_time: Instant,
@@ -2437,6 +2438,108 @@ async fn admin_update_feedback_tags(
     }
 }
 
+/// GET /api/admin/feedback/export - 导出反馈为 CSV
+async fn admin_export_feedback(
+    State(state): State<Arc<AppState>>,
+) -> Response<Body> {
+    let db = state.db.lock().unwrap();
+    let (items, _) = db_feedback_get_paginated(&db, 1, 10000, None);
+
+    let mut csv = String::from("email,subject,description,platform,app_version,tags,created_at\n");
+    for item in &items {
+        csv.push_str(&format!(
+            "{},{},{},{},{},{},{}\n",
+            csv_escape(&item.email),
+            csv_escape(&item.subject),
+            csv_escape(&item.description),
+            csv_escape(&item.platform),
+            csv_escape(&item.app_version),
+            csv_escape(item.tags.as_deref().unwrap_or("")),
+            csv_escape(&item.created_at),
+        ));
+    }
+
+    (
+        StatusCode::OK,
+        [
+            ("Content-Type", "text/csv; charset=utf-8"),
+            ("Content-Disposition", "attachment; filename=\"feedback.csv\""),
+        ],
+        csv,
+    ).into_response()
+}
+
+/// POST /api/admin/feedback/import - 导入反馈 CSV
+async fn admin_import_feedback(
+    State(state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let mut csv_data = String::new();
+
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "success": false, "error": format!("Failed to read multipart: {}", e) })),
+        )
+    })? {
+        let name = field.name().unwrap_or("").to_string();
+        if name == "file" {
+            csv_data = field.text().await.map_err(|e| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({ "success": false, "error": format!("Failed to read file: {}", e) })),
+                )
+            })?;
+        }
+    }
+
+    if csv_data.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "success": false, "error": "No CSV data" })),
+        ));
+    }
+
+    let db = state.db.lock().unwrap();
+    let mut imported = 0u64;
+    for (i, line) in csv_data.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() { continue; }
+        if i == 0 && line.to_lowercase().contains("email") && line.to_lowercase().contains("subject") { continue; }
+
+        let parts = parse_csv_line(line);
+        if parts.len() >= 3 {
+            let email = parts[0].trim().to_string();
+            let subject = parts[1].trim().to_string();
+            let description = parts[2].trim().to_string();
+            let platform = if parts.len() >= 4 { parts[3].trim().to_string() } else { String::new() };
+            let app_version = if parts.len() >= 5 { parts[4].trim().to_string() } else { String::new() };
+            let tags = if parts.len() >= 6 { Some(parts[5].trim().to_string()).filter(|s| !s.is_empty()) } else { None };
+
+            if !email.is_empty() && !subject.is_empty() {
+                let req = FeedbackCreateRequest {
+                    email,
+                    subject,
+                    description,
+                    platform: Some(platform).filter(|s| !s.is_empty()),
+                    app_version: Some(app_version).filter(|s| !s.is_empty()),
+                };
+                if db_feedback_create(&db, &req).is_ok() {
+                    // Update tags if provided
+                    if let Some(ref t) = tags {
+                        if let Some(item) = db_feedback_get_by_id(&db, db.last_insert_rowid()) {
+                            let _ = db_feedback_update_tags(&db, item.id, t);
+                        }
+                    }
+                    imported += 1;
+                }
+            }
+        }
+    }
+
+    Ok(Json(serde_json::json!({ "success": true, "data": { "imported": imported } })))
+}
+
 // ============================================================
 // Stats API Handlers
 // ============================================================
@@ -2738,6 +2841,279 @@ async fn admin_import_blog_posts(
 }
 
 // ============================================================
+// RSS Feed Generation & Blog/Discovery to RSS
+// ============================================================
+
+/// Escape XML special characters
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+     .replace('<', "&lt;")
+     .replace('>', "&gt;")
+     .replace('"', "&quot;")
+     .replace('\'', "&apos;")
+}
+
+/// Generate RSS XML from blog posts
+fn generate_blog_rss_xml(posts: &[BlogPost], domain: &str) -> String {
+    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    xml.push_str("<rss version=\"2.0\" xmlns:atom=\"http://www.w3.org/2005/Atom\">\n");
+    xml.push_str("<channel>\n");
+    xml.push_str(&format!("  <title>Zebra Blog</title>\n"));
+    xml.push_str(&format!("  <link>https://{}/api/blog</link>\n", domain));
+    xml.push_str("  <description>Zebra 博客文章</description>\n");
+    xml.push_str(&format!("  <language>zh-cn</language>\n"));
+    xml.push_str(&format!("  <lastBuildDate>{}</lastBuildDate>\n", chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S +0000")));
+
+    for post in posts {
+        xml.push_str("  <item>\n");
+        xml.push_str(&format!("    <title>{}</title>\n", xml_escape(&post.title)));
+        xml.push_str(&format!("    <link>https://{}/api/blog/post/{}</link>\n", domain, post.id));
+        xml.push_str(&format!("    <guid>https://{}/api/blog/post/{}</guid>\n", domain, post.id));
+        if !post.summary.is_empty() {
+            xml.push_str(&format!("    <description>{}</description>\n", xml_escape(&post.summary)));
+        } else {
+            let desc = if post.content.len() > 200 {
+                format!("{}...", &post.content[..200])
+            } else {
+                post.content.clone()
+            };
+            xml.push_str(&format!("    <description>{}</description>\n", xml_escape(&desc)));
+        }
+        if let Some(ref tags) = post.tags {
+            for tag in tags.split(',') {
+                let tag = tag.trim();
+                if !tag.is_empty() {
+                    xml.push_str(&format!("    <category>{}</category>\n", xml_escape(tag)));
+                }
+            }
+        }
+        xml.push_str(&format!("    <pubDate>{}</pubDate>\n", xml_escape(&post.created_at)));
+        xml.push_str("  </item>\n");
+    }
+
+    xml.push_str("</channel>\n");
+    xml.push_str("</rss>\n");
+    xml
+}
+
+/// Generate RSS XML from discoveries
+fn generate_discovery_rss_xml(items: &[DiscoveryItem], domain: &str) -> String {
+    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    xml.push_str("<rss version=\"2.0\" xmlns:atom=\"http://www.w3.org/2005/Atom\">\n");
+    xml.push_str("<channel>\n");
+    xml.push_str("  <title>Zebra Discoveries</title>\n");
+    xml.push_str(&format!("  <link>https://{}</link>\n", domain));
+    xml.push_str("  <description>Zebra 发现推荐</description>\n");
+    xml.push_str("  <language>zh-cn</language>\n");
+    xml.push_str(&format!("  <lastBuildDate>{}</lastBuildDate>\n", chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S +0000")));
+
+    for item in items {
+        xml.push_str("  <item>\n");
+        xml.push_str(&format!("    <title>{}</title>\n", xml_escape(&item.name)));
+        xml.push_str(&format!("    <link>{}</link>\n", xml_escape(&item.url)));
+        xml.push_str(&format!("    <guid>https://{}/discovery/{}</guid>\n", domain, item.id));
+        xml.push_str(&format!("    <description>{}</description>\n", xml_escape(&item.description)));
+        if let Some(ref tags) = item.tags {
+            for tag in tags.split(',') {
+                let tag = tag.trim();
+                if !tag.is_empty() {
+                    xml.push_str(&format!("    <category>{}</category>\n", xml_escape(tag)));
+                }
+            }
+        }
+        xml.push_str(&format!("    <pubDate>{}</pubDate>\n", xml_escape(&item.created_at)));
+        xml.push_str("  </item>\n");
+    }
+
+    xml.push_str("</channel>\n");
+    xml.push_str("</rss>\n");
+    xml
+}
+
+/// GET /api/blog/rss — 博客 RSS Feed
+async fn blog_rss_feed(
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let db = state.db.lock().unwrap();
+    let (posts, _) = db_blog_get_paginated(&db, 1, 100, None, true);
+    let xml = generate_blog_rss_xml(&posts, &state.domain);
+    Ok((
+        [(axum::http::header::CONTENT_TYPE, "application/rss+xml; charset=utf-8")],
+        xml,
+    ))
+}
+
+/// GET /api/discoveries/rss — 发现 RSS Feed
+async fn discoveries_rss_feed(
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let db = state.db.lock().unwrap();
+    let (items, _) = db_discovery_get_paginated(&db, 1, 100, "time", None, None);
+    let xml = generate_discovery_rss_xml(&items, &state.domain);
+    Ok((
+        [(axum::http::header::CONTENT_TYPE, "application/rss+xml; charset=utf-8")],
+        xml,
+    ))
+}
+
+/// POST /api/admin/rss/generate-from-blog — 将博客添加为 RSS 源
+async fn admin_generate_rss_from_blog(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let rss_url = format!("https://{}/api/blog/rss", state.domain);
+    let title = "Zebra Blog".to_string();
+    let site_url = format!("https://{}/api/blog", state.domain);
+
+    let db = state.rss_db.db.lock().unwrap();
+    let result = db.execute(
+        "INSERT OR IGNORE INTO rss_sources (title, url, site_url, feed_type, category, enabled, created_at, updated_at)
+         VALUES (?1, ?2, ?3, 'rss2', '博客', 1, datetime('now'), datetime('now'))",
+        params![title, rss_url, site_url],
+    );
+
+    match result {
+        Ok(_) => {
+            let id = db.last_insert_rowid();
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "data": {
+                    "id": id,
+                    "title": title,
+                    "rss_url": rss_url,
+                    "site_url": site_url,
+                }
+            })))
+        }
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "success": false, "error": e.to_string() })),
+        )),
+    }
+}
+
+/// POST /api/admin/rss/generate-from-discovery — 将发现添加为 RSS 源
+async fn admin_generate_rss_from_discovery(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let rss_url = format!("https://{}/api/discoveries/rss", state.domain);
+    let title = "Zebra Discoveries".to_string();
+    let site_url = format!("https://{}", state.domain);
+
+    let db = state.rss_db.db.lock().unwrap();
+    let result = db.execute(
+        "INSERT OR IGNORE INTO rss_sources (title, url, site_url, feed_type, category, enabled, created_at, updated_at)
+         VALUES (?1, ?2, ?3, 'rss2', '发现', 1, datetime('now'), datetime('now'))",
+        params![title, rss_url, site_url],
+    );
+
+    match result {
+        Ok(_) => {
+            let id = db.last_insert_rowid();
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "data": {
+                    "id": id,
+                    "title": title,
+                    "rss_url": rss_url,
+                    "site_url": site_url,
+                }
+            })))
+        }
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "success": false, "error": e.to_string() })),
+        )),
+    }
+}
+
+/// Generate RSS XML from versions
+fn generate_versions_rss_xml(versions: &[VersionInfo], domain: &str) -> String {
+    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    xml.push_str("<rss version=\"2.0\" xmlns:atom=\"http://www.w3.org/2005/Atom\">\n");
+    xml.push_str("<channel>\n");
+    xml.push_str("  <title>Zebra Updates</title>\n");
+    xml.push_str(&format!("  <link>https://{}</link>\n", domain));
+    xml.push_str("  <description>Zebra 应用版本更新</description>\n");
+    xml.push_str("  <language>zh-cn</language>\n");
+    xml.push_str(&format!("  <lastBuildDate>{}</lastBuildDate>\n", chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S +0000")));
+
+    for v in versions {
+        let download_url = normalize_download_url(&v.download_url, domain);
+        xml.push_str("  <item>\n");
+        xml.push_str(&format!("    <title>{} {} v{} ({})</title>\n", xml_escape(&v.platform), xml_escape(&v.version_type), xml_escape(&v.version), v.version_code));
+        xml.push_str(&format!("    <link>{}</link>\n", xml_escape(&download_url)));
+        xml.push_str(&format!("    <guid>https://{}/version/{}/{}</guid>\n", domain, v.platform, v.version_code));
+        let desc = if v.changelog.is_empty() {
+            format!("New version {} available for {}", v.version, v.platform)
+        } else {
+            v.changelog.clone()
+        };
+        xml.push_str(&format!("    <description>{}</description>\n", xml_escape(&desc)));
+        xml.push_str(&format!("    <category>{}</category>\n", xml_escape(&v.platform)));
+        xml.push_str(&format!("    <pubDate>{}</pubDate>\n", xml_escape(&v.release_date)));
+        xml.push_str("  </item>\n");
+    }
+
+    xml.push_str("</channel>\n");
+    xml.push_str("</rss>\n");
+    xml
+}
+
+/// GET /api/versions/rss — 版本 RSS Feed
+async fn versions_rss_feed(
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let db = state.db.lock().unwrap();
+    let platforms = ["windows", "linux", "macos", "android", "ios"];
+    let mut all_versions = Vec::new();
+    for platform in &platforms {
+        if let Some(v) = db_get_latest(&db, platform) {
+            all_versions.push(v);
+        }
+    }
+    let xml = generate_versions_rss_xml(&all_versions, &state.domain);
+    Ok((
+        [(axum::http::header::CONTENT_TYPE, "application/rss+xml; charset=utf-8")],
+        xml,
+    ))
+}
+
+/// POST /api/admin/rss/generate-from-versions — 将版本添加为 RSS 源
+async fn admin_generate_rss_from_versions(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let rss_url = format!("https://{}/api/versions/rss", state.domain);
+    let title = "Zebra Updates".to_string();
+    let site_url = format!("https://{}", state.domain);
+
+    let db = state.rss_db.db.lock().unwrap();
+    let result = db.execute(
+        "INSERT OR IGNORE INTO rss_sources (title, url, site_url, feed_type, category, enabled, created_at, updated_at)
+         VALUES (?1, ?2, ?3, 'rss2', '版本更新', 1, datetime('now'), datetime('now'))",
+        params![title, rss_url, site_url],
+    );
+
+    match result {
+        Ok(_) => {
+            let id = db.last_insert_rowid();
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "data": {
+                    "id": id,
+                    "title": title,
+                    "rss_url": rss_url,
+                    "site_url": site_url,
+                }
+            })))
+        }
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "success": false, "error": e.to_string() })),
+        )),
+    }
+}
+
+// ============================================================
 // Main
 // ============================================================
 
@@ -2775,6 +3151,7 @@ async fn main() {
 
     let state = Arc::new(AppState {
         db: Mutex::new(conn),
+        rss_db: rss_db.clone(),
         uploads_dir: uploads_dir.clone(),
         domain: config.domain().to_string(),
         start_time: Instant::now(),
@@ -2838,9 +3215,18 @@ async fn main() {
         .route("/api/feedback", post(submit_feedback))
         .route("/api/admin/feedback", get(admin_list_feedback))
         .route("/api/admin/feedback/batch-delete", post(admin_batch_delete_feedback))
+        .route("/api/admin/feedback/export", get(admin_export_feedback))
+        .route("/api/admin/feedback/import", post(admin_import_feedback))
         .route("/api/admin/feedback/{id}", get(admin_get_feedback))
         .route("/api/admin/feedback/{id}", axum::routing::delete(admin_delete_feedback))
         .route("/api/admin/feedback/{id}/tags", axum::routing::put(admin_update_feedback_tags))
+        // RSS Feed Generation API
+        .route("/api/blog/rss", get(blog_rss_feed))
+        .route("/api/discoveries/rss", get(discoveries_rss_feed))
+        .route("/api/versions/rss", get(versions_rss_feed))
+        .route("/api/admin/rss/generate-from-blog", post(admin_generate_rss_from_blog))
+        .route("/api/admin/rss/generate-from-discovery", post(admin_generate_rss_from_discovery))
+        .route("/api/admin/rss/generate-from-versions", post(admin_generate_rss_from_versions))
         // 静态文件服务（上传的文件 + static 目录）
         .nest_service("/api/uploads", ServeDir::new(&uploads_dir))
         .nest_service("/static", ServeDir::new(&static_dir))

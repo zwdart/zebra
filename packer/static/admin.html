@@ -180,6 +180,7 @@ td { font-size: 14px; }
             <button class="btn-filter" data-platform="ios" onclick="filterPlatform('ios')">iOS</button>
           </div>
           <button class="btn btn-primary" onclick="openUploadModal()">+ 上传新版本</button>
+          <button class="btn btn-ghost" onclick="generateVersionsRss()" title="生成版本 RSS 源" style="font-size:16px;padding:6px 10px;">📡</button>
         </div>
       </div>
       <div class="stats-bar" id="stats-bar"></div>
@@ -204,6 +205,7 @@ td { font-size: 14px; }
             <button class="btn-filter" data-type="2" onclick="filterDiscoveryType(2)">广告</button>
           </div>
           <button class="btn btn-primary" onclick="openDiscoveryCreateModal()">+ 新增发现</button>
+          <button class="btn btn-ghost" onclick="generateDiscoveryRss()" title="生成发现 RSS 源" style="font-size:16px;padding:6px 10px;">📡</button>
           <button class="btn btn-ghost" onclick="exportDiscoveries()">导出 CSV</button>
           <label class="btn btn-ghost" style="cursor:pointer;">导入 CSV<input type="file" accept=".csv" style="display:none;" onchange="importDiscoveries(this)"></label>
         </div>
@@ -224,6 +226,7 @@ td { font-size: 14px; }
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
           <input type="text" id="blog-search" placeholder="搜索文章..." style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:200px;" oninput="debounceBlogSearch()">
           <button class="btn btn-primary" onclick="openBlogCreateModal()">+ 新建文章</button>
+          <button class="btn btn-ghost" onclick="generateBlogRss()" title="生成博客 RSS 源" style="font-size:16px;padding:6px 10px;">📡</button>
           <button class="btn btn-ghost" onclick="exportBlogPosts()">导出 CSV</button>
           <label class="btn btn-ghost" style="cursor:pointer;">导入 CSV<input type="file" accept=".csv" style="display:none;" onchange="importBlogPosts(this)"></label>
           <a href="/api/blog" target="_blank" class="btn btn-ghost">查看博客</a>
@@ -244,6 +247,15 @@ td { font-size: 14px; }
         <h2>反馈列表</h2>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
           <input type="text" id="feedback-search" placeholder="搜索邮箱/主题/描述/标签..." style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:260px;" oninput="debounceFeedbackSearch()">
+          <div style="position:relative;display:inline-block;">
+            <button class="btn btn-ghost" onclick="toggleDropdown('feedbackIoDropdown')" style="display:inline-flex;align-items:center;gap:4px;">导入 / 导出 <span style="font-size:10px;">&#9660;</span></button>
+            <div id="feedbackIoDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:white;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;min-width:160px;overflow:hidden;">
+              <div style="padding:8px 14px;font-size:12px;color:#999;font-weight:600;border-bottom:1px solid #eee;">导出</div>
+              <a href="javascript:void(0)" onclick="exportFeedbackCsv();closeDropdown('feedbackIoDropdown')" style="display:block;padding:8px 14px;font-size:13px;color:#333;text-decoration:none;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📄 导出 CSV</a>
+              <div style="padding:8px 14px;font-size:12px;color:#999;font-weight:600;border-bottom:1px solid #eee;border-top:1px solid #eee;">导入</div>
+              <label style="display:block;padding:8px 14px;font-size:13px;color:#333;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📥 导入 CSV<input type="file" accept=".csv" style="display:none;" onchange="importFeedbackCsv(this);closeDropdown('feedbackIoDropdown')"></label>
+            </div>
+          </div>
           <button class="btn btn-danger" id="feedback-batch-delete-btn" style="display:none;" onclick="batchDeleteFeedback()">批量删除 (<span id="feedback-selected-count">0</span>)</button>
         </div>
       </div>
@@ -255,6 +267,29 @@ td { font-size: 14px; }
     </div>
   </div>
 
+</div>
+
+<!-- RSS 地址弹窗 -->
+<div class="modal-overlay" id="rss-modal">
+  <div class="modal" style="width:480px;">
+    <div class="modal-header">
+      <h3 id="rss-modal-title">RSS 源地址</h3>
+      <button class="modal-close" onclick="closeModal('rss-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:#555;">RSS 订阅地址</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="rss-url-input" readonly style="flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:monospace;background:#f9f9f9;">
+          <button class="btn btn-primary" onclick="copyRssUrl()">复制</button>
+        </div>
+      </div>
+      <div id="rss-modal-status" style="font-size:12px;color:#666;"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+        <button class="btn btn-ghost" onclick="closeModal('rss-modal')">关闭</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- 上传版本弹窗 -->
@@ -1489,6 +1524,116 @@ async function batchDeleteFeedback() {
     }
   } catch (e) { showToast('批量删除失败: ' + e.message, 'error'); }
 }
+
+function exportFeedbackCsv() {
+  window.open('/api/admin/feedback/export', '_blank');
+}
+
+async function importFeedbackCsv(el) {
+  const file = el.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const resp = await fetch('/api/admin/feedback/import', { method: 'POST', body: form });
+    const json = await resp.json();
+    if (json.success) {
+      showToast(`导入完成，新增 ${json.data?.imported || 0} 条反馈`);
+      loadFeedback();
+    } else {
+      showToast('导入失败: ' + (json.error || ''), 'error');
+    }
+  } catch (e) {
+    showToast('导入失败: ' + e.message, 'error');
+  }
+  el.value = '';
+}
+
+// ===================== Generate RSS from Blog/Discovery =====================
+function showRssModal(title, url, status) {
+  document.getElementById('rss-modal-title').textContent = title;
+  document.getElementById('rss-url-input').value = url;
+  document.getElementById('rss-modal-status').textContent = status || '';
+  document.getElementById('rss-modal').classList.add('active');
+}
+
+function copyRssUrl() {
+  const input = document.getElementById('rss-url-input');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(input.value).then(() => showToast('已复制到剪贴板')).catch(() => {
+      input.select();
+      document.execCommand('copy');
+      showToast('已复制');
+    });
+  } else {
+    input.select();
+    document.execCommand('copy');
+    showToast('已复制');
+  }
+}
+
+async function generateBlogRss() {
+  try {
+    const resp = await fetch('/api/admin/rss/generate-from-blog', { method: 'POST' });
+    const json = await resp.json();
+    if (json.success) {
+      const data = json.data;
+      showRssModal('博客 RSS 源', data.rss_url, '博客 RSS 源已生成并添加到订阅源列表，可前往 RSS 管理查看。');
+    } else {
+      showToast('生成失败: ' + (json.error || '未知错误'), 'error');
+    }
+  } catch (e) {
+    showToast('生成失败: ' + e.message, 'error');
+  }
+}
+
+async function generateDiscoveryRss() {
+  try {
+    const resp = await fetch('/api/admin/rss/generate-from-discovery', { method: 'POST' });
+    const json = await resp.json();
+    if (json.success) {
+      const data = json.data;
+      showRssModal('发现 RSS 源', data.rss_url, '发现 RSS 源已生成并添加到订阅源列表，可前往 RSS 管理查看。');
+    } else {
+      showToast('生成失败: ' + (json.error || '未知错误'), 'error');
+    }
+  } catch (e) {
+    showToast('生成失败: ' + e.message, 'error');
+  }
+}
+
+async function generateVersionsRss() {
+  try {
+    const resp = await fetch('/api/admin/rss/generate-from-versions', { method: 'POST' });
+    const json = await resp.json();
+    if (json.success) {
+      const data = json.data;
+      showRssModal('版本 RSS 源', data.rss_url, '版本 RSS 源已生成并添加到订阅源列表，可前往 RSS 管理查看。');
+    } else {
+      showToast('生成失败: ' + (json.error || '未知错误'), 'error');
+    }
+  } catch (e) {
+    showToast('生成失败: ' + e.message, 'error');
+  }
+}
+
+// ===================== Dropdown =====================
+function toggleDropdown(id) {
+  const el = document.getElementById(id);
+  const isOpen = el.style.display === 'block';
+  document.querySelectorAll('[id$="Dropdown"]').forEach(d => d.style.display = 'none');
+  if (!isOpen) el.style.display = 'block';
+}
+
+function closeDropdown(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('[onclick*="toggleDropdown"]')) {
+    document.querySelectorAll('[id$="Dropdown"]').forEach(d => d.style.display = 'none');
+  }
+});
 
 // ===================== Init =====================
 checkLogin();

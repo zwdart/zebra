@@ -96,6 +96,67 @@ class RssDatabaseService {
     ''');
     _db!.execute('CREATE INDEX IF NOT EXISTS idx_local_folder_items_folder ON rss_folder_items(folder_id)');
     _db!.execute('CREATE INDEX IF NOT EXISTS idx_local_folder_items_source ON rss_folder_items(source_id)');
+
+    // Auto-seed default RSS sources if database is empty
+    _seedDefaultSources();
+  }
+
+  /// Seed 5 default RSS sources and create "默认" folder with first 3 sources
+  static void _seedDefaultSources() {
+    final sourceCount = _db!
+        .select("SELECT COUNT(*) as cnt FROM feed_sources")
+        .first['cnt'] as int;
+    final folderCount = _db!
+        .select("SELECT COUNT(*) as cnt FROM rss_folders")
+        .first['cnt'] as int;
+
+    if (sourceCount > 0 && folderCount > 0) return;
+
+    final defaults = [
+      {'title': '别的', 'url': 'https://www.biede.com/feed/'},
+      {'title': '虎嗅网', 'url': 'https://rss.huxiu.com'},
+      {'title': 'Nature', 'url': 'https://www.nature.com/nature.rss'},
+      {'title': '美团技术', 'url': 'https://tech.meituan.com/rss.xml'},
+      {'title': '钛媒体', 'url': 'https://www.tmtpost.com/feed'},
+    ];
+
+    // Insert default sources
+    final insertSource = _db!.prepare('''
+      INSERT OR IGNORE INTO feed_sources (title, url, site_url, feed_type, icon_url, category, sync_enabled, sort_order, source, created_at, updated_at)
+      VALUES (?, ?, '', 'rss2', '', '', 1, 0, 'default', datetime('now'), datetime('now'))
+    ''');
+
+    final List<int> sourceIds = [];
+    for (final d in defaults) {
+      try {
+        insertSource.execute([d['title'], d['url']]);
+        final idResult = _db!.select(
+          'SELECT id FROM feed_sources WHERE url = ?',
+          [d['url']],
+        );
+        if (idResult.isNotEmpty) {
+          sourceIds.add(idResult.first['id'] as int);
+        }
+      } catch (_) {}
+    }
+    insertSource.dispose();
+
+    // Create "默认" folder
+    final stmt = _db!.prepare(
+      "INSERT INTO rss_folders (name, description, created_at, updated_at) VALUES ('默认', '默认收藏夹', datetime('now'), datetime('now'))"
+    );
+    stmt.execute([]);
+    final folderId = _db!.lastInsertRowId;
+    stmt.dispose();
+
+    // Add first 3 sources to "默认" folder
+    final addFolderItem = _db!.prepare(
+      'INSERT OR IGNORE INTO rss_folder_items (folder_id, source_id, created_at) VALUES (?, ?, datetime(\'now\'))'
+    );
+    for (final id in sourceIds.take(3)) {
+      addFolderItem.execute([folderId, id]);
+    }
+    addFolderItem.dispose();
   }
 
   // ==================== Feed Sources ====================
