@@ -102,7 +102,10 @@ td { font-size: 14px; }
 
 <div class="header">
   <h1>Zebra RSS - 数据源管理</h1>
-  <a href="/api/admin" class="btn btn-ghost" style="color:white;border-color:rgba(255,255,255,0.3);font-size:12px;">返回管理后台</a>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button class="btn btn-ghost" onclick="doRssLogout()" id="rssLogoutBtn" style="color:white;border-color:rgba(255,255,255,0.3);font-size:12px;display:none;">退出登录</button>
+    <a href="/api/admin" class="btn btn-ghost" style="color:white;border-color:rgba(255,255,255,0.3);font-size:12px;">返回管理后台</a>
+  </div>
 </div>
 
 <div class="container">
@@ -383,6 +386,34 @@ td { font-size: 14px; }
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- 登录弹窗 -->
+<div class="modal-overlay active" id="loginOverlay">
+  <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:3000;display:flex;align-items:center;justify-content:center;">
+    <div class="modal" style="width:400px;">
+      <div class="modal-header">
+        <h3>登录 RSS 管理后台</h3>
+      </div>
+      <div class="modal-body">
+        <form onsubmit="return handleRssLogin(event)">
+          <div class="form-group">
+            <label>用户名</label>
+            <input type="text" id="rss-login-username" required placeholder="admin" autofocus>
+          </div>
+          <div class="form-group">
+            <label>密码</label>
+            <input type="password" id="rss-login-password" required placeholder="请输入密码">
+          </div>
+          <div id="rss-login-error" style="color:#c62828;font-size:13px;margin-bottom:12px;display:none;"></div>
+          <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px;">
+            <button type="button" class="btn btn-ghost" onclick="closeRssLogin()">取消</button>
+            <button type="submit" class="btn btn-primary">登录</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 const PAGE_SIZES = [10, 20, 50, 100];
@@ -1204,13 +1235,71 @@ function showToast(msg, type = 'success') {
 }
 
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  if (overlay.id === 'loginOverlay') return; // Don't close login on background click
   overlay.addEventListener('click', function(e) {
     if (e.target === this) this.classList.remove('active');
   });
 });
 
-loadSources(getPageFromUrl());
-window.addEventListener('popstate', function() { loadSources(getPageFromUrl()); });
+// ===================== RSS Admin Auth =====================
+function checkRssLogin() {
+  const token = localStorage.getItem('admin_token');
+  if (token) {
+    document.getElementById('loginOverlay').style.display = 'none';
+    document.getElementById('rssLogoutBtn').style.display = '';
+    loadSources(getPageFromUrl());
+    window.addEventListener('popstate', function() { loadSources(getPageFromUrl()); });
+  } else {
+    // Not logged in — show login overlay, don't load sources yet
+    document.getElementById('loginOverlay').style.display = '';
+  }
+}
+
+function handleRssLogin(e) {
+  e.preventDefault();
+  const username = document.getElementById('rss-login-username').value;
+  const password = document.getElementById('rss-login-password').value;
+  const errEl = document.getElementById('rss-login-error');
+  errEl.style.display = 'none';
+
+  fetch('/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+  .then(r => r.text().then(text => {
+    try { return { ok: r.ok, json: JSON.parse(text) }; } catch(e) { return { ok: false, json: { error: 'Server returned non-JSON response' } }; }
+  }))
+  .then(({ ok, json }) => {
+    if (ok && json.success) {
+      localStorage.setItem('admin_token', json.token);
+      document.getElementById('loginOverlay').style.display = 'none';
+      document.getElementById('rssLogoutBtn').style.display = '';
+      loadSources(getPageFromUrl());
+      window.addEventListener('popstate', function() { loadSources(getPageFromUrl()); });
+    } else {
+      errEl.textContent = json.error || '登录失败';
+      errEl.style.display = 'block';
+    }
+  })
+  .catch(err => {
+    errEl.textContent = '网络错误: ' + err.message;
+    errEl.style.display = 'block';
+  });
+  return false;
+}
+
+function closeRssLogin() {
+  // Only allow closing if we were already logged in (rare edge case)
+  window.location.href = '/api/admin';
+}
+
+function doRssLogout() {
+  localStorage.removeItem('admin_token');
+  location.reload();
+}
+
+checkRssLogin();
 </script>
 </body>
 </html>

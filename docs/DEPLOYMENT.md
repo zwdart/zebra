@@ -15,8 +15,9 @@ zebra/
 │   ├── zebra-api.service   # Systemd 服务配置
 │   ├── zebra-api.conf      # Nginx 配置
 │   └── config.toml         # API 服务配置
-└── lib/
-    └── build_info.dart     # 构建时间 (自动生成)
+├── lib/
+│   ├── build_info.dart     # 构建时间 (自动生成，已加入 .gitignore)
+│   └── ...                 # 其余应用代码
 ```
 
 ## 环境依赖

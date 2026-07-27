@@ -133,6 +133,46 @@ zebra-api --port 8080 --static-dir ./static
 
 索引: `idx_app_launches_unique_id`, `idx_app_launches_launched_at`
 
+### rss_sources - RSS 数据源 (zebra_rss.db)
+
+独立 SQLite 数据库，路径: `{data_dir}/zebra_rss.db`
+
+| 列名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| id | INTEGER | 自增 | 主键 |
+| title | TEXT | '' | 源名称 |
+| url | TEXT | - | Feed URL (唯一索引) |
+| site_url | TEXT | '' | 网站链接 |
+| feed_type | TEXT | 'rss2' | 类型: rss1/rss2/atom |
+| category | TEXT | '' | 分类 |
+| enabled | INTEGER | 1 | 是否启用 |
+| created_at | TEXT | datetime('now') | 创建时间 |
+| updated_at | TEXT | datetime('now') | 更新时间 |
+
+索引: `idx_rss_sources_url` (唯一), `idx_rss_sources_enabled`, `idx_rss_sources_category`
+
+### rss_folders - RSS 收藏夹
+
+| 列名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| id | INTEGER | 自增 | 主键 |
+| name | TEXT | - | 文件夹名称 |
+| description | TEXT | '' | 描述 |
+| created_at | TEXT | datetime('now') | 创建时间 |
+| updated_at | TEXT | datetime('now') | 更新时间 |
+
+### rss_folder_items - 收藏夹-源关联
+
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | INTEGER | 主键 |
+| folder_id | INTEGER | 外键 → rss_folders.id, ON DELETE CASCADE |
+| source_id | INTEGER | 外键 → rss_sources.id, ON DELETE CASCADE |
+| created_at | TEXT | 关联时间 |
+
+唯一约束: `(folder_id, source_id)`
+索引: `idx_folder_items_folder`, `idx_folder_items_source`
+
 ## API 接口总览
 
 ### 公开 API
@@ -148,6 +188,9 @@ zebra-api --port 8080 --static-dir ./static
 | GET | `/api/blog/posts` | 已发布博客列表 |
 | GET | `/api/blog/posts/{id}` | 博客详情 |
 | POST | `/api/feedback` | 提交反馈 |
+| GET | `/api/blog/rss` | 博客 RSS Feed |
+| GET | `/api/discoveries/rss` | 发现 RSS Feed |
+| GET | `/api/versions/rss` | 版本 RSS Feed |
 
 ### 管理 API
 
@@ -176,6 +219,34 @@ zebra-api --port 8080 --static-dir ./static
 | POST | `/api/admin/feedback/batch-delete` | 批量删除 |
 | PUT | `/api/admin/feedback/{id}/tags` | 更新标签 |
 | GET | `/api/admin/stats/data` | 统计数据 |
+| GET | `/api/admin/rss` | RSS 管理后台页面 (HTML) |
+| GET | `/api/rss/sources` | 公开 RSS 源列表 (分页) |
+| GET | `/api/rss/folders` | 公开收藏夹列表 |
+| GET | `/api/rss/folders/{id}/sources` | 收藏夹内源列表 (分页) |
+| POST | `/api/admin/rss/sources` | 创建 RSS 源 |
+| PUT | `/api/admin/rss/sources/{id}` | 更新 RSS 源 |
+| DELETE | `/api/admin/rss/sources/{id}` | 删除 RSS 源 |
+| POST | `/api/admin/rss/sources/batch-delete` | 批量删除源 |
+| GET | `/api/admin/rss/sources/export` | 导出 CSV |
+| POST | `/api/admin/rss/sources/import` | 导入 CSV |
+| GET | `/api/admin/rss/sources/export/opml` | 导出 OPML |
+| POST | `/api/admin/rss/sources/import/opml` | 导入 OPML |
+| POST | `/api/admin/rss/generate-from-blog` | 从博客生成源 |
+| POST | `/api/admin/rss/generate-from-discovery` | 从发现生成源 |
+| POST | `/api/admin/rss/generate-from-versions` | 从版本生成源 |
+| GET | `/api/admin/rss/folders` | 收藏夹管理列表 |
+| POST | `/api/admin/rss/folders` | 创建收藏夹 |
+| PUT | `/api/admin/rss/folders/{id}` | 更新收藏夹 |
+| DELETE | `/api/admin/rss/folders/{id}` | 删除收藏夹 |
+| GET | `/api/admin/rss/folders/{id}/sources` | 收藏夹内源列表 |
+| POST | `/api/admin/rss/folders/{id}/sources` | 添加源到收藏夹 |
+| POST | `/api/admin/rss/folders/{id}/sources/batch` | 批量添加源 |
+| DELETE | `/api/admin/rss/folders/{id}/sources/{source_id}` | 移除源 |
+| POST | `/api/admin/rss/folders/{id}/sources/batch-delete` | 批量移除源 |
+| GET | `/api/admin/rss/folders/{id}/export` | 导出文件夹 CSV |
+| POST | `/api/admin/rss/folders/{id}/import` | 导入文件夹 CSV |
+| GET | `/api/admin/rss/folders/{id}/export/opml` | 导出文件夹 OPML |
+| POST | `/api/admin/rss/folders/{id}/import/opml` | 导入文件夹 OPML |
 
 ### 静态页面
 
@@ -641,6 +712,115 @@ zebra-api --port 8080 --static-dir ./static
 
 ---
 
+## RSS API (独立数据库 zebra_rss.db)
+
+### GET /api/rss/sources - 公开 RSS 源列表
+
+**查询参数**:
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| page | integer | 否 | 1 | 页码 |
+| size | integer | 否 | 20 | 每页数量 (最大 50) |
+
+**响应 (200)**:
+```json
+{ "success": true, "data": [...], "total": 10, "page": 1, "size": 20 }
+```
+
+### GET /api/rss/folders - 公开收藏夹列表
+
+**响应 (200)**: 返回 `rss_folders` + `source_count` 字段。
+
+### GET /api/rss/folders/{id}/sources - 收藏夹内源列表
+
+**路径参数**: `id` - 收藏夹 ID
+
+**查询参数**: `page`, `size`
+
+**响应 (200)**: 同 `/api/rss/sources` 格式。
+
+### POST /api/admin/rss/sources - 创建 RSS 源
+
+**请求体 (JSON)**:
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| title | string | 是 | 源名称 |
+| url | string | 是 | Feed URL |
+| site_url | string | 否 | 网站链接 |
+| feed_type | string | 否 | 类型 (默认 rss2) |
+| category | string | 否 | 分类 |
+| enabled | boolean | 否 | 启用状态 (默认 true) |
+
+**响应 (200)**: 返回创建的 `RssSource`。
+
+### PUT /api/admin/rss/sources/{id} - 更新 RSS 源
+
+所有字段可选。
+
+### DELETE /api/admin/rss/sources/{id} - 删除 RSS 源
+
+### POST /api/admin/rss/sources/batch-delete - 批量删除
+
+**请求体 (JSON)**: `{ "ids": [1, 2, 3] }`
+
+### GET /api/admin/rss/sources/export - 导出 CSV
+
+### POST /api/admin/rss/sources/import - 导入 CSV
+
+### GET /api/admin/rss/sources/export/opml - 导出 OPML
+
+### POST /api/admin/rss/sources/import/opml - 导入 OPML
+
+### RSS 源生成接口
+
+#### POST /api/admin/rss/generate-from-blog
+
+从 `blog_posts` (已发布) 批量创建 RSS 数据源，跳过已存在的 URL。
+
+#### POST /api/admin/rss/generate-from-discovery
+
+从 `discoveries` (启用) 批量创建 RSS 数据源。
+
+#### POST /api/admin/rss/generate-from-versions
+
+从 `versions` (已发布) 批量创建 RSS 数据源。
+
+### 收藏夹管理 (Admin)
+
+#### GET /api/admin/rss/folders
+
+收藏夹管理列表。
+
+#### POST /api/admin/rss/folders - 创建收藏夹
+
+**请求体**: `{ "name": "...", "description": "..." }`
+
+#### PUT /api/admin/rss/folders/{id} - 更新收藏夹
+
+#### DELETE /api/admin/rss/folders/{id} - 删除收藏夹
+
+#### GET /api/admin/rss/folders/{id}/sources - 收藏夹内源列表
+
+#### POST /api/admin/rss/folders/{id}/sources - 添加源到收藏夹
+
+#### POST /api/admin/rss/folders/{id}/sources/batch - 批量添加
+
+#### DELETE /api/admin/rss/folders/{id}/sources/{source_id} - 移除源
+
+#### POST /api/admin/rss/folders/{id}/sources/batch-delete - 批量移除
+
+#### GET /api/admin/rss/folders/{id}/export - 导出文件夹 CSV
+
+#### POST /api/admin/rss/folders/{id}/import - 导入文件夹 CSV
+
+#### GET /api/admin/rss/folders/{id}/export/opml - 导出文件夹 OPML
+
+#### POST /api/admin/rss/folders/{id}/import/opml - 导入文件夹 OPML
+
+---
+
 ## 通用数据结构
 
 ### VersionInfo
@@ -712,6 +892,24 @@ zebra-api --port 8080 --static-dir ./static
   "created_at": "2024-01-01 10:00:00"
 }
 ```
+
+### RssSource
+
+```json
+{
+  "id": 1,
+  "title": "源名称",
+  "url": "https://...",
+  "site_url": "https://...",       // 可为 null
+  "feed_type": "rss2",             // rss1/rss2/atom
+  "category": "科技",              // 可为 null
+  "enabled": true,
+  "created_at": "2024-01-01 10:00:00",
+  "updated_at": "2024-01-01 10:00:00"
+}
+```
+
+---
 
 ## 错误码
 
