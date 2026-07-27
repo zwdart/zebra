@@ -38,7 +38,7 @@ data_dir = "runtimes"                # 数据目录
 static_dir = "static"                # 静态文件目录
 log_max_bytes = 2048                 # 日志截断字节数
 admin_username = "admin"             # 管理员用户名
-admin_password = "zebra2024"         # 管理员密码
+admin_password = "zebra2016"         # 管理员密码
 ```
 
 命令行参数优先级高于 config.toml:
@@ -308,7 +308,7 @@ zebra-api --port 8080 --static-dir ./static
   "service": "zebra-api",
   "version": "1.0.0",
   "uptime_secs": 3600,
-  "started_at": "2024-01-01 10:00:00",
+  "started_at": "2016-01-01 10:00:00",
   "pid": 12345
 }
 ```
@@ -417,7 +417,7 @@ zebra-api --port 8080 --static-dir ./static
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | username | string | 是 | 用户名 (默认: admin) |
-| password | string | 是 | 密码 (默认: zebra2024) |
+| password | string | 是 | 密码 (默认: zebra2016) |
 
 **响应 (200)**:
 
@@ -837,7 +837,7 @@ zebra-api --port 8080 --static-dir ./static
   "changelog": "更新内容",           // 更新日志
   "file_size": 10485760,            // 文件大小 (字节)
   "file_hash": "sha256:abc...",     // SHA256 哈希
-  "release_date": "2024-01-01",     // 发布日期
+  "release_date": "2016-01-01",     // 发布日期
   "min_supported_version": "1.0.0", // 最低支持版本 (可为 null)
   "file_name": "zebra-1.2.0.exe"    // 原始文件名
 }
@@ -857,8 +857,8 @@ zebra-api --port 8080 --static-dir ./static
   "clicks": 100,
   "sort_order": 0,
   "enabled": true,
-  "created_at": "2024-01-01 10:00:00",
-  "updated_at": "2024-01-01 10:00:00"
+  "created_at": "2016-01-01 10:00:00",
+  "updated_at": "2016-01-01 10:00:00"
 }
 ```
 
@@ -873,8 +873,8 @@ zebra-api --port 8080 --static-dir ./static
   "tags": "flutter,dart",           // 可为 null
   "sort_order": 0,
   "published": true,
-  "created_at": "2024-01-01 10:00:00",
-  "updated_at": "2024-01-01 10:00:00"
+  "created_at": "2016-01-01 10:00:00",
+  "updated_at": "2016-01-01 10:00:00"
 }
 ```
 
@@ -889,7 +889,7 @@ zebra-api --port 8080 --static-dir ./static
   "platform": "windows",
   "app_version": "1.2.0",
   "tags": "已处理",                 // 可为 null
-  "created_at": "2024-01-01 10:00:00"
+  "created_at": "2016-01-01 10:00:00"
 }
 ```
 
@@ -904,8 +904,8 @@ zebra-api --port 8080 --static-dir ./static
   "feed_type": "rss2",             // rss1/rss2/atom
   "category": "科技",              // 可为 null
   "enabled": true,
-  "created_at": "2024-01-01 10:00:00",
-  "updated_at": "2024-01-01 10:00:00"
+  "created_at": "2016-01-01 10:00:00",
+  "updated_at": "2016-01-01 10:00:00"
 }
 ```
 

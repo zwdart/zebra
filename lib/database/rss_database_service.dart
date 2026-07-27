@@ -1,9 +1,14 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:path/path.dart' as p;
 import '../models/feed_source.dart';
 import '../models/rss_article.dart';
+
+/// 数据库加密密钥 — release 模式使用，与主数据库保持一致。
+/// TODO: 可改为从系统密钥链（Keychain / KeyStore）读取以增强安全性。
+const _dbEncryptionKey = 'zebra_db_key_2016';
 
 class RssDatabaseService {
   static Database? _db;
@@ -22,6 +27,11 @@ class RssDatabaseService {
 
     _dbPath = p.join(dbDir.path, 'zebra_rss.db');
     _db = sqlite3.open(_dbPath!);
+
+    // Release 构建启用数据库加密，调试模式不加密方便开发
+    if (kReleaseMode) {
+      _db!.execute("PRAGMA key = '$_dbEncryptionKey'");
+    }
 
     _db!.execute('''
       CREATE TABLE IF NOT EXISTS feed_sources (
@@ -139,7 +149,7 @@ class RssDatabaseService {
         }
       } catch (_) {}
     }
-    insertSource.dispose();
+    insertSource.close();
 
     // Create "默认" folder
     final stmt = _db!.prepare(
@@ -147,7 +157,7 @@ class RssDatabaseService {
     );
     stmt.execute([]);
     final folderId = _db!.lastInsertRowId;
-    stmt.dispose();
+    stmt.close();
 
     // Add first 3 sources to "默认" folder
     final addFolderItem = _db!.prepare(
@@ -156,7 +166,7 @@ class RssDatabaseService {
     for (final id in sourceIds.take(3)) {
       addFolderItem.execute([folderId, id]);
     }
-    addFolderItem.dispose();
+    addFolderItem.close();
   }
 
   // ==================== Feed Sources ====================
@@ -195,7 +205,7 @@ class RssDatabaseService {
       source.source,
     ]);
     final lastId = _db!.lastInsertRowId;
-    stmt.dispose();
+    stmt.close();
     return lastId;
   }
 
@@ -220,7 +230,7 @@ class RssDatabaseService {
       source.source,
       source.id,
     ]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void updateFeedSourceSyncTime(int id) {
@@ -228,7 +238,7 @@ class RssDatabaseService {
       UPDATE feed_sources SET last_synced_at = datetime('now'), last_sync_error = NULL, updated_at = datetime('now') WHERE id = ?
     ''');
     stmt.execute([id]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void updateFeedSourceSyncError(int id, String error) {
@@ -236,16 +246,16 @@ class RssDatabaseService {
       UPDATE feed_sources SET last_sync_error = ?, updated_at = datetime('now') WHERE id = ?
     ''');
     stmt.execute([error, id]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void deleteFeedSource(int id) {
     final stmt1 = _db!.prepare('DELETE FROM articles WHERE feed_source_id = ?');
     stmt1.execute([id]);
-    stmt1.dispose();
+    stmt1.close();
     final stmt2 = _db!.prepare('DELETE FROM feed_sources WHERE id = ?');
     stmt2.execute([id]);
-    stmt2.dispose();
+    stmt2.close();
   }
 
   static void deleteFeedSources(List<int> ids) {
@@ -340,7 +350,7 @@ class RssDatabaseService {
       article.isStarred ? 1 : 0,
     ]);
     final lastId = _db!.lastInsertRowId;
-    stmt.dispose();
+    stmt.close();
     return lastId;
   }
 
@@ -356,25 +366,25 @@ class RssDatabaseService {
   static void markAsRead(int articleId) {
     final stmt = _db!.prepare('UPDATE articles SET is_read = 1 WHERE id = ?');
     stmt.execute([articleId]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void markAllAsRead(int feedSourceId) {
     final stmt = _db!.prepare('UPDATE articles SET is_read = 1 WHERE feed_source_id = ? AND is_read = 0');
     stmt.execute([feedSourceId]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void toggleStar(int articleId) {
     final stmt = _db!.prepare('UPDATE articles SET is_starred = CASE WHEN is_starred = 1 THEN 0 ELSE 1 END WHERE id = ?');
     stmt.execute([articleId]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void deleteArticlesBefore(DateTime date) {
     final stmt = _db!.prepare('DELETE FROM articles WHERE published_at < ?');
     stmt.execute([date.toUtc().toIso8601String()]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void deleteAllArticles() {
@@ -384,7 +394,7 @@ class RssDatabaseService {
   static void deleteArticle(int id) {
     final stmt = _db!.prepare('DELETE FROM articles WHERE id = ?');
     stmt.execute([id]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void clearFeedArticles(int feedSourceId) {
@@ -442,7 +452,7 @@ class RssDatabaseService {
     );
     stmt.execute([name, description]);
     final lastId = _db!.lastInsertRowId;
-    stmt.dispose();
+    stmt.close();
     return lastId;
   }
 
@@ -451,7 +461,7 @@ class RssDatabaseService {
       "UPDATE rss_folders SET name = ?, description = ?, updated_at = datetime('now') WHERE id = ?"
     );
     stmt.execute([name, description, id]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void deleteFolder(int id) {
@@ -475,7 +485,7 @@ class RssDatabaseService {
       "INSERT OR IGNORE INTO rss_folder_items (folder_id, source_id, created_at) VALUES (?, ?, datetime('now'))"
     );
     stmt.execute([folderId, sourceId]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void removeSourceFromFolder(int folderId, int sourceId) {
@@ -506,7 +516,7 @@ class RssDatabaseService {
   }
 
   static void close() {
-    _db?.dispose();
+    _db?.close();
     _db = null;
   }
 }

@@ -40,7 +40,7 @@ pub struct Config {
     pub log_max_bytes: Option<usize>,
     /// Admin login username (default: admin)
     pub admin_username: Option<String>,
-    /// Admin login password (default: zebra2024)
+    /// Admin login password (default: zebra2016)
     pub admin_password: Option<String>,
 }
 
@@ -96,7 +96,7 @@ impl Config {
     }
 
     pub fn admin_password(&self) -> &str {
-        self.admin_password.as_deref().unwrap_or("zebra2024")
+        self.admin_password.as_deref().unwrap_or("zebra2016")
     }
 }
 

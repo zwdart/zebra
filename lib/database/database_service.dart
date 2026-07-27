@@ -1,9 +1,14 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:path/path.dart' as p;
 import '../models/ssh_connection.dart';
 import '../models/diary_entry.dart';
+
+/// 数据库加密密钥 — release 模式使用。
+/// TODO: 可改为从系统密钥链（Keychain / KeyStore）读取以增强安全性。
+const _dbEncryptionKey = 'zebra_db_key_2016';
 
 class DatabaseService {
   static Database? _db;
@@ -23,6 +28,11 @@ class DatabaseService {
 
     _dbPath = p.join(dbDir.path, 'zebra.db');
     _db = sqlite3.open(_dbPath!);
+
+    // Release 构建启用数据库加密，调试模式不加密方便开发
+    if (kReleaseMode) {
+      _db!.execute("PRAGMA key = '$_dbEncryptionKey'");
+    }
 
     _db!.execute('''
       CREATE TABLE IF NOT EXISTS connections (
@@ -85,7 +95,7 @@ class DatabaseService {
       conn.updatedAt.toIso8601String(),
     ]);
     final lastId = _db!.lastInsertRowId;
-    stmt.dispose();
+    stmt.close();
     return lastId;
   }
 
@@ -110,17 +120,17 @@ class DatabaseService {
       conn.updatedAt.toIso8601String(),
       conn.id,
     ]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void deleteConnection(int id) {
     final stmt = _db!.prepare('DELETE FROM connections WHERE id = ?');
     stmt.execute([id]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void close() {
-    _db?.dispose();
+    _db?.close();
     _db = null;
   }
 
@@ -150,7 +160,7 @@ class DatabaseService {
       entry.updatedAt.toIso8601String(),
     ]);
     final lastId = _db!.lastInsertRowId;
-    stmt.dispose();
+    stmt.close();
     return lastId;
   }
 
@@ -167,13 +177,13 @@ class DatabaseService {
       entry.updatedAt.toIso8601String(),
       entry.id,
     ]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static void deleteDiaryEntry(int id) {
     final stmt = _db!.prepare('DELETE FROM diary WHERE id = ?');
     stmt.execute([id]);
-    stmt.dispose();
+    stmt.close();
   }
 
   static List<DiaryEntry> searchDiaryEntries(String query) {
