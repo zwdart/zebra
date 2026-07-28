@@ -188,7 +188,21 @@ class AppLocalizations {
   String get uninstallFailed => translate('uninstallFailed');
   String get confirmUninstall => translate('confirmUninstall');
   String get confirmUninstallMsg => translate('confirmUninstallMsg');
-  String get systemIntegration => translate('systemIntegration');
+  String get storage => translate('storage');
+  String get storageInfo => translate('storageInfo');
+  String get processorCores => translate('processorCores');
+  String get hostName => translate('hostName');
+  String get cachePath => translate('cachePath');
+  String get databasePathLabel => translate('databasePathLabel');
+  String get localStoragePath => translate('localStoragePath');
+  String get rssDownloadPath => translate('rssDownloadPath');
+  String get clearRunningData => translate('clearRunningData');
+  String get clearAllData => translate('clearAllData');
+  String get clearRunningDataMsg => translate('clearRunningDataMsg');
+  String get clearAllDataMsg => translate('clearAllDataMsg');
+  String get clearSuccess => translate('clearSuccess');
+  String get clearFailed => translate('clearFailed');
+  String get close => translate('close');
   String get newTab => translate('newTab');
   String get noSessions => translate('noSessions');
   String get closeTab => translate('closeTab');
@@ -703,6 +717,21 @@ class AppLocalizations {
     'confirmUninstall': 'Confirm Uninstall',
     'confirmUninstallMsg': 'This will remove the application from your system. Continue?',
     'systemIntegration': 'System Integration',
+    'storage': 'Storage Space',
+    'storageInfo': 'Storage Info',
+    'processorCores': 'CPU Cores',
+    'hostName': 'Host Name',
+    'cachePath': 'Cache Path',
+    'databasePathLabel': 'Database Path',
+    'localStoragePath': 'Local Storage Path',
+    'rssDownloadPath': 'RSS Download Path',
+    'clearRunningData': 'Clear Running Data',
+    'clearAllData': 'Clear All Data',
+    'clearRunningDataMsg': 'This will clear temporary cache files. Continue?',
+    'clearAllDataMsg': 'This will clear all cache and database data. This cannot be undone. Continue?',
+    'clearSuccess': 'Cleared successfully',
+    'clearFailed': 'Clear failed',
+    'close': 'Close',
     'newTab': 'New Tab',
     'noSessions': 'No sessions',
     'closeTab': 'Close Tab',
@@ -1172,6 +1201,21 @@ class AppLocalizations {
     'confirmUninstall': '确认卸载',
     'confirmUninstallMsg': '将从系统中移除应用程序，是否继续？',
     'systemIntegration': '系统集成',
+    'storage': '存储空间',
+    'storageInfo': '存储信息',
+    'processorCores': '处理器核心',
+    'hostName': '主机名',
+    'cachePath': '缓存路径',
+    'databasePathLabel': '数据库路径',
+    'localStoragePath': '本地存储路径',
+    'rssDownloadPath': 'RSS 下载路径',
+    'clearRunningData': '清理运行数据',
+    'clearAllData': '清理全部数据',
+    'clearRunningDataMsg': '将清理临时缓存文件，是否继续？',
+    'clearAllDataMsg': '将清理所有缓存和数据库数据，此操作不可撤销，是否继续？',
+    'clearSuccess': '清理成功',
+    'clearFailed': '清理失败',
+    'close': '关闭',
     'newTab': '新建标签页',
     'noSessions': '无会话',
     'closeTab': '关闭标签页',

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../database/database_service.dart';
@@ -195,19 +196,15 @@ class _DiaryScreenState extends State<DiaryScreen> {
   }
 
   Future<void> _importCsv() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+    if (result == null || result.files.isEmpty) return;
+
     final loc = AppLocalizations.of(context);
     try {
-      final path = await ZebraPaths.filePath('diary', 'diary_import.csv');
-      final file = File(path);
-      if (!await file.exists()) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(loc.diaryImportPath.replaceAll('{path}', path))),
-          );
-        }
-        return;
-      }
-
+      final file = File(result.files.first.path!);
       final csvContent = await file.readAsString();
       final lines = csvContent.split('\n').where((l) => l.trim().isNotEmpty).toList();
       var imported = 0;

@@ -2,10 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../database/database_service.dart';
 import '../utils/unique_id.dart';
+import '../utils/zebra_paths.dart';
 import '../providers/theme_provider.dart';
 import '../providers/locale_provider.dart';
 import '../providers/update_provider.dart';
@@ -73,33 +75,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => _showThemeModePicker(context),
                 ),
                 const Divider(),
-                _buildSectionHeader(context, 'Database'),
-                ListTile(
-                  leading: const Icon(Icons.storage),
-                  title: Text('Database Path'),
-                  subtitle: Text(
-                    DatabaseService.dbDirPath,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  trailing: _buildDatabaseTrailing(context),
-                  onTap: () => _onDatabaseTap(context),
-                ),
-                const Divider(),
-                if (_showApiServer) ...[
-                  _buildSectionHeader(context, 'API'),
-                  ListTile(
-                    leading: const Icon(Icons.cloud),
-                    title: const Text('API Server'),
-                    subtitle: Text(
-                      UpdateService.apiBaseUrl,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _showApiUrlDialog(context),
-                  ),
-                  const Divider(),
-                ],
-                const Divider(),
                 _buildSectionHeader(context, loc.more),
                 ListTile(
                   leading: const Icon(Icons.article_outlined),
@@ -123,6 +98,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   },
                 ),
+                const Divider(),
+                if (_showApiServer) ...[
+                  _buildSectionHeader(context, 'API'),
+                  ListTile(
+                    leading: const Icon(Icons.cloud),
+                    title: const Text('API Server'),
+                    subtitle: Text(
+                      UpdateService.apiBaseUrl,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showApiUrlDialog(context),
+                  ),
+                  const Divider(),
+                ],
+                const Divider(),
+                _buildSectionHeader(context, loc.storage),
+                ListTile(
+                  leading: const Icon(Icons.storage),
+                  title: Text(loc.storageInfo),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showStorageInfoDialog(context),
+                ),
+                if (Platform.isLinux) ...[
+                  ListTile(
+                    leading: const Icon(Icons.delete_forever, color: Colors.red),
+                    title: Text(loc.uninstallFromSystem, style: const TextStyle(color: Colors.red)),
+                    onTap: () => _uninstallFromSystem(context),
+                  ),
+                ],
                 const Divider(),
                 _buildSectionHeader(context, loc.about),
                 Consumer<UpdateProvider>(
@@ -172,15 +177,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                 ),
                 _buildUniqueIdTile(context, loc),
-                if (Platform.isLinux) ...[
-                  const Divider(),
-                  _buildSectionHeader(context, loc.systemIntegration),
-                  ListTile(
-                    leading: const Icon(Icons.delete_forever, color: Colors.red),
-                    title: Text(loc.uninstallFromSystem, style: const TextStyle(color: Colors.red)),
-                    onTap: () => _uninstallFromSystem(context),
-                  ),
-                ],
               ],
             ),
           ),
@@ -370,6 +366,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await Share.shareXFiles([XFile(dbFile.path)], text: 'zebra.db');
   }
 
+  void _shareAllDatabases(BuildContext context) async {
+    final dirPath = DatabaseService.dbDirPath;
+    if (dirPath.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Database directory not found')),
+        );
+      }
+      return;
+    }
+
+    final dir = Directory(dirPath);
+    if (!await dir.exists()) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Database directory not found')),
+        );
+      }
+      return;
+    }
+
+    final dbFiles = dir.listSync().whereType<File>().where((f) => f.path.endsWith('.db')).toList();
+    if (dbFiles.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No database files found')),
+        );
+      }
+      return;
+    }
+
+    final xFiles = dbFiles.map((f) => XFile(f.path)).toList();
+    await Share.shareXFiles(xFiles, text: 'zebra databases');
+  }
+
   void _checkForUpdates(BuildContext context) {
     showDialog(
       context: context,
@@ -430,6 +461,263 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  void _showStorageInfoDialog(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+
+    // 异步获取路径
+    final tempDir = await Directory.systemTemp;
+    final docDir = await getApplicationDocumentsDirectory();
+    final rssDir = await ZebraPaths.rss;
+    final cachePath = tempDir.path;
+    final dbPath = DatabaseService.dbDirPath;
+    final localStoragePath = docDir.path;
+    final rssPath = rssDir.path;
+
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.storage, size: 24),
+            const SizedBox(width: 8),
+            Text(loc.storageInfo),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ========== 系统信息 ==========
+              Text(
+                loc.systemInfo,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _infoRow(loc.operatingSystem, '${Platform.operatingSystem} ${Platform.operatingSystemVersion}'),
+              const SizedBox(height: 4),
+              _infoRow(loc.processorCores, '${Platform.numberOfProcessors}'),
+              const SizedBox(height: 4),
+              _infoRow(loc.hostName, Platform.localHostname),
+              const Divider(height: 24),
+              // ========== 路径信息 ==========
+              Text(
+                loc.databasePathLabel,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _pathTile(loc.cachePath, cachePath),
+              _pathTile(loc.databasePathLabel, dbPath),
+              _pathTile(loc.localStoragePath, localStoragePath),
+              _pathTile(loc.rssDownloadPath, rssPath),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _shareAllDatabases(context);
+            },
+            child: Text(loc.shareDatabase),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _confirmClearRunningData(context);
+            },
+            child: Text(loc.clearRunningData),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _confirmClearAllData(context);
+            },
+            child: Text(
+              loc.clearAllData,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(AppLocalizations.of(context).close),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(
+            '$label:',
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+        ),
+        Expanded(
+          child: Text(value),
+        ),
+      ],
+    );
+  }
+
+  Widget _pathTile(String label, String path) {
+    return InkWell(
+      onTap: path.isNotEmpty ? () => _openDirectory(path) : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Icon(Icons.folder_open, size: 18, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    path.isNotEmpty ? path : '(empty)',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openDirectory(String path) async {
+    try {
+      if (Platform.isLinux) {
+        await Process.run('xdg-open', [path]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [path]);
+      } else if (Platform.isWindows) {
+        await Process.run('explorer', [path]);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  void _confirmClearRunningData(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.clearRunningData),
+        content: Text(loc.clearRunningDataMsg),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(loc.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(loc.confirm),
+          ),
+        ],
+      ),
+    ).then((confirmed) async {
+      if (confirmed != true || !context.mounted) return;
+      try {
+        // 清理系统临时目录下的 zebra 相关缓存
+        final tempDir = await Directory.systemTemp;
+        final zebraTemp = Directory('${tempDir.path}/zebra');
+        if (zebraTemp.existsSync()) {
+          zebraTemp.deleteSync(recursive: true);
+        }
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(loc.clearSuccess)),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${loc.clearFailed}: $e')),
+          );
+        }
+      }
+    });
+  }
+
+  void _confirmClearAllData(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.clearAllData),
+        content: Text(loc.clearAllDataMsg),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(loc.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(loc.confirm, style: const TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    ).then((confirmed) async {
+      if (confirmed != true || !context.mounted) return;
+      try {
+        // 清理临时目录缓存
+        final tempDir = await Directory.systemTemp;
+        final zebraTemp = Directory('${tempDir.path}/zebra');
+        if (zebraTemp.existsSync()) {
+          zebraTemp.deleteSync(recursive: true);
+        }
+
+        // 删除数据库文件
+        final dbFile = File(DatabaseService.dbPath);
+        if (dbFile.existsSync()) {
+          dbFile.deleteSync();
+        }
+
+        // 删除应用支持目录下的数据
+        final appDir = await getApplicationSupportDirectory();
+        final zebraData = Directory('${appDir.path}/zebra');
+        if (zebraData.existsSync()) {
+          zebraData.deleteSync(recursive: true);
+        }
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(loc.clearSuccess)),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${loc.clearFailed}: $e')),
+          );
+        }
+      }
+    });
   }
 
   String? _findPackerBinary() {
