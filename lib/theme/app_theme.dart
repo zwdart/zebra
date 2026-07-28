@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class AppTheme {
   static ThemeData light([Color? seedColor]) {
     final color = seedColor ?? Colors.blue;
+    final colorScheme = ColorScheme.fromSeed(seedColor: color, brightness: Brightness.light);
     return ThemeData(
       useMaterial3: true,
       colorSchemeSeed: color,
@@ -26,11 +27,16 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
+      dividerTheme: DividerThemeData(
+        color: colorScheme.outline,
+        thickness: 0.5,
+      ),
     );
   }
 
   static ThemeData dark([Color? seedColor]) {
     final color = seedColor ?? Colors.blue;
+    final colorScheme = ColorScheme.fromSeed(seedColor: color, brightness: Brightness.dark);
     return ThemeData(
       useMaterial3: true,
       colorSchemeSeed: color,
@@ -53,6 +59,10 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      dividerTheme: DividerThemeData(
+        color: colorScheme.outline,
+        thickness: 0.5,
       ),
     );
   }
