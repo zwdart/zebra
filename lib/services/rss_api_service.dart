@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart' show IOClient;
 import '../models/feed_source.dart';
 import 'update_service.dart';
 
@@ -149,10 +151,18 @@ class RssApiService {
     }
   }
 
+  /// 创建一个允许自签名证书的 HTTP 客户端（用于抓取 RSS 源）
+  static http.Client _createClient() {
+    final httpClient = HttpClient()
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+    return IOClient(httpClient);
+  }
+
   /// 从 URL 抓取并解析 RSS/Atom feed
   static Future<Map<String, dynamic>> fetchFeed(String url) async {
+    final client = _createClient();
     try {
-      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+      final response = await client.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final body = _decodeBody(response.bodyBytes, response.headers['content-type']);
         return {'body': body, 'contentType': response.headers['content-type']};
@@ -168,6 +178,8 @@ class RssApiService {
     } catch (e) {
       debugPrint('Fetch feed failed: $e');
       return {'error': e.toString()};
+    } finally {
+      client.close();
     }
   }
 
