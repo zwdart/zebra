@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/feed_source.dart';
 import '../models/rss_article.dart';
 import '../repositories/rss_repository.dart';
@@ -7,6 +8,7 @@ import '../services/rss_api_service.dart';
 
 class RssProvider extends ChangeNotifier {
   final RssRepository _repository = RssRepository();
+  static const _prefKeySyncInterval = 'rss_sync_interval_minutes';
 
   List<FeedSource> _feeds = [];
   List<RssArticle> _articles = [];
@@ -17,6 +19,7 @@ class RssProvider extends ChangeNotifier {
   int _articlePage = 1;
   bool _hasMoreArticles = true;
   Timer? _syncTimer;
+  int _syncIntervalMinutes = 30;
 
   List<FeedSource> get feeds => _feeds;
   List<RssArticle> get articles => _articles;
@@ -26,6 +29,7 @@ class RssProvider extends ChangeNotifier {
   String? get error => _error;
   bool get hasMoreArticles => _hasMoreArticles;
   int get totalUnreadCount => _repository.getTotalUnreadCount();
+  int get syncIntervalMinutes => _syncIntervalMinutes;
 
   String getFeedTitle(int feedSourceId) {
     final feed = _feeds.where((f) => f.id == feedSourceId).toList();
@@ -40,7 +44,9 @@ class RssProvider extends ChangeNotifier {
     return _repository.getFeedSourceByUrl(url);
   }
 
-  void init() {
+  Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    _syncIntervalMinutes = prefs.getInt(_prefKeySyncInterval) ?? 30;
     loadFeedSources();
     _startAutoSync();
   }
@@ -325,9 +331,20 @@ class RssProvider extends ChangeNotifier {
   }
 
   void _startAutoSync() {
-    _syncTimer = Timer.periodic(const Duration(minutes: 30), (_) {
+    _syncTimer?.cancel();
+    _syncTimer = Timer.periodic(Duration(minutes: _syncIntervalMinutes), (_) {
       syncAll();
     });
+  }
+
+  /// 设置同步间隔（分钟），持久化并重启定时器
+  Future<void> setSyncIntervalMinutes(int minutes) async {
+    if (minutes < 1) return;
+    _syncIntervalMinutes = minutes;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_prefKeySyncInterval, minutes);
+    _startAutoSync();
+    notifyListeners();
   }
 
   // ==================== History ====================

@@ -430,6 +430,9 @@ class AppLocalizations {
   String get rssAddToFolder => translate('rssAddToFolder');
   String get rssAddedToFolder => translate('rssAddedToFolder');
   String get rssNoFoldersAvailable => translate('rssNoFoldersAvailable');
+  String get rssSyncInterval => translate('rssSyncInterval');
+  String get rssSyncIntervalDesc => translate('rssSyncIntervalDesc');
+  String get rssSyncIntervalMin => translate('rssSyncIntervalMin');
   String get rssHistoryCleanup => translate('rssHistoryCleanup');
   String get rssClean7Days => translate('rssClean7Days');
   String get rssClean7DaysDesc => translate('rssClean7DaysDesc');
@@ -950,6 +953,9 @@ class AppLocalizations {
     'rssAddToFolder': 'Add to Folder',
     'rssAddedToFolder': 'Added to "{name}"',
     'rssNoFoldersAvailable': 'No folders, create one first',
+    'rssSyncInterval': 'Auto Sync Interval',
+    'rssSyncIntervalDesc': 'Automatically sync feeds every {min} minutes',
+    'rssSyncIntervalMin': '{min} min',
     'rssHistoryCleanup': 'History Cleanup',
     'rssClean7Days': 'Clean 7-day old',
     'rssClean7DaysDesc': 'Delete articles older than 7 days',
@@ -1434,6 +1440,9 @@ class AppLocalizations {
     'rssAddToFolder': '加入收藏夹',
     'rssAddedToFolder': '已加入「{name}」',
     'rssNoFoldersAvailable': '暂无收藏夹，请先创建',
+    'rssSyncInterval': '自动同步间隔',
+    'rssSyncIntervalDesc': '每隔 {min} 分钟自动同步一次',
+    'rssSyncIntervalMin': '{min} 分钟',
     'rssHistoryCleanup': '历史数据清理',
     'rssClean7Days': '清理 7 天前的文章',
     'rssClean7DaysDesc': '删除 7 天以前的所有文章',

@@ -4,9 +4,14 @@ import '../../providers/rss_provider.dart';
 import '../../widgets/custom_title_bar.dart';
 import '../../l10n/app_localizations.dart';
 
-class RssSettingsScreen extends StatelessWidget {
+class RssSettingsScreen extends StatefulWidget {
   const RssSettingsScreen({super.key});
 
+  @override
+  State<RssSettingsScreen> createState() => _RssSettingsScreenState();
+}
+
+class _RssSettingsScreenState extends State<RssSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
@@ -24,41 +29,87 @@ class RssSettingsScreen extends StatelessWidget {
   }
 
   Widget _buildBody(BuildContext context) {
-    final loc = AppLocalizations.of(context);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _buildSection(
-          context,
-          title: loc.rssHistoryCleanup,
-          children: [
-            Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.delete_outline),
-                    title: Text(loc.rssClean7Days),
-                    subtitle: Text(loc.rssClean7DaysDesc),
-                    onTap: () => _clearHistory(context, days: 7),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.delete_outline),
-                    title: Text(loc.rssClean30Days),
-                    subtitle: Text(loc.rssClean30DaysDesc),
-                    onTap: () => _clearHistory(context, days: 30),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: Icon(Icons.delete_forever, color: Theme.of(context).colorScheme.error),
-                    title: Text(loc.rssCleanAll, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                    subtitle: Text(loc.rssCleanAllDesc),
-                    onTap: () => _clearAllArticles(context),
-                  ),
-                ],
+        _buildSyncIntervalSection(context),
+        const SizedBox(height: 24),
+        _buildHistoryCleanupSection(context),
+      ],
+    );
+  }
+
+  Widget _buildSyncIntervalSection(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final provider = context.watch<RssProvider>();
+    final currentMin = provider.syncIntervalMinutes;
+    const options = [15, 30, 60, 120];
+
+    return _buildSection(
+      context,
+      title: loc.rssSyncInterval,
+      children: [
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.sync),
+                title: Text(loc.rssSyncInterval),
+                subtitle: Text(loc.rssSyncIntervalDesc.replaceAll('{min}', '$currentMin')),
+                trailing: DropdownButton<int>(
+                  value: currentMin,
+                  underline: const SizedBox(),
+                  items: options.map((min) {
+                    return DropdownMenuItem(
+                      value: min,
+                      child: Text(loc.rssSyncIntervalMin.replaceAll('{min}', '$min')),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null && value != currentMin) {
+                      provider.setSyncIntervalMinutes(value);
+                    }
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHistoryCleanupSection(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    return _buildSection(
+      context,
+      title: loc.rssHistoryCleanup,
+      children: [
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: Text(loc.rssClean7Days),
+                subtitle: Text(loc.rssClean7DaysDesc),
+                onTap: () => _clearHistory(context, days: 7),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: Text(loc.rssClean30Days),
+                subtitle: Text(loc.rssClean30DaysDesc),
+                onTap: () => _clearHistory(context, days: 30),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: Icon(Icons.delete_forever, color: Theme.of(context).colorScheme.error),
+                title: Text(loc.rssCleanAll, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                subtitle: Text(loc.rssCleanAllDesc),
+                onTap: () => _clearAllArticles(context),
+              ),
+            ],
+          ),
         ),
       ],
     );

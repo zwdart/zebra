@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zebra SSH - 友好的 SSH 客户端</title>
+    <title>Zebra RSS - 强大的 RSS 阅读器</title>
     <style>
         :root {
-            --primary: #7dd3fc;
-            --primary-light: #bae6fd;
-            --primary-dark: #38bdf8;
-            --gradient: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%);
-            --bg-dark: #0c1f35;
-            --bg-section-alt: #102744;
+            --primary: #fb923c;
+            --primary-light: #fdba74;
+            --primary-dark: #f97316;
+            --gradient: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+            --bg-dark: #1c0f0c;
+            --bg-section-alt: #271712;
             --text-white: #ffffff;
-            --text-light: #94a3b8;
+            --text-light: #a3948b;
             --card-bg: rgba(255, 255, 255, 0.06);
-            --card-border: rgba(125, 211, 252, 0.25);
+            --card-border: rgba(251, 146, 60, 0.25);
         }
         
         * {
@@ -48,10 +48,10 @@
             top: 0;
             left: 0;
             right: 0;
-            background: rgba(12, 31, 53, 0.92);
+            background: rgba(28, 15, 12, 0.92);
             backdrop-filter: blur(20px);
             z-index: 1000;
-            border-bottom: 1px solid rgba(125, 211, 252, 0.2);
+            border-bottom: 1px solid rgba(251, 146, 60, 0.2);
         }
         
         .navbar .container {
@@ -116,7 +116,7 @@
         .nav-links a.active::after {
             width: 100%;
         }
-        
+
         .nav-switch-btn {
             padding: 8px 20px;
             background: transparent;
@@ -143,12 +143,12 @@
             border-radius: 25px;
             font-weight: 600;
             transition: all 0.3s;
-            box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3);
+            box-shadow: 0 4px 20px rgba(251, 146, 60, 0.3);
         }
         
         .nav-download-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 25px rgba(56, 189, 248, 0.4);
+            box-shadow: 0 6px 25px rgba(251, 146, 60, 0.4);
         }
         
         .menu-toggle {
@@ -164,7 +164,7 @@
         header {
             padding: 140px 20px 80px;
             text-align: center;
-            background: radial-gradient(ellipse at top, rgba(125, 211, 252, 0.18) 0%, transparent 60%);
+            background: radial-gradient(ellipse at top, rgba(251, 146, 60, 0.18) 0%, transparent 60%);
         }
         
         .logo-container {
@@ -176,14 +176,14 @@
             width: 130px;
             height: 130px;
             border-radius: 28px;
-            box-shadow: 0 20px 60px rgba(125, 211, 252, 0.4);
+            box-shadow: 0 20px 60px rgba(251, 146, 60, 0.4);
         }
         
         h1 {
             font-size: 3.5rem;
             font-weight: 800;
             margin-bottom: 15px;
-            background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 50%, #0ea5e9 100%);
+            background: linear-gradient(135deg, #fb923c 0%, #f97316 50%, #ea580c 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -237,10 +237,10 @@
         }
         
         .feature-card:hover {
-            background: rgba(125, 211, 252, 0.1);
+            background: rgba(251, 146, 60, 0.1);
             border-color: var(--primary);
             transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(125, 211, 252, 0.18);
+            box-shadow: 0 15px 40px rgba(251, 146, 60, 0.18);
         }
         
         .feature-icon {
@@ -253,7 +253,7 @@
             justify-content: center;
             font-size: 1.8rem;
             margin-bottom: 20px;
-            box-shadow: 0 8px 25px rgba(125, 211, 252, 0.3);
+            box-shadow: 0 8px 25px rgba(251, 146, 60, 0.3);
         }
         
         .feature-title {
@@ -329,7 +329,7 @@
         }
         
         .step:hover {
-            background: rgba(125, 211, 252, 0.1);
+            background: rgba(251, 146, 60, 0.1);
             border-color: var(--primary);
         }
         
@@ -345,7 +345,7 @@
             font-size: 1.4rem;
             color: white;
             flex-shrink: 0;
-            box-shadow: 0 6px 20px rgba(125, 211, 252, 0.35);
+            box-shadow: 0 6px 20px rgba(251, 146, 60, 0.35);
         }
         
         .step-content h3 {
@@ -415,9 +415,9 @@
         }
         
         .platform-group:hover {
-            background: rgba(125, 211, 252, 0.1);
+            background: rgba(251, 146, 60, 0.1);
             border-color: var(--primary);
-            box-shadow: 0 10px 30px rgba(125, 211, 252, 0.12);
+            box-shadow: 0 10px 30px rgba(251, 146, 60, 0.12);
         }
         
         .platform-header {
@@ -436,7 +436,7 @@
             align-items: center;
             justify-content: center;
             font-size: 1.5rem;
-            box-shadow: 0 6px 20px rgba(125, 211, 252, 0.3);
+            box-shadow: 0 6px 20px rgba(251, 146, 60, 0.3);
         }
         
         .platform-name {
@@ -462,12 +462,12 @@
             border-radius: 10px;
             font-weight: 500;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(125, 211, 252, 0.35);
+            box-shadow: 0 4px 15px rgba(251, 146, 60, 0.35);
         }
         
         .download-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(125, 211, 252, 0.45);
+            box-shadow: 0 8px 25px rgba(251, 146, 60, 0.45);
         }
         
         .download-btn i {
@@ -508,10 +508,10 @@
         }
         
         .sponsor-card:hover {
-            background: rgba(125, 211, 252, 0.1);
+            background: rgba(251, 146, 60, 0.1);
             border-color: var(--primary);
             transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(125, 211, 252, 0.18);
+            box-shadow: 0 15px 40px rgba(251, 146, 60, 0.18);
         }
         
         .sponsor-icon {
@@ -524,7 +524,7 @@
             justify-content: center;
             font-size: 2rem;
             margin: 0 auto 15px;
-            box-shadow: 0 8px 25px rgba(125, 211, 252, 0.35);
+            box-shadow: 0 8px 25px rgba(251, 146, 60, 0.35);
         }
         
         .sponsor-icon i {
@@ -547,7 +547,7 @@
         footer {
             padding: 40px 20px;
             text-align: center;
-            border-top: 1px solid rgba(125, 211, 252, 0.2);
+            border-top: 1px solid rgba(251, 146, 60, 0.2);
             background: var(--bg-section-alt);
         }
         
@@ -583,21 +583,24 @@
                 top: 70px;
                 left: 0;
                 right: 0;
-                background: rgba(12, 31, 53, 0.98);
+                background: rgba(28, 15, 12, 0.98);
                 flex-direction: column;
                 align-items: center;
                 padding: 30px 0;
                 gap: 25px;
                 transform: translateY(-150%);
                 transition: transform 0.3s ease;
-                border-bottom: 1px solid rgba(125, 211, 252, 0.2);
+                border-bottom: 1px solid rgba(251, 146, 60, 0.2);
             }
             
             .nav-links.active {
                 transform: translateY(0);
             }
             
-            .nav-switch-btn,
+            .nav-switch-btn {
+                display: none;
+            }
+            
             .nav-download-btn {
                 display: none;
             }
@@ -646,8 +649,8 @@
     <nav class="navbar">
         <div class="container">
             <a href="#" class="nav-logo">
-                <img src="./assets/icons/icon.png" alt="Zebra SSH">
-                <span>Zebra SSH</span>
+                <img src="./assets/icons/icon.png" alt="Zebra RSS">
+                <span>Zebra RSS</span>
             </a>
             <ul class="nav-links">
                 <li><a href="#features">核心功能</a></li>
@@ -655,8 +658,8 @@
                 <li><a href="#download">下载安装</a></li>
                 <li><a href="#sponsors">友情赞助</a></li>
             </ul>
-            <a href="rss.html" class="nav-switch-btn">
-                <i class="fas fa-rss"></i> RSS 阅读
+            <a href="index.html" class="nav-switch-btn">
+                <i class="fas fa-terminal"></i> SSH 终端
             </a>
             <a href="#download" class="nav-download-btn">立即下载</a>
             <button class="menu-toggle" onclick="toggleMenu()">
@@ -668,10 +671,10 @@
     <header>
         <div class="container">
             <div class="logo-container">
-                <img src="./assets/icons/icon.png" alt="Zebra SSH Logo" class="logo">
+                <img src="./assets/icons/icon.png" alt="Zebra RSS Logo" class="logo">
             </div>
-            <h1>Zebra SSH</h1>
-            <p class="tagline">友好的 SSH 客户端，跨平台服务器管理工具</p>
+            <h1>Zebra RSS</h1>
+            <p class="tagline">强大的 RSS 阅读器，一站式管理您的信息订阅</p>
         </div>
     </header>
     
@@ -685,113 +688,114 @@
             <div class="feature-grid">
                 <div class="feature-card" onclick="toggleFeature(this)">
                     <div class="feature-icon">
-                        <i class="fas fa-terminal"></i>
+                        <i class="fas fa-rss"></i>
                     </div>
-                    <h3 class="feature-title">SSH 终端</h3>
-                    <p class="feature-desc">完整的 SSH 终端体验，支持多种终端操作</p>
+                    <h3 class="feature-title">订阅源管理</h3>
+                    <p class="feature-desc">便捷管理您的 RSS/Atom 订阅源，分类整理</p>
                     <div class="feature-details">
                         <h4>详细功能：</h4>
                         <ul>
-                            <li>支持 SSH2 协议连接</li>
-                            <li>密钥认证和密码认证</li>
-                            <li>终端窗口大小自适应</li>
-                            <li>支持 ANSI 颜色</li>
-                            <li>会话保持和重连</li>
-                            <li>终端历史记录</li>
+                            <li>支持 RSS 2.0 / RSS 1.0 / Atom 格式</li>
+                            <li>文件夹分类管理订阅源</li>
+                            <li>导入导出 OPML / CSV 格式</li>
+                            <li>从 URL 快速添加订阅源</li>
+                            <li>云端收藏夹同步</li>
+                            <li>自动检测 Feed 类型</li>
                         </ul>
                     </div>
                 </div>
                 
                 <div class="feature-card" onclick="toggleFeature(this)">
                     <div class="feature-icon">
-                        <i class="fas fa-folder-open"></i>
+                        <i class="fas fa-newspaper"></i>
                     </div>
-                    <h3 class="feature-title">SFTP 文件管理</h3>
-                    <p class="feature-desc">图形化文件传输和管理界面</p>
+                    <h3 class="feature-title">文章阅读</h3>
+                    <p class="feature-desc">清晰舒适的阅读体验，支持全文浏览</p>
                     <div class="feature-details">
                         <h4>详细功能：</h4>
                         <ul>
-                            <li>可视化文件浏览</li>
-                            <li>拖拽上传下载</li>
-                            <li>批量文件操作</li>
-                            <li>文件权限管理</li>
-                            <li>目录同步功能</li>
-                            <li>文件搜索和过滤</li>
+                            <li>文章列表浏览，支持分页</li>
+                            <li>文章详情阅读，图文并茂</li>
+                            <li>文章搜索与筛选</li>
+                            <li>阅读进度跟踪</li>
+                            <li>收藏重要文章</li>
+                            <li>外部链接跳转</li>
                         </ul>
                     </div>
                 </div>
                 
                 <div class="feature-card" onclick="toggleFeature(this)">
                     <div class="feature-icon">
-                        <i class="fas fa-chart-line"></i>
+                        <i class="fas fa-sync-alt"></i>
                     </div>
-                    <h3 class="feature-title">服务器监控</h3>
-                    <p class="feature-desc">实时监控服务器资源使用情况</p>
+                    <h3 class="feature-title">自动同步</h3>
+                    <p class="feature-desc">定时自动更新订阅内容，不错过任何更新</p>
                     <div class="feature-details">
                         <h4>详细功能：</h4>
                         <ul>
-                            <li>CPU 使用率监控</li>
-                            <li>内存使用情况</li>
-                            <li>磁盘空间监控</li>
-                            <li>网络流量统计</li>
-                            <li>系统负载查看</li>
-                            <li>进程资源占用</li>
+                            <li>定时自动同步（可设置 15/30/60/120 分钟间隔）</li>
+                            <li>手动一键同步所有订阅</li>
+                            <li>单个订阅源独立同步</li>
+                            <li>同步错误提示和重试</li>
+                            <li>增量更新，仅获取新文章</li>
+                            <li>同步状态实时反馈</li>
                         </ul>
                     </div>
                 </div>
                 
                 <div class="feature-card" onclick="toggleFeature(this)">
                     <div class="feature-icon">
-                        <i class="fas fa-cogs"></i>
+                        <i class="fas fa-bookmark"></i>
                     </div>
-                    <h3 class="feature-title">进程管理</h3>
-                    <p class="feature-desc">查看和管理系统进程</p>
+                    <h3 class="feature-title">收藏与标记</h3>
+                    <p class="feature-desc">标记已读、收藏重要文章，高效管理信息</p>
                     <div class="feature-details">
                         <h4>详细功能：</h4>
                         <ul>
-                            <li>进程列表查看</li>
-                            <li>进程详情信息</li>
-                            <li>进程状态监控</li>
-                            <li>进程资源占用</li>
-                            <li>进程搜索过滤</li>
-                            <li>进程终止操作</li>
+                            <li>标记已读 / 全部标为已读</li>
+                            <li>文章收藏（星标）</li>
+                            <li>未读计数提示</li>
+                            <li>查看文章阅读状态</li>
+                            <li>历史记录清理</li>
+                            <li>按阅读状态筛选</li>
                         </ul>
                     </div>
                 </div>
                 
                 <div class="feature-card" onclick="toggleFeature(this)">
                     <div class="feature-icon">
-                        <i class="fas fa-broom"></i>
+                        <i class="fas fa-history"></i>
                     </div>
-                    <h3 class="feature-title">磁盘清理</h3>
-                    <p class="feature-desc">清理服务器磁盘空间</p>
+                    <h3 class="feature-title">历史管理</h3>
+                    <p class="feature-desc">灵活管理文章历史，自动清理过期内容</p>
                     <div class="feature-details">
                         <h4>详细功能：</h4>
                         <ul>
-                            <li>磁盘空间分析</li>
-                            <li>大文件查找</li>
-                            <li>临时文件清理</li>
-                            <li>日志文件清理</li>
-                            <li>缓存文件清理</li>
-                            <li>自定义清理规则</li>
+                            <li>7 天 / 30 天历史清理</li>
+                            <li>一键清空所有文章</li>
+                            <li>按订阅源清理历史</li>
+                            <li>指定日期范围清理</li>
+                            <li>本地存储效率优化</li>
+                            <li>数据库自动维护</li>
                         </ul>
                     </div>
                 </div>
                 
                 <div class="feature-card" onclick="toggleFeature(this)">
                     <div class="feature-icon">
-                        <i class="fas fa-globe"></i>
+                        <i class="fas fa-shield-alt"></i>
                     </div>
-                    <h3 class="feature-title">跨平台支持</h3>
-                    <p class="feature-desc">支持多种操作系统平台</p>
+                    <h3 class="feature-title">离线可用</h3>
+                    <p class="feature-desc">文章本地存储，随时随地离线阅读</p>
                     <div class="feature-details">
-                        <h4>支持平台：</h4>
+                        <h4>详细功能：</h4>
                         <ul>
-                            <li>Android 手机和平板</li>
-                            <li>iOS 设备</li>
-                            <li>Windows 桌面</li>
-                            <li>macOS 桌面</li>
-                            <li>Linux 桌面</li>
+                            <li>文章内容本地持久化</li>
+                            <li>离线浏览已同步文章</li>
+                            <li>跨会话阅读记录保持</li>
+                            <li>低流量消耗（增量同步）</li>
+                            <li>高效的本地数据库存储</li>
+                            <li>支持大量订阅源</li>
                         </ul>
                     </div>
                 </div>
@@ -809,7 +813,7 @@
                 <div class="step" onclick="toggleStep(this)">
                     <div class="step-number">1</div>
                     <div class="step-content">
-                        <h3>下载安装</h3>
+                        <h3>下载安装 Zebra</h3>
                         <p>选择适合您设备的版本进行下载</p>
                         <div class="step-details">
                             <p><strong>Android 用户：</strong>下载 APK 文件后，允许安装未知来源应用，按照提示完成安装。</p>
@@ -822,19 +826,15 @@
                 <div class="step" onclick="toggleStep(this)">
                     <div class="step-number">2</div>
                     <div class="step-content">
-                        <h3>添加服务器连接</h3>
-                        <p>配置您的服务器连接信息</p>
+                        <h3>添加 RSS 订阅源</h3>
+                        <p>将您关注的博客、新闻源添加到应用</p>
                         <div class="step-details">
-                            <p>1. 打开 Zebra SSH 应用</p>
+                            <p>1. 打开 Zebra 应用，进入 RSS 功能</p>
                             <p>2. 点击右下角的 "+" 按钮</p>
-                            <p>3. 填写服务器信息：</p>
-                            <ul>
-                                <li>连接名称（便于识别）</li>
-                                <li>服务器地址（IP 或域名）</li>
-                                <li>端口号（默认 22）</li>
-                                <li>用户名</li>
-                                <li>密码或密钥文件</li>
-                            </ul>
+                            <p>3. 输入订阅源的 RSS/Atom URL 地址</p>
+                            <p>4. 系统自动检测 Feed 类型并获取信息</p>
+                            <p>5. 可选：设置订阅源名称和分类文件夹</p>
+                            <p><strong>提示：</strong>支持 OPML 文件批量导入，在管理页面选择"导入"即可。</p>
                         </div>
                     </div>
                 </div>
@@ -842,14 +842,15 @@
                 <div class="step" onclick="toggleStep(this)">
                     <div class="step-number">3</div>
                     <div class="step-content">
-                        <h3>连接服务器</h3>
-                        <p>点击连接按钮建立 SSH 连接</p>
+                        <h3>同步与阅读</h3>
+                        <p>自动或手动同步文章，开始阅读</p>
                         <div class="step-details">
-                            <p>1. 在服务器列表中找到您的服务器</p>
-                            <p>2. 点击 "连接" 按钮</p>
-                            <p>3. 等待连接建立</p>
-                            <p>4. 连接成功后将自动进入终端界面</p>
-                            <p><strong>提示：</strong>首次连接可能需要确认服务器指纹。</p>
+                            <p>1. 应用会自动每 30 分钟同步一次订阅源</p>
+                            <p>2. 也可点击同步按钮手动立即同步</p>
+                            <p>3. 同步完成后，未读文章数会更新</p>
+                            <p>4. 点击订阅源进入文章列表</p>
+                            <p>5. 点击文章标题查看详细内容</p>
+                            <p><strong>提示：</strong>可在设置中调整同步间隔和清理策略。</p>
                         </div>
                     </div>
                 </div>
@@ -857,14 +858,14 @@
                 <div class="step" onclick="toggleStep(this)">
                     <div class="step-number">4</div>
                     <div class="step-content">
-                        <h3>使用各项功能</h3>
-                        <p>探索 Zebra SSH 的强大功能</p>
+                        <h3>高效管理</h3>
+                        <p>使用各种管理功能优化您的阅读体验</p>
                         <div class="step-details">
-                            <p><strong>终端功能：</strong>在终端界面输入命令，支持完整的 SSH 终端体验。</p>
-                            <p><strong>SFTP 文件管理：</strong>点击 "文件管理" 按钮，图形化管理服务器文件。</p>
-                            <p><strong>服务器监控：</strong>点击 "监控" 按钮，实时查看服务器资源使用情况。</p>
-                            <p><strong>进程管理：</strong>点击 "进程" 按钮，查看和管理系统进程。</p>
-                            <p><strong>磁盘清理：</strong>点击 "清理" 按钮，清理服务器磁盘空间。</p>
+                            <p><strong>分类管理：</strong>创建文件夹，将同类订阅源归类整理。</p>
+                            <p><strong>已读标记：</strong>阅读后自动或手动标记已读，亦可一键全部标为已读。</p>
+                            <p><strong>收藏文章：</strong>点击星标收藏重要文章，方便日后查阅。</p>
+                            <p><strong>历史清理：</strong>定期清理旧文章，节省存储空间。</p>
+                            <p><strong>导入导出：</strong>通过 OPML/CSV 在不同阅读器之间迁移订阅源。</p>
                         </div>
                     </div>
                 </div>
@@ -891,10 +892,6 @@
                         <i class="fas fa-download"></i>
                         Windows (64位)
                     </a>
-                    <!-- <a href="javascript:void(0)" class="download-btn disabled" onclick="return false">
-                        <i class="fas fa-download"></i>
-                        Windows (32位)
-                    </a> -->
                 </div>
             </div>
             
@@ -946,7 +943,7 @@
                 </div>
             </div>
 
-                        <!-- Android -->
+            <!-- Android -->
             <div class="platform-group">
                 <div class="platform-header">
                     <div class="platform-icon">
@@ -1032,9 +1029,9 @@
     
     <footer>
         <div class="container">
-            <p>&copy; 2016 Zebra SSH. All rights reserved.</p>
+            <p>&copy; 2016 Zebra RSS. All rights reserved.</p>
             <div class="footer-links">
-                <a href="rss.html"><i class="fas fa-rss"></i> Zebra RSS - 阅读器</a>
+                <a href="index.html"><i class="fas fa-terminal"></i> Zebra SSH - 终端管理</a>
                 <a href="http://zebra.dart.xin">官方网站</a>
                 <a href="https://github.com/zwdart">GitHub</a>
                 <a href="mailto:zebra@dart.xin">联系我们</a>
