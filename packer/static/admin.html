@@ -210,7 +210,6 @@ td { font-size: 14px; }
           <label class="btn btn-ghost" style="cursor:pointer;">导入 CSV<input type="file" accept=".csv" style="display:none;" onchange="importDiscoveries(this)"></label>
         </div>
       </div>
-      <div class="stats-bar" id="discovery-stats-bar"></div>
       <div class="card-body" style="padding-bottom:0;">
         <div id="discoveries-table"></div>
       </div>
@@ -232,7 +231,6 @@ td { font-size: 14px; }
           <a href="/api/blog" target="_blank" class="btn btn-ghost">查看博客</a>
         </div>
       </div>
-      <div class="stats-bar" id="blog-stats-bar"></div>
       <div class="card-body" style="padding-bottom:0;">
         <div id="blog-table"></div>
       </div>
@@ -259,7 +257,6 @@ td { font-size: 14px; }
           <button class="btn btn-danger" id="feedback-batch-delete-btn" style="display:none;" onclick="batchDeleteFeedback()">批量删除 (<span id="feedback-selected-count">0</span>)</button>
         </div>
       </div>
-      <div class="stats-bar" id="feedback-stats-bar"></div>
       <div class="card-body" style="padding-bottom:0;">
         <div id="feedback-table"></div>
       </div>
@@ -465,6 +462,10 @@ td { font-size: 14px; }
         <div class="form-group">
           <label>图标 URL</label>
           <input type="url" id="discovery-icon">
+        </div>
+        <div class="form-group">
+          <label>宣传图 URL</label>
+          <input type="url" id="discovery-banner" placeholder="可选，建议 16:9 比例，如 1280×720">
         </div>
         <div class="form-group">
           <label>标签 (tags)</label>
@@ -892,16 +893,9 @@ async function loadDiscoveries(page) {
     discoveryTotal = json.total || 0;
     renderDiscoveryTable(discoveryData);
     renderDiscoveryPagination();
-    updateDiscoveryStats();
   } catch (e) {
     showToast('加载发现列表失败: ' + e.message, 'error');
   }
-}
-
-function updateDiscoveryStats() {
-  document.getElementById('discovery-stats-bar').innerHTML = `
-    <span>共 <span class="count">${discoveryTotal}</span> 条</span>
-  `;
 }
 
 function filterDiscoveryType(type) {
@@ -921,7 +915,7 @@ function renderDiscoveryTable(items) {
     return;
   }
   let html = `<div class="table-scroll"><table><thead><tr>
-    <th>ID</th><th>类型</th><th>图标</th><th>名称</th><th>简介</th><th>标签</th><th>链接</th><th>点击数</th><th>排序</th><th>状态</th><th>创建时间</th><th>操作</th>
+    <th>ID</th><th>类型</th><th>图标</th><th>宣传图</th><th>名称</th><th>简介</th><th>标签</th><th>链接</th><th>点击数</th><th>排序</th><th>状态</th><th>创建时间</th><th>操作</th>
   </tr></thead><tbody>`;
   for (const d of items) {
     const typeName = TYPE_NAMES[d.type] || '未知';
@@ -930,10 +924,12 @@ function renderDiscoveryTable(items) {
     const enabledHtml = d.enabled ? '<span class="enabled-badge enabled-true">启用</span>' : '<span class="enabled-badge enabled-false">禁用</span>';
     const tagsHtml = d.tags ? d.tags.split(',').map(t => t.trim()).filter(t => t).map(t => `<span class="type-badge type-badge-1" style="margin:1px;">${escHtml(t)}</span>`).join(' ') : '-';
     const iconHtml = d.icon_url ? `<img src="${escHtml(d.icon_url)}" style="width:24px;height:24px;border-radius:4px;object-fit:cover;" onerror="this.style.display='none'" title="${escHtml(d.icon_url)}">` : '<span style="color:#ccc;">-</span>';
+    const bannerHtml = d.banner_url ? `<img src="${escHtml(d.banner_url)}" style="width:80px;height:45px;border-radius:4px;object-fit:cover;cursor:pointer;" onerror="this.style.display='none'" onclick="window.open('${escHtml(d.banner_url).replace(/'/g, "\\'")}','_blank')" title="${escHtml(d.banner_url)}">` : '<span style="color:#ccc;">-</span>';
     html += `<tr>
       <td>${d.id}</td>
       <td><span class="type-badge type-badge-${d.type}">${typeName}</span></td>
       <td>${iconHtml}</td>
+      <td>${bannerHtml}</td>
       <td><strong>${escHtml(d.name)}</strong></td>
       <td title="${escHtml(d.description)}">${escHtml(desc)}</td>
       <td>${tagsHtml}</td>
@@ -1004,6 +1000,7 @@ function openDiscoveryEditModal(id) {
   document.getElementById('discovery-desc').value = d.description || '';
   document.getElementById('discovery-url').value = d.url || '';
   document.getElementById('discovery-icon').value = d.icon_url || '';
+  document.getElementById('discovery-banner').value = d.banner_url || '';
   document.getElementById('discovery-tags').value = d.tags || '';
   document.getElementById('discovery-sort').value = d.sort_order || 0;
   document.getElementById('discovery-enabled').value = d.enabled ? 'true' : 'false';
@@ -1021,6 +1018,7 @@ async function handleDiscoverySave(e) {
     description: document.getElementById('discovery-desc').value,
     url: document.getElementById('discovery-url').value,
     icon_url: document.getElementById('discovery-icon').value,
+    banner_url: document.getElementById('discovery-banner').value,
     tags: document.getElementById('discovery-tags').value,
     sort_order: parseInt(document.getElementById('discovery-sort').value) || 0,
     enabled: document.getElementById('discovery-enabled').value === 'true',
@@ -1153,8 +1151,6 @@ async function loadBlogPosts(page) {
     blogTotal = json.total || 0;
     renderBlogTable(json.data || []);
     renderBlogPagination();
-    document.getElementById('blog-stats-bar').innerHTML =
-      `<span>共 <span class="count">${blogTotal}</span> 篇文章</span>`;
   } catch (e) { showToast('加载博客失败: ' + e.message, 'error'); }
 }
 
@@ -1338,8 +1334,6 @@ async function loadFeedback(page) {
     feedbackTotal = json.total || 0;
     renderFeedbackTable(feedbackData);
     renderFeedbackPagination();
-    document.getElementById('feedback-stats-bar').innerHTML =
-      `<span>共 <span class="count">${feedbackTotal}</span> 条反馈</span>`;
   } catch (e) {
     showToast('加载反馈列表失败: ' + e.message, 'error');
   }

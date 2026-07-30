@@ -8,6 +8,7 @@ import 'rss_article_detail_screen.dart';
 import 'rss_source_manage_screen.dart';
 import 'rss_settings_screen.dart';
 import 'rss_folder_manage_screen.dart';
+import 'rss_explore_screen.dart';
 
 class RssFeedListScreen extends StatefulWidget {
   const RssFeedListScreen({super.key});
@@ -50,7 +51,7 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
   String _title(AppLocalizations loc) {
     switch (_viewMode) {
       case ViewMode.all:
-        return loc.rssSubscription;
+        return 'Zebra RSS';
       case ViewMode.starred:
         return loc.rssFavorites;
       case ViewMode.folder:
@@ -118,21 +119,18 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
       appBar: isDesktop
           ? null
           : AppBar(
-              title: Text(_title(loc)),
+              title: GestureDetector(
+                onTap: _onRefreshTap,
+                child: Text(_title(loc)),
+              ),
               actions: [
                 IconButton(
-                  icon: AnimatedBuilder(
-                    animation: _refreshAnimController,
-                    builder: (context, child) {
-                      return Transform.rotate(
-                        angle: _refreshAnimController.value * 6 * 3.14159265,
-                        child: child,
-                      );
-                    },
-                    child: const Icon(Icons.replay),
+                  icon: const Icon(Icons.explore),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const RssExploreScreen()),
                   ),
-                  onPressed: _onRefreshTap,
-                  tooltip: loc.refresh,
+                  tooltip: loc.rssExplore,
                 ),
                 PopupMenuButton<String>(
                   onSelected: _handleMenuAction,
@@ -148,18 +146,12 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
               showBackButton: false,
               actions: [
                 IconButton(
-                  icon: AnimatedBuilder(
-                    animation: _refreshAnimController,
-                    builder: (context, child) {
-                      return Transform.rotate(
-                        angle: _refreshAnimController.value * 6 * 3.14159265,
-                        child: child,
-                      );
-                    },
-                    child: const Icon(Icons.replay),
+                  icon: const Icon(Icons.explore),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const RssExploreScreen()),
                   ),
-                  onPressed: _onRefreshTap,
-                  tooltip: loc.refresh,
+                  tooltip: loc.rssExplore,
                 ),
                 PopupMenuButton<String>(
                   onSelected: _handleMenuAction,
@@ -182,15 +174,8 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
 
       const PopupMenuDivider(),
 
-      // View section
-      if (_viewMode != ViewMode.all)
-        PopupMenuItem(value: 'all', child: Text(loc.discoveryFilterAll)),
-      if (_viewMode != ViewMode.starred)
-        PopupMenuItem(value: 'starred', child: Text(loc.rssFavorites)),
-
       // Management section
-      const PopupMenuDivider(),
-      PopupMenuItem(value: 'manage', child: Text(loc.rssFeedManagement)),
+      PopupMenuItem(value: 'manage', child: Text(loc.rssSubscription)),
       PopupMenuItem(value: 'folders', child: Text(loc.rssFolderManagement)),
       PopupMenuItem(value: 'settings', child: Text(loc.settings)),
     ];
@@ -485,6 +470,9 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
         break;
       case 'manage':
         Navigator.push(context, MaterialPageRoute(builder: (_) => const RssSourceManageScreen()));
+        break;
+      case 'explore':
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const RssExploreScreen()));
         break;
       case 'folders':
         Navigator.push(context, MaterialPageRoute(builder: (_) => const RssFolderManageScreen()));

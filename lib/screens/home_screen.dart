@@ -15,6 +15,7 @@ import 'connection_form_screen.dart';
 import 'terminal_screen.dart';
 import 'sftp_screen.dart';
 import 'monitor_screen.dart';
+import 'rss/rss_explore_screen.dart';
 import '../widgets/connection_card.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -41,10 +42,13 @@ class _HomeScreenState extends State<HomeScreen> {
             onSelected: (v) {
               if (v == 'export_csv') _exportCsv(context);
               else if (v == 'import_csv') _importCsv(context);
+              else if (v == 'discover') _openDiscover(context);
             },
             itemBuilder: (_) => [
               PopupMenuItem(value: 'export_csv', child: Text(loc.exportCsv)),
               PopupMenuItem(value: 'import_csv', child: Text(loc.importCsv)),
+              const PopupMenuDivider(),
+              PopupMenuItem(value: 'discover', child: Text(loc.rssExplore)),
             ],
           ),
         ],
@@ -67,10 +71,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   onSelected: (v) {
                     if (v == 'export_csv') _exportCsv(context);
                     else if (v == 'import_csv') _importCsv(context);
+                    else if (v == 'discover') _openDiscover(context);
                   },
                   itemBuilder: (_) => [
                     PopupMenuItem(value: 'export_csv', child: Text(loc.exportCsv)),
                     PopupMenuItem(value: 'import_csv', child: Text(loc.importCsv)),
+                    const PopupMenuDivider(),
+                    PopupMenuItem(value: 'discover', child: Text(loc.rssExplore)),
                   ],
                 ),
               ],
@@ -136,6 +143,13 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const ConnectionFormScreen()),
+    );
+  }
+
+  void _openDiscover(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const RssExploreScreen(initialTab: 1)),
     );
   }
 

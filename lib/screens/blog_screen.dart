@@ -6,7 +6,9 @@ import '../l10n/app_localizations.dart';
 import 'blog_detail_screen.dart';
 
 class BlogScreen extends StatefulWidget {
-  const BlogScreen({super.key});
+  final bool embedded;
+
+  const BlogScreen({super.key, this.embedded = false});
 
   @override
   State<BlogScreen> createState() => _BlogScreenState();
@@ -18,8 +20,6 @@ class _BlogScreenState extends State<BlogScreen> {
   int _currentPage = 1;
   int _total = 0;
   final int _pageSize = 10;
-  String _searchQuery = '';
-  final TextEditingController _searchController = TextEditingController();
   final TextEditingController _pageJumpController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -32,7 +32,6 @@ class _BlogScreenState extends State<BlogScreen> {
 
   @override
   void dispose() {
-    _searchController.dispose();
     _pageJumpController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -58,7 +57,6 @@ class _BlogScreenState extends State<BlogScreen> {
     final result = await BlogService.getBlogPosts(
       page: _currentPage,
       size: _pageSize,
-      search: _searchQuery.isNotEmpty ? _searchQuery : null,
     );
 
     if (!mounted) return;
@@ -76,21 +74,6 @@ class _BlogScreenState extends State<BlogScreen> {
     if (_isLoading || _items.length >= _total) return;
     _currentPage++;
     _loadData();
-  }
-
-  void _onSearch() {
-    setState(() {
-      _searchQuery = _searchController.text;
-    });
-    _loadData(refresh: true);
-  }
-
-  void _onSearchClear() {
-    _searchController.clear();
-    setState(() {
-      _searchQuery = '';
-    });
-    _loadData(refresh: true);
   }
 
   void _goToPage(int page) {
@@ -123,6 +106,10 @@ class _BlogScreenState extends State<BlogScreen> {
     final loc = AppLocalizations.of(context);
     final theme = Theme.of(context);
 
+    if (widget.embedded) {
+      return _buildBodyContent(context, loc, theme);
+    }
+
     return Scaffold(
       appBar: CustomTitleBar.isDesktop
           ? null
@@ -133,57 +120,18 @@ class _BlogScreenState extends State<BlogScreen> {
                 onPressed: () => Navigator.pop(context),
               ),
             ),
-      body: Column(
+      body: _buildBodyContent(context, loc, theme),
+    );
+  }
+
+  Widget _buildBodyContent(BuildContext context, AppLocalizations loc, ThemeData theme) {
+    return Column(
         children: [
-          if (CustomTitleBar.isDesktop)
+          if (!widget.embedded && CustomTitleBar.isDesktop)
             CustomTitleBar(
               title: loc.blog,
               showBackButton: true,
             ),
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: '${loc.search}...',
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, size: 20),
-                              onPressed: _onSearchClear,
-                            )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: theme.colorScheme.primary),
-                      ),
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    onSubmitted: (_) => _onSearch(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: loc.search,
-                  onPressed: _onSearch,
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 4),
           // Total count + pagination
           if (_total > 0)
@@ -228,21 +176,13 @@ class _BlogScreenState extends State<BlogScreen> {
                       ),
           ),
         ],
-      ),
-    );
+      );
   }
 
   Widget _buildPaginationControls(ThemeData theme) {
     final loc = AppLocalizations.of(context);
     return Row(
       children: [
-        Text(
-          '${loc.blogTotal} $_total',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.outline,
-          ),
-        ),
-        const Spacer(),
         if (_totalPages > 1) ...[
           IconButton(
             icon: const Icon(Icons.first_page, size: 20),
@@ -399,8 +339,6 @@ class _BlogScreenState extends State<BlogScreen> {
                       fontSize: 11,
                     ),
                   ),
-                  const Spacer(),
-                  Icon(Icons.open_in_new, size: 12, color: theme.colorScheme.outline),
                 ],
               ),
             ],

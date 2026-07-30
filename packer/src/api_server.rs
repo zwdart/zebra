@@ -174,6 +174,7 @@ pub struct DiscoveryItem {
     pub description: String,
     pub url: String,
     pub icon_url: Option<String>,
+    pub banner_url: Option<String>,
     pub tags: Option<String>,
     pub clicks: i64,
     pub sort_order: i32,
@@ -200,6 +201,7 @@ pub struct DiscoveryCreateRequest {
     pub description: String,
     pub url: String,
     pub icon_url: Option<String>,
+    pub banner_url: Option<String>,
     pub tags: Option<String>,
     pub sort_order: Option<i32>,
     pub enabled: Option<bool>,
@@ -213,6 +215,7 @@ pub struct DiscoveryUpdateRequest {
     pub description: Option<String>,
     pub url: Option<String>,
     pub icon_url: Option<String>,
+    pub banner_url: Option<String>,
     pub tags: Option<String>,
     pub clicks: Option<i64>,
     pub sort_order: Option<i32>,
@@ -644,6 +647,12 @@ fn init_db(db: &Connection) {
     if !has_sort_order {
         db.execute_batch("ALTER TABLE blog_posts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0").ok();
     }
+
+    // 迁移：为已有数据添加 banner_url 字段（如果不存在）
+    let has_banner_url: bool = db.prepare("SELECT banner_url FROM discoveries LIMIT 1").is_ok();
+    if !has_banner_url {
+        db.execute_batch("ALTER TABLE discoveries ADD COLUMN banner_url TEXT DEFAULT ''").ok();
+    }
 }
 
 fn db_get_latest(db: &Connection, platform: &str) -> Option<VersionInfo> {
@@ -828,7 +837,7 @@ fn db_discovery_get_paginated_inner(
         "ORDER BY created_at DESC, sort_order ASC, id DESC"
     };
     let list_sql = format!(
-        "SELECT id, type, name, description, url, icon_url, tags, clicks, sort_order, enabled, created_at, updated_at
+        "SELECT id, type, name, description, url, icon_url, banner_url, tags, clicks, sort_order, enabled, created_at, updated_at
          FROM discoveries {} {} LIMIT ? OFFSET ?",
         where_clause, order
     );
@@ -849,12 +858,13 @@ fn db_discovery_get_paginated_inner(
             description: row.get(3)?,
             url: row.get(4)?,
             icon_url: row.get(5)?,
-            tags: row.get(6)?,
-            clicks: row.get(7)?,
-            sort_order: row.get(8)?,
-            enabled: row.get::<_, i64>(9)? != 0,
-            created_at: row.get(10)?,
-            updated_at: row.get(11)?,
+            banner_url: row.get(6)?,
+            tags: row.get(7)?,
+            clicks: row.get(8)?,
+            sort_order: row.get(9)?,
+            enabled: row.get::<_, i64>(10)? != 0,
+            created_at: row.get(11)?,
+            updated_at: row.get(12)?,
         })
     }).unwrap();
 
@@ -864,7 +874,7 @@ fn db_discovery_get_paginated_inner(
 
 fn db_discovery_get_random(db: &Connection) -> Option<DiscoveryItem> {
     db.query_row(
-        "SELECT id, type, name, description, url, icon_url, tags, clicks, sort_order, enabled, created_at, updated_at
+        "SELECT id, type, name, description, url, icon_url, banner_url, tags, clicks, sort_order, enabled, created_at, updated_at
          FROM discoveries WHERE enabled = 1 ORDER BY RANDOM() LIMIT 1",
         [],
         |row| {
@@ -875,12 +885,13 @@ fn db_discovery_get_random(db: &Connection) -> Option<DiscoveryItem> {
                 description: row.get(3)?,
                 url: row.get(4)?,
                 icon_url: row.get(5)?,
-                tags: row.get(6)?,
-                clicks: row.get(7)?,
-                sort_order: row.get(8)?,
-                enabled: row.get::<_, i64>(9)? != 0,
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
+                banner_url: row.get(6)?,
+                tags: row.get(7)?,
+                clicks: row.get(8)?,
+                sort_order: row.get(9)?,
+                enabled: row.get::<_, i64>(10)? != 0,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         },
     ).ok()
@@ -888,7 +899,7 @@ fn db_discovery_get_random(db: &Connection) -> Option<DiscoveryItem> {
 
 fn db_discovery_get_by_id(db: &Connection, id: i64) -> Option<DiscoveryItem> {
     db.query_row(
-        "SELECT id, type, name, description, url, icon_url, tags, clicks, sort_order, enabled, created_at, updated_at
+        "SELECT id, type, name, description, url, icon_url, banner_url, tags, clicks, sort_order, enabled, created_at, updated_at
          FROM discoveries WHERE id = ?1",
         params![id],
         |row| {
@@ -899,12 +910,13 @@ fn db_discovery_get_by_id(db: &Connection, id: i64) -> Option<DiscoveryItem> {
                 description: row.get(3)?,
                 url: row.get(4)?,
                 icon_url: row.get(5)?,
-                tags: row.get(6)?,
-                clicks: row.get(7)?,
-                sort_order: row.get(8)?,
-                enabled: row.get::<_, i64>(9)? != 0,
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
+                banner_url: row.get(6)?,
+                tags: row.get(7)?,
+                clicks: row.get(8)?,
+                sort_order: row.get(9)?,
+                enabled: row.get::<_, i64>(10)? != 0,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         },
     ).ok()
@@ -920,7 +932,7 @@ fn db_discovery_increment_clicks(db: &Connection, id: i64) {
 fn db_discovery_get_all(db: &Connection) -> Vec<DiscoveryItem> {
     let mut stmt = db
         .prepare(
-            "SELECT id, type, name, description, url, icon_url, tags, clicks, sort_order, enabled, created_at, updated_at
+            "SELECT id, type, name, description, url, icon_url, banner_url, tags, clicks, sort_order, enabled, created_at, updated_at
              FROM discoveries ORDER BY sort_order ASC, id DESC",
         )
         .unwrap();
@@ -933,12 +945,13 @@ fn db_discovery_get_all(db: &Connection) -> Vec<DiscoveryItem> {
                 description: row.get(3)?,
                 url: row.get(4)?,
                 icon_url: row.get(5)?,
-                tags: row.get(6)?,
-                clicks: row.get(7)?,
-                sort_order: row.get(8)?,
-                enabled: row.get::<_, i64>(9)? != 0,
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
+                banner_url: row.get(6)?,
+                tags: row.get(7)?,
+                clicks: row.get(8)?,
+                sort_order: row.get(9)?,
+                enabled: row.get::<_, i64>(10)? != 0,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         })
         .unwrap();
@@ -949,14 +962,15 @@ fn db_discovery_create(db: &Connection, req: &DiscoveryCreateRequest) -> Result<
     let sort_order = req.sort_order.unwrap_or(0);
     let enabled = req.enabled.unwrap_or(true);
     db.execute(
-        "INSERT INTO discoveries (type, name, description, url, icon_url, tags, clicks, sort_order, enabled)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, ?8)",
+        "INSERT INTO discoveries (type, name, description, url, icon_url, banner_url, tags, clicks, sort_order, enabled)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?9)",
         params![
             req.item_type,
             req.name,
             req.description,
             req.url,
             req.icon_url.as_deref().unwrap_or(""),
+            req.banner_url.as_deref().unwrap_or(""),
             req.tags.as_deref().unwrap_or(""),
             sort_order,
             enabled as i64,
@@ -988,6 +1002,9 @@ fn db_discovery_update(db: &Connection, id: i64, req: &DiscoveryUpdateRequest) -
     }
     if let Some(ref v) = req.icon_url {
         updates.push("icon_url = ?"); param_values.push(Box::new(v.clone()));
+    }
+    if let Some(ref v) = req.banner_url {
+        updates.push("banner_url = ?"); param_values.push(Box::new(v.clone()));
     }
     if let Some(ref v) = req.tags {
         updates.push("tags = ?"); param_values.push(Box::new(v.clone()));
@@ -1803,6 +1820,7 @@ async fn admin_import_discoveries(
                     description,
                     url,
                     icon_url,
+                    banner_url: None,
                     tags,
                     sort_order: Some(sort_order),
                     enabled: Some(enabled),

@@ -4,15 +4,17 @@ import '../models/discovery_item.dart';
 import '../services/discovery_service.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
+import 'discovery_detail_screen.dart';
 
 class DiscoveryScreen extends StatefulWidget {
-  const DiscoveryScreen({super.key});
+  final bool embedded;
+  const DiscoveryScreen({super.key, this.embedded = false});
 
   @override
-  State<DiscoveryScreen> createState() => _DiscoveryScreenState();
+  State<DiscoveryScreen> createState() => DiscoveryScreenState();
 }
 
-class _DiscoveryScreenState extends State<DiscoveryScreen> {
+class DiscoveryScreenState extends State<DiscoveryScreen> {
   final List<DiscoveryItem> _items = [];
   bool _isLoading = false;
   int _currentPage = 1;
@@ -72,6 +74,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     });
   }
 
+  String get sortMode => _sort;
+
   void _toggleSort() {
     setState(() {
       if (_sort == 'order') {
@@ -88,21 +92,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   void _setFilterType(int? type) {
     setState(() {
       _filterType = type;
-    });
-    _loadData(refresh: true);
-  }
-
-  void _onSearch() {
-    setState(() {
-      _searchQuery = _searchController.text;
-    });
-    _loadData(refresh: true);
-  }
-
-  void _onSearchClear() {
-    _searchController.clear();
-    setState(() {
-      _searchQuery = '';
     });
     _loadData(refresh: true);
   }
@@ -134,6 +123,19 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
+
+  void _onItemLongPress(DiscoveryItem item) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DiscoveryDetailScreen(item: item),
+      ),
+    );
+  }
+
+  void toggleSort() => _toggleSort();
+
+  void randomTap() => _onRandomTap();
 
   Future<void> _onRandomTap() async {
     final item = await DiscoveryService.getRandomDiscovery();
@@ -191,6 +193,10 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
     final theme = Theme.of(context);
+
+    if (widget.embedded) {
+      return _buildBodyContent(context, loc, theme);
+    }
 
     return Scaffold(
       appBar: CustomTitleBar.isDesktop
@@ -258,51 +264,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 ),
               ],
             ),
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: loc.discoverySearchHint,
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, size: 20),
-                              onPressed: _onSearchClear,
-                            )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.3)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: theme.colorScheme.primary),
-                      ),
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    onSubmitted: (_) => _onSearch(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: loc.discoverySearch,
-                  onPressed: _onSearch,
-                ),
-              ],
-            ),
-          ),
           // Type filter chips
+          const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Wrap(
@@ -357,6 +320,64 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     );
   }
 
+  Widget _buildBodyContent(BuildContext context, AppLocalizations loc, ThemeData theme) {
+    return Column(
+      children: [
+        // Type filter chips
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              _buildFilterChip(loc, null, loc.discoveryFilterAll),
+              _buildFilterChip(loc, 0, loc.discoveryTypeOfficial),
+              _buildFilterChip(loc, 1, loc.discoveryTypeRecommended),
+              _buildFilterChip(loc, 2, loc.discoveryTypeAd),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Total count + pagination
+        if (_total > 0)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildPaginationControls(theme),
+          ),
+        const SizedBox(height: 4),
+        // List
+        Expanded(
+          child: _items.isEmpty && _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _items.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.explore,
+                              size: 64, color: theme.colorScheme.outline),
+                          const SizedBox(height: 16),
+                          Text(loc.discoveryEmpty,
+                              style: theme.textTheme.titleMedium),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: () => _loadData(refresh: true),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 80),
+                        itemCount: _items.length,
+                        itemBuilder: (ctx, i) {
+                          return _buildItemCard(_items[i], theme);
+                        },
+                      ),
+                    ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildFilterChip(AppLocalizations loc, int? type, String label) {
     final isSelected = _filterType == type;
     return FilterChip(
@@ -371,13 +392,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     final loc = AppLocalizations.of(context);
     return Row(
       children: [
-        Text(
-          '${loc.discoveryTotal} $_total',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.outline,
-          ),
-        ),
-        const Spacer(),
         // Page controls
         if (_totalPages > 1) ...[
           IconButton(
@@ -469,6 +483,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => _onItemTap(item),
+        onLongPress: () => _onItemLongPress(item),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -479,12 +494,12 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   borderRadius: BorderRadius.circular(8),
                   child: Image.network(
                     item.iconUrl!,
-                    width: 40,
-                    height: 40,
+                    width: 44,
+                    height: 44,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
-                      width: 40,
-                      height: 40,
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
                         color: _typeColor(item.type, theme).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -492,7 +507,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       child: Icon(
                         _typeIcon(item.type),
                         color: _typeColor(item.type, theme),
-                        size: 22,
+                        size: 24,
                       ),
                     ),
                   ),
@@ -508,7 +523,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   child: Icon(
                     _typeIcon(item.type),
                     color: _typeColor(item.type, theme),
-                    size: 22,
+                    size: 24,
                   ),
                 ),
               const SizedBox(width: 12),
@@ -579,24 +594,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                         )).toList(),
                       ),
                     ],
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.touch_app,
-                            size: 12, color: theme.colorScheme.outline),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${item.clicks}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
-                            fontSize: 11,
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(Icons.open_in_new,
-                            size: 12, color: theme.colorScheme.outline),
-                      ],
-                    ),
                   ],
                 ),
               ),

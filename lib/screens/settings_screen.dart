@@ -15,8 +15,7 @@ import '../services/update_service.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'about_screen.dart';
-import 'blog_screen.dart';
-import 'discovery_screen.dart';
+import 'rss/rss_explore_screen.dart';
 import 'update_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -83,7 +82,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const BlogScreen()),
+                      MaterialPageRoute(builder: (_) => const RssExploreScreen(initialTab: 2)),
                     );
                   },
                 ),
@@ -94,7 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const DiscoveryScreen()),
+                      MaterialPageRoute(builder: (_) => const RssExploreScreen(initialTab: 1)),
                     );
                   },
                 ),

@@ -8,7 +8,7 @@ import '../../models/feed_source.dart';
 import '../../utils/zebra_paths.dart';
 import '../../widgets/custom_title_bar.dart';
 import 'rss_article_list_screen.dart';
-import 'rss_quick_add_screen.dart';
+import 'rss_explore_screen.dart';
 import 'rss_folder_manage_screen.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -24,7 +24,7 @@ class RssSourceManageScreen extends StatelessWidget {
       appBar: isDesktop
           ? null
           : AppBar(
-              title: Text(loc.rssFeedManagement),
+              title: Text(loc.rssSubscription),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.folder_special),
@@ -52,7 +52,7 @@ class RssSourceManageScreen extends StatelessWidget {
         children: [
           if (isDesktop)
             CustomTitleBar(
-              title: loc.rssFeedManagement,
+              title: loc.rssSubscription,
               showBackButton: true,
               actions: [
                 IconButton(
@@ -86,7 +86,6 @@ class RssSourceManageScreen extends StatelessWidget {
   Widget _buildBody() {
     return Consumer<RssProvider>(
       builder: (context, provider, _) {
-        final loc = AppLocalizations.of(context);
         if (provider.feeds.isEmpty) {
           return _buildEmptyState(context);
         }
@@ -205,7 +204,17 @@ class RssSourceManageScreen extends StatelessWidget {
             ],
           ],
         ),
-        trailing: PopupMenuButton<String>(
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // IconButton(
+            //   icon: const Icon(Icons.info_outline, size: 20),
+            //   tooltip: loc.rssSourceInfo,
+            //   onPressed: () => _showFeedInfo(context, feed),
+            //   padding: EdgeInsets.zero,
+            //   constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            // ),
+            PopupMenuButton<String>(
           onSelected: (value) => _handleSourceMenuAction(context, value, feed),
           itemBuilder: (context) => [
             PopupMenuItem(value: 'sync', child: Text(loc.rssSyncSource)),
@@ -215,6 +224,8 @@ class RssSourceManageScreen extends StatelessWidget {
             PopupMenuItem(value: 'folder', child: Text(loc.rssAddToFolder)),
             const PopupMenuDivider(),
             PopupMenuItem(value: 'delete', child: Text(loc.delete, style: const TextStyle(color: Colors.red))),
+          ],
+        ),
           ],
         ),
         onTap: () {
@@ -301,7 +312,7 @@ class RssSourceManageScreen extends StatelessWidget {
   void _showQuickAddDialog(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const RssQuickAddScreen()),
+      MaterialPageRoute(builder: (_) => const RssExploreScreen()),
     );
   }
 

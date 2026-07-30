@@ -513,6 +513,13 @@ class AppLocalizations {
   String get discoveryLastPage => translate('discoveryLastPage');
   String get discoveryPage => translate('discoveryPage');
   String get discoveryJumpTo => translate('discoveryJumpTo');
+  String get discoveryShare => translate('discoveryShare');
+  String get discoveryOpenBrowser => translate('discoveryOpenBrowser');
+  String get discoveryCopy => translate('discoveryCopy');
+  String get discoveryCopied => translate('discoveryCopied');
+
+  // RSS Explore
+  String get rssExplore => translate('rssExplore');
 
   // Image error
   String get imageLoadFailed => translate('imageLoadFailed');
@@ -873,7 +880,7 @@ class AppLocalizations {
     'copyLink': 'Copy Link',
     'linkCopied': 'Link copied',
     // RSS
-    'rssSubscription': 'Zebra RSS',
+    'rssSubscription': 'Subscribed',
     'rssFeedManagement': 'Feeds',
     'rssFolderManagement': 'Folders',
     'rssSettings': 'Settings',
@@ -1033,6 +1040,12 @@ class AppLocalizations {
     'discoveryLastPage': 'Last',
     'discoveryPage': 'Page',
     'discoveryJumpTo': 'Go',
+    'discoveryShare': 'Share',
+    'discoveryOpenBrowser': 'Open in Browser',
+    'discoveryCopy': 'Copy',
+    'discoveryCopied': 'Copied',
+    // RSS Explore
+    'rssExplore': 'Explore',
     // Image error
     'imageLoadFailed': 'Image failed to load',
     // RSS Settings
@@ -1360,7 +1373,7 @@ class AppLocalizations {
     'copyLink': '复制链接',
     'linkCopied': '链接已复制',
     // RSS
-    'rssSubscription': 'Zebra RSS',
+    'rssSubscription': '已订阅',
     'rssFeedManagement': '订阅源',
     'rssFolderManagement': '收藏夹',
     'rssSettings': '设置',
@@ -1373,7 +1386,7 @@ class AppLocalizations {
     'rssNoArticles': '暂无文章',
     'rssNoArticlesHint': '点击下方按钮获取最新内容',
     'rssSyncNow': '同步最新',
-    'rssRecommended': '推荐订阅源',
+    'rssRecommended': '订阅源',
     'rssManualAdd': '手动添加',
     'rssImportCsv': '从 CSV 导入',
     'rssImportOpml': '从 OPML 导入',
@@ -1431,7 +1444,7 @@ class AppLocalizations {
     'rssOriginalLink': '原文链接',
     'rssViewInBrowser': '浏览器打开',
     'rssNoLink': '没有可用的链接',
-    'rssRecommendedSources': '推荐订阅源',
+    'rssRecommendedSources': '订阅源',
     'rssBatchAdd': '批量添加 ({count})',
     'rssMaxSelect': '最多选 10 个',
     'rssViewingFolder': '正在查看「{name}」内的订阅源',
@@ -1520,6 +1533,12 @@ class AppLocalizations {
     'discoveryLastPage': '末页',
     'discoveryPage': '页',
     'discoveryJumpTo': '跳转',
+    'discoveryShare': '分享',
+    'discoveryOpenBrowser': '跳转链接',
+    'discoveryCopy': '复制',
+    'discoveryCopied': '已复制',
+    // RSS Explore
+    'rssExplore': '发现中心',
     // Image error
     'imageLoadFailed': '图片加载失败',
     // RSS Settings

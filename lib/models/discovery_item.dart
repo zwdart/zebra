@@ -5,6 +5,7 @@ class DiscoveryItem {
   final String description;
   final String url;
   final String? iconUrl;
+  final String? bannerUrl;
   final String? tags;
   final int clicks;
   final int sortOrder;
@@ -19,6 +20,7 @@ class DiscoveryItem {
     required this.description,
     required this.url,
     this.iconUrl,
+    this.bannerUrl,
     this.tags,
     this.clicks = 0,
     this.sortOrder = 0,
@@ -53,6 +55,7 @@ class DiscoveryItem {
       description: json['description'] as String? ?? '',
       url: json['url'] as String? ?? '',
       iconUrl: json['icon_url'] as String?,
+      bannerUrl: json['banner_url'] as String?,
       tags: json['tags'] as String?,
       clicks: json['clicks'] as int? ?? 0,
       sortOrder: json['sort_order'] as int? ?? 0,

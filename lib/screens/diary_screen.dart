@@ -7,6 +7,7 @@ import '../models/diary_entry.dart';
 import '../utils/zebra_paths.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
+import 'rss/rss_explore_screen.dart';
 
 class DiaryScreen extends StatefulWidget {
   const DiaryScreen({super.key});
@@ -190,6 +191,13 @@ class _DiaryScreenState extends State<DiaryScreen> {
     }
   }
 
+  void _openDiscover() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const RssExploreScreen(initialTab: 1)),
+    );
+  }
+
   String _timestamp() {
     final now = DateTime.now();
     return '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
@@ -301,10 +309,13 @@ class _DiaryScreenState extends State<DiaryScreen> {
                   onSelected: (v) {
                     if (v == 'export') _exportCsv();
                     else if (v == 'import') _importCsv();
+                    else if (v == 'discover') _openDiscover();
                   },
                   itemBuilder: (_) => [
                     PopupMenuItem(value: 'export', child: Text(loc.diaryExportCsv)),
                     PopupMenuItem(value: 'import', child: Text(loc.diaryImportCsv)),
+                    const PopupMenuDivider(),
+                    PopupMenuItem(value: 'discover', child: Text(loc.rssExplore)),
                   ],
                 ),
               ],
@@ -330,10 +341,13 @@ class _DiaryScreenState extends State<DiaryScreen> {
                   onSelected: (v) {
                     if (v == 'export') _exportCsv();
                     else if (v == 'import') _importCsv();
+                    else if (v == 'discover') _openDiscover();
                   },
                   itemBuilder: (_) => [
                     PopupMenuItem(value: 'export', child: Text(loc.diaryExportCsv)),
                     PopupMenuItem(value: 'import', child: Text(loc.diaryImportCsv)),
+                    const PopupMenuDivider(),
+                    PopupMenuItem(value: 'discover', child: Text(loc.rssExplore)),
                   ],
                 ),
               ],
