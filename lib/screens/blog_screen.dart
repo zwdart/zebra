@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/blog_post.dart';
-import '../services/blog_service.dart';
+import '../providers/blog_provider.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'blog_detail_screen.dart';
@@ -15,18 +16,16 @@ class BlogScreen extends StatefulWidget {
 }
 
 class _BlogScreenState extends State<BlogScreen> {
-  final List<BlogPost> _items = [];
-  bool _isLoading = false;
-  int _currentPage = 1;
-  int _total = 0;
-  final int _pageSize = 10;
   final TextEditingController _pageJumpController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _loadData(refresh: true);
+    final provider = context.read<BlogProvider>();
+    if (provider.items.isEmpty && !provider.isLoading) {
+      provider.loadData(refresh: true);
+    }
     _scrollController.addListener(_onScroll);
   }
 
@@ -37,59 +36,17 @@ class _BlogScreenState extends State<BlogScreen> {
     super.dispose();
   }
 
-  int get _totalPages => (_total / _pageSize).ceil().clamp(1, 9999);
-
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
-      _loadMore();
-    }
-  }
-
-  Future<void> _loadData({bool refresh = false}) async {
-    if (_isLoading) return;
-    if (refresh) {
-      _currentPage = 1;
-      _items.clear();
-    }
-
-    setState(() => _isLoading = true);
-
-    final result = await BlogService.getBlogPosts(
-      page: _currentPage,
-      size: _pageSize,
-    );
-
-    if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      if (result != null) {
-        if (refresh) _items.clear();
-        _items.addAll(result.items);
-        _total = result.total;
-      }
-    });
-  }
-
-  void _loadMore() {
-    if (_isLoading || _items.length >= _total) return;
-    _currentPage++;
-    _loadData();
-  }
-
-  void _goToPage(int page) {
-    final target = page.clamp(1, _totalPages);
-    if (target != _currentPage) {
-      setState(() {
-        _currentPage = target;
-      });
-      _loadData(refresh: true);
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      context.read<BlogProvider>().loadMore();
     }
   }
 
   void _jumpToPage() {
     final page = int.tryParse(_pageJumpController.text);
     if (page != null) {
-      _goToPage(page);
+      context.read<BlogProvider>().goToPage(page);
       _pageJumpController.clear();
     }
   }
@@ -105,10 +62,16 @@ class _BlogScreenState extends State<BlogScreen> {
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final provider = context.watch<BlogProvider>();
+    final items = provider.items;
+    final isLoading = provider.isLoading;
+    final total = provider.total;
+    final currentPage = provider.currentPage;
+    final totalPages = provider.totalPages;
 
-    if (widget.embedded) {
-      return _buildBodyContent(context, loc, theme);
-    }
+    final body = _buildBodyContent(loc, theme, items, isLoading, total, currentPage, totalPages);
+
+    if (widget.embedded) return body;
 
     return Scaffold(
       appBar: CustomTitleBar.isDesktop
@@ -120,79 +83,87 @@ class _BlogScreenState extends State<BlogScreen> {
                 onPressed: () => Navigator.pop(context),
               ),
             ),
-      body: _buildBodyContent(context, loc, theme),
+      body: body,
     );
   }
 
-  Widget _buildBodyContent(BuildContext context, AppLocalizations loc, ThemeData theme) {
+  Widget _buildBodyContent(AppLocalizations loc, ThemeData theme,
+      List<BlogPost> items, bool isLoading, int total, int currentPage, int totalPages) {
     return Column(
-        children: [
-          if (!widget.embedded && CustomTitleBar.isDesktop)
-            CustomTitleBar(
-              title: loc.blog,
-              showBackButton: true,
-            ),
-          const SizedBox(height: 4),
-          // Total count + pagination
-          if (_total > 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _buildPaginationControls(theme),
-            ),
-          const SizedBox(height: 4),
-          // List
-          Expanded(
-            child: _items.isEmpty && _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _items.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.article_outlined,
-                                size: 64, color: theme.colorScheme.outline),
-                            const SizedBox(height: 16),
-                            Text(loc.blogEmpty,
-                                style: theme.textTheme.titleMedium),
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: () => _loadData(refresh: true),
-                        child: ListView.builder(
+      children: [
+        if (!widget.embedded && CustomTitleBar.isDesktop)
+          CustomTitleBar(
+            title: loc.blog,
+            showBackButton: true,
+          ),
+        const SizedBox(height: 4),
+        if (total > 0)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildPaginationControls(theme, currentPage, totalPages),
+          ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: items.isEmpty && isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: () => context.read<BlogProvider>().loadData(refresh: true),
+                  child: items.isEmpty
+                      ? LayoutBuilder(
+                          builder: (context, constraints) => SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: SizedBox(
+                              height: constraints.maxHeight,
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.article_outlined,
+                                        size: 64, color: theme.colorScheme.outline),
+                                    const SizedBox(height: 16),
+                                    Text(loc.blogEmpty,
+                                        style: theme.textTheme.titleMedium),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
                           controller: _scrollController,
+                          physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.only(bottom: 80),
-                          itemCount: _items.length + (_isLoading ? 1 : 0),
+                          itemCount: items.length + (isLoading ? 1 : 0),
                           itemBuilder: (ctx, i) {
-                            if (i == _items.length) {
+                            if (i == items.length) {
                               return const Padding(
                                 padding: EdgeInsets.all(16),
                                 child: Center(child: CircularProgressIndicator()),
                               );
                             }
-                            return _buildItemCard(_items[i], theme);
+                            return _buildItemCard(items[i], theme);
                           },
                         ),
-                      ),
-          ),
-        ],
-      );
+                ),
+        ),
+      ],
+    );
   }
 
-  Widget _buildPaginationControls(ThemeData theme) {
+  Widget _buildPaginationControls(ThemeData theme, int currentPage, int totalPages) {
     final loc = AppLocalizations.of(context);
     return Row(
       children: [
-        if (_totalPages > 1) ...[
+        if (totalPages > 1) ...[
           IconButton(
             icon: const Icon(Icons.first_page, size: 20),
-            onPressed: _currentPage > 1 ? () => _goToPage(1) : null,
+            onPressed: currentPage > 1 ? () => context.read<BlogProvider>().goToPage(1) : null,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
           ),
           IconButton(
             icon: const Icon(Icons.chevron_left, size: 20),
-            onPressed: _currentPage > 1 ? () => _goToPage(_currentPage - 1) : null,
+            onPressed: currentPage > 1 ? () => context.read<BlogProvider>().goToPage(currentPage - 1) : null,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
           ),
@@ -200,22 +171,22 @@ class _BlogScreenState extends State<BlogScreen> {
             constraints: const BoxConstraints(minWidth: 48),
             alignment: Alignment.center,
             child: Text(
-              '$_currentPage / $_totalPages',
+              '$currentPage / $totalPages',
               style: theme.textTheme.bodySmall,
             ),
           ),
           IconButton(
             icon: const Icon(Icons.chevron_right, size: 20),
-            onPressed: _currentPage < _totalPages
-                ? () => _goToPage(_currentPage + 1)
+            onPressed: currentPage < totalPages
+                ? () => context.read<BlogProvider>().goToPage(currentPage + 1)
                 : null,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
           ),
           IconButton(
             icon: const Icon(Icons.last_page, size: 20),
-            onPressed: _currentPage < _totalPages
-                ? () => _goToPage(_totalPages)
+            onPressed: currentPage < totalPages
+                ? () => context.read<BlogProvider>().goToPage(totalPages)
                 : null,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),

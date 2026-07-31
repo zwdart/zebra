@@ -17,13 +17,8 @@ class RssFeedListScreen extends StatefulWidget {
   State<RssFeedListScreen> createState() => _RssFeedListScreenState();
 }
 
-enum ViewMode { all, starred, folder }
-
 class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
-  ViewMode _viewMode = ViewMode.all;
-  int? _selectedFolderId;
-  String _selectedFolderName = '';
   late AnimationController _refreshAnimController;
 
   @override
@@ -48,21 +43,21 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
     super.dispose();
   }
 
-  String _title(AppLocalizations loc) {
-    switch (_viewMode) {
+  String _title(RssProvider provider, AppLocalizations loc) {
+    switch (provider.viewMode) {
       case ViewMode.all:
         return 'Zebra RSS';
       case ViewMode.starred:
         return loc.rssFavorites;
       case ViewMode.folder:
-        return _selectedFolderName;
+        return provider.selectedFolderName;
     }
   }
 
   void _onRefreshTap() {
     _refreshAnimController.forward(from: 0);
     final provider = context.read<RssProvider>();
-    switch (_viewMode) {
+    switch (provider.viewMode) {
       case ViewMode.all:
         provider.loadAllArticles(refresh: true);
         break;
@@ -70,8 +65,8 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
         provider.loadStarredArticles(refresh: true);
         break;
       case ViewMode.folder:
-        if (_selectedFolderId != null) {
-          provider.loadFolderArticles(_selectedFolderId!, refresh: true);
+        if (provider.selectedFolderId != null) {
+          provider.loadFolderArticles(provider.selectedFolderId!, refresh: true);
         }
         break;
     }
@@ -83,37 +78,11 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
     }
   }
 
-  void _switchToAll() {
-    setState(() {
-      _viewMode = ViewMode.all;
-      _selectedFolderId = null;
-      _selectedFolderName = '';
-    });
-    context.read<RssProvider>().loadAllArticles(refresh: true);
-  }
-
-  void _switchToStarred() {
-    setState(() {
-      _viewMode = ViewMode.starred;
-      _selectedFolderId = null;
-      _selectedFolderName = '';
-    });
-    context.read<RssProvider>().loadStarredArticles(refresh: true);
-  }
-
-  void _switchToFolder(int folderId, String folderName) {
-    setState(() {
-      _viewMode = ViewMode.folder;
-      _selectedFolderId = folderId;
-      _selectedFolderName = folderName;
-    });
-    context.read<RssProvider>().loadFolderArticles(folderId, refresh: true);
-  }
-
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
     final isDesktop = CustomTitleBar.isDesktop;
+    final provider = context.watch<RssProvider>();
 
     return Scaffold(
       appBar: isDesktop
@@ -121,7 +90,7 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
           : AppBar(
               title: GestureDetector(
                 onTap: _onRefreshTap,
-                child: Text(_title(loc)),
+                child: Text(_title(provider, loc)),
               ),
               actions: [
                 IconButton(
@@ -142,7 +111,7 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
         children: [
           if (isDesktop)
             CustomTitleBar(
-              title: _title(loc),
+              title: _title(provider, loc),
               showBackButton: false,
               actions: [
                 IconButton(
@@ -198,8 +167,8 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
             padding: const EdgeInsets.only(right: 8),
             child: FilterChip(
               label: Text(loc.discoveryFilterAll),
-              selected: _viewMode == ViewMode.all,
-              onSelected: (_) => _switchToAll(),
+              selected: provider.viewMode == ViewMode.all,
+              onSelected: (_) => provider.switchToAll(),
               selectedColor: Theme.of(context).colorScheme.primaryContainer,
             ),
           ),
@@ -207,8 +176,8 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
             padding: const EdgeInsets.only(right: 8),
             child: FilterChip(
               label: Text(loc.rssFavorites),
-              selected: _viewMode == ViewMode.starred,
-              onSelected: (_) => _switchToStarred(),
+              selected: provider.viewMode == ViewMode.starred,
+              onSelected: (_) => provider.switchToStarred(),
               selectedColor: Theme.of(context).colorScheme.primaryContainer,
               avatar: const Icon(Icons.star, size: 16),
             ),
@@ -218,8 +187,8 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
               padding: const EdgeInsets.only(right: 8),
               child: FilterChip(
                 label: Text(folder['name'] as String),
-                selected: _viewMode == ViewMode.folder && _selectedFolderId == folder['id'],
-                onSelected: (_) => _switchToFolder(folder['id'] as int, folder['name'] as String),
+                selected: provider.viewMode == ViewMode.folder && provider.selectedFolderId == folder['id'],
+                onSelected: (_) => provider.switchToFolder(folder['id'] as int, folder['name'] as String),
                 selectedColor: Theme.of(context).colorScheme.primaryContainer,
                 avatar: const Icon(Icons.folder, size: 16),
               ),
@@ -463,10 +432,10 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
         );
         break;
       case 'starred':
-        _switchToStarred();
+        context.read<RssProvider>().switchToStarred();
         break;
       case 'all':
-        _switchToAll();
+        context.read<RssProvider>().switchToAll();
         break;
       case 'manage':
         Navigator.push(context, MaterialPageRoute(builder: (_) => const RssSourceManageScreen()));

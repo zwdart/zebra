@@ -369,6 +369,12 @@ class RssDatabaseService {
     stmt.close();
   }
 
+  static void markAsUnread(int articleId) {
+    final stmt = _db!.prepare('UPDATE articles SET is_read = 0 WHERE id = ?');
+    stmt.execute([articleId]);
+    stmt.close();
+  }
+
   static void markAllAsRead(int feedSourceId) {
     final stmt = _db!.prepare('UPDATE articles SET is_read = 1 WHERE feed_source_id = ? AND is_read = 0');
     stmt.execute([feedSourceId]);

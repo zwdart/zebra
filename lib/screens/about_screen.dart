@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../providers/about_provider.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
-import '../build_info.dart';
 import 'feedback_screen.dart';
 
 class AboutScreen extends StatelessWidget {
@@ -15,16 +16,11 @@ class AboutScreen extends StatelessWidget {
   final String strWebUrl = 'http://zebra.dart.xin';
   final String strShop = 'https://fone.taobao.com/';
 
-  static String _getBuildTime() {
-    if (buildTime.isNotEmpty) return buildTime;
-    return "unknown";
-  }
-
-
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
     final colorScheme = Theme.of(context).colorScheme;
+    final info = context.watch<AboutProvider>().info;
 
     return Scaffold(
       appBar: CustomTitleBar.isDesktop ? null : AppBar(
@@ -62,7 +58,7 @@ class AboutScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${loc.version}: 1.0.0',
+                  '${loc.version}: ${info.hasVersion ? info.version : '...'}',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
@@ -75,7 +71,7 @@ class AboutScreen extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
                     child: Text(
-                      '${loc.buildTime}: ${_getBuildTime()}',
+                      '${loc.buildTime}: ${info.buildTimeString}',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
@@ -130,7 +126,7 @@ class AboutScreen extends StatelessWidget {
                         onTap: () => showLicensePage(
                           context: context,
                           applicationName: 'Zebra SSH',
-                          applicationVersion: '1.0.0',
+                          applicationVersion: info.hasVersion ? info.version : '1.0.0',
                         ),
                       ),
                       const Divider(height: 1),

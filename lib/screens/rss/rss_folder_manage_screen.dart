@@ -128,7 +128,7 @@ class _RssFolderManageScreenState extends State<RssFolderManageScreen> {
         trailing: PopupMenuButton<String>(
           onSelected: (value) => _handleFolderMenuAction(context, value, folder),
           itemBuilder: (context) => [
-            const PopupMenuItem(value: 'open', child: Text('View')),
+            PopupMenuItem(value: 'open', child: Text(loc.openFolder)),
             PopupMenuItem(value: 'edit', child: Text(loc.rssEditSource)),
             const PopupMenuDivider(),
             PopupMenuItem(value: 'delete', child: Text(loc.delete, style: const TextStyle(color: Colors.red))),
@@ -274,7 +274,7 @@ class _RssFolderManageScreenState extends State<RssFolderManageScreen> {
     if (context.mounted) {
       final error = provider.error;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error ?? loc.rssSyncComplete)),
+        SnackBar(content: Text(error == null ? loc.rssSyncComplete : loc.translate(error))),
       );
     }
   }
@@ -291,24 +291,14 @@ class FolderDetailScreen extends StatefulWidget {
 }
 
 class _FolderDetailScreenState extends State<FolderDetailScreen> {
-  List<FeedSource> _sources = [];
   bool _selectMode = false;
   final Set<int> _selectedIds = {};
 
-  @override
-  void initState() {
-    super.initState();
-    _loadSources();
-  }
-
-  void _loadSources() {
-    final provider = context.read<RssProvider>();
-    setState(() {
-      _sources = provider.getFolderSources(widget.folder['id'] as int);
-    });
-  }
-
   int get _folderId => widget.folder['id'] as int;
+
+  List<FeedSource> _getSources(RssProvider provider) {
+    return provider.getFolderSources(_folderId);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -335,7 +325,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                 if (_selectMode) ...[
                   IconButton(
                     icon: const Icon(Icons.select_all),
-                    onPressed: _selectAll,
+                    onPressed: () => _selectAll(context.read<RssProvider>().getFolderSources(_folderId)),
                     tooltip: loc.rssSelectAll,
                   ),
                   IconButton(
@@ -363,10 +353,9 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                       const PopupMenuDivider(),
                       PopupMenuItem(value: 'export_csv', child: Text(loc.rssExportCsv)),
                       PopupMenuItem(value: 'export_opml', child: Text(loc.rssExportOpml)),
+                      const PopupMenuDivider(),
                       PopupMenuItem(value: 'import_csv', child: Text(loc.rssImportCsv)),
                       PopupMenuItem(value: 'import_opml', child: Text(loc.rssImportOpml)),
-                      const PopupMenuDivider(),
-                      PopupMenuItem(value: 'refresh', child: Text(loc.rssRefreshList)),
                     ],
                   ),
                 ],
@@ -384,7 +373,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                 if (_selectMode) ...[
                   IconButton(
                     icon: const Icon(Icons.select_all),
-                    onPressed: _selectAll,
+                    onPressed: () => _selectAll(context.read<RssProvider>().getFolderSources(_folderId)),
                     tooltip: loc.rssSelectAll,
                   ),
                   IconButton(
@@ -412,31 +401,33 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                       const PopupMenuDivider(),
                       PopupMenuItem(value: 'export_csv', child: Text(loc.rssExportCsv)),
                       PopupMenuItem(value: 'export_opml', child: Text(loc.rssExportOpml)),
+                      const PopupMenuDivider(),
                       PopupMenuItem(value: 'import_csv', child: Text(loc.rssImportCsv)),
                       PopupMenuItem(value: 'import_opml', child: Text(loc.rssImportOpml)),
-                      const PopupMenuDivider(),
-                      PopupMenuItem(value: 'refresh', child: Text(loc.rssRefreshList)),
                     ],
                   ),
                 ],
               ],
             ),
-          Expanded(child: _buildSourceList()),
+          Expanded(child: Consumer<RssProvider>(
+            builder: (context, provider, _) => _buildSourceList(provider),
+          )),
         ],
       ),
     );
   }
 
-  Widget _buildSourceList() {
-    if (_sources.isEmpty) {
+  Widget _buildSourceList(RssProvider provider) {
+    final sources = _getSources(provider);
+    if (sources.isEmpty) {
       return _buildEmptyState();
     }
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _sources.length,
+      itemCount: sources.length,
       itemBuilder: (context, index) {
-        final source = _sources[index];
+        final source = sources[index];
         final isSelected = _selectedIds.contains(source.id);
 
         return _selectMode
@@ -563,12 +554,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
     );
   }
 
-  void _selectAll() {
+  void _selectAll(List<FeedSource> sources) {
     setState(() {
-      if (_selectedIds.length == _sources.length) {
+      if (_selectedIds.length == sources.length) {
         _selectedIds.clear();
       } else {
-        _selectedIds.addAll(_sources.map((s) => s.id!));
+        _selectedIds.addAll(sources.map((s) => s.id!));
       }
     });
   }
@@ -598,9 +589,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
         break;
       case 'import_opml':
         _importOpml(context);
-        break;
-      case 'refresh':
-        _loadSources();
         break;
     }
   }
@@ -635,13 +623,13 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
       SnackBar(content: Text(loc.rssSyncingFolder), duration: const Duration(seconds: 1)),
     );
 
+    final sources = _getSources(provider);
     var synced = 0;
-    for (final source in _sources) {
+    for (final source in sources) {
       await provider.syncFeedSourceById(source.id!);
       synced++;
     }
 
-    _loadSources();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(loc.rssSyncedCountValue(synced))),
@@ -656,11 +644,10 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
       SnackBar(content: Text(loc.rssSyncingSourceValue(source.title)), duration: const Duration(seconds: 1)),
     );
     await provider.syncFeedSourceById(source.id!);
-    _loadSources();
     if (mounted) {
       final error = provider.error;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error ?? loc.rssSyncComplete)),
+        SnackBar(content: Text(error == null ? loc.rssSyncComplete : loc.translate(error))),
       );
     }
   }
@@ -715,8 +702,8 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
   }
 
   Future<void> _addSourceFromUrl(String url, String title) async {
-    final loc = AppLocalizations.of(context);
     final provider = context.read<RssProvider>();
+    final loc = AppLocalizations.of(context);
     final source = FeedSource(
       title: title.isNotEmpty ? title : url,
       url: url,
@@ -728,13 +715,12 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
       if (savedSource != null) {
         provider.addSourceToFolder(_folderId, savedSource.id!);
       }
-      _loadSources();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Feed added to folder')),
+        SnackBar(content: Text(loc.rssFeedAddedToFolder)),
       );
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(provider.error ?? 'Add failed')),
+        SnackBar(content: Text(provider.error == null ? loc.unknownError : loc.translate(provider.error!))),
       );
     }
   }
@@ -775,7 +761,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
               context.read<RssProvider>().updateFeedSource(
                 source.copyWith(title: title, url: urlController.text.trim()),
               );
-              _loadSources();
             },
             child: Text(loc.save),
           ),
@@ -788,7 +773,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
     final loc = AppLocalizations.of(context);
     final provider = context.read<RssProvider>();
     final localFeeds = provider.feeds;
-    final currentFolderUrls = _sources.map((s) => s.url).toSet();
+    final currentFolderUrls = _getSources(provider).map((s) => s.url).toSet();
 
     // Filter out sources already in this folder.
     final availableFeeds = localFeeds.where((f) => !currentFolderUrls.contains(f.url)).toList();
@@ -813,9 +798,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
             folderId: _folderId,
             availableFeeds: availableFeeds,
             scrollController: scrollController,
-            onSourcesAdded: () {
-              _loadSources();
-            },
+            onSourcesAdded: () {},
           );
         },
       ),
@@ -838,7 +821,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
             onPressed: () {
               Navigator.pop(context);
               context.read<RssProvider>().removeSourceFromFolder(_folderId, source.id!);
-              _loadSources();
             },
             child: Text(loc.confirm),
           ),
@@ -872,7 +854,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
                 _selectMode = false;
                 _selectedIds.clear();
               });
-              _loadSources();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(loc.rssRemoved)),
               );
@@ -956,7 +937,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
         added++;
       }
     }
-    _loadSources();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(loc.rssImportComplete.replaceAll('{count}', '$added'))),
@@ -993,7 +973,6 @@ class _FolderDetailScreenState extends State<FolderDetailScreen> {
         added++;
       }
     }
-    _loadSources();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(loc.rssImportComplete.replaceAll('{count}', '$added'))),

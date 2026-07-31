@@ -28,7 +28,8 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
   bool _summaryExpanded = false;
   bool _contentExpanded = false;
   bool _summaryModeDetected = false;
-  bool _isStarred = false;
+  late bool _isStarred = widget.article.isStarred;
+  late bool _isRead = widget.article.isRead;
 
   // Cached built widgets to avoid re-parsing HTML on setState.
   Widget? _cachedSummaryHtml;
@@ -80,7 +81,7 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
                     PopupMenuItem(value: 'share', child: Text(loc.share)),
                     PopupMenuItem(
                       value: 'read',
-                      child: Text(article.isRead ? loc.rssMarkAsUnread : loc.rssMarkAsRead),
+                      child: Text(_isRead ? loc.rssMarkAsUnread : loc.rssMarkAsRead),
                     ),
                     if (article.link.isNotEmpty)
                       PopupMenuItem(value: 'browser', child: Text(loc.rssViewInBrowser)),
@@ -110,7 +111,7 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
                     PopupMenuItem(value: 'share', child: Text(loc.share)),
                     PopupMenuItem(
                       value: 'read',
-                      child: Text(article.isRead ? loc.rssMarkAsUnread : loc.rssMarkAsRead),
+                      child: Text(_isRead ? loc.rssMarkAsUnread : loc.rssMarkAsRead),
                     ),
                     if (article.link.isNotEmpty)
                       PopupMenuItem(value: 'browser', child: Text(loc.rssViewInBrowser)),
@@ -150,7 +151,12 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
       final provider = context.read<RssProvider>();
       final full = provider.getArticle(article.id!);
       final result = full ?? article;
-      if (mounted) _isStarred = result.isStarred;
+      if (mounted) {
+        setState(() {
+          _isStarred = result.isStarred;
+          _isRead = result.isRead;
+        });
+      }
       return result;
     });
     return _fullArticleFuture!;
@@ -719,7 +725,12 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
         Share.share('${article.title}\n${article.link}');
         break;
       case 'read':
-        context.read<RssProvider>().markAsRead(article.id!);
+        if (_isRead) {
+          context.read<RssProvider>().markAsUnread(article.id!);
+        } else {
+          context.read<RssProvider>().markAsRead(article.id!);
+        }
+        setState(() => _isRead = !_isRead);
         break;
       case 'browser':
         _openInBrowser(context);

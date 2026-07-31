@@ -6,6 +6,9 @@ import '../models/rss_article.dart';
 import '../repositories/rss_repository.dart';
 import '../services/rss_api_service.dart';
 
+/// 视图模式：全部 / 星标 / 文件夹
+enum ViewMode { all, starred, folder }
+
 class RssProvider extends ChangeNotifier {
   final RssRepository _repository = RssRepository();
   static const _prefKeySyncInterval = 'rss_sync_interval_minutes';
@@ -21,6 +24,11 @@ class RssProvider extends ChangeNotifier {
   Timer? _syncTimer;
   int _syncIntervalMinutes = 30;
 
+  // 视图模式状态
+  ViewMode _viewMode = ViewMode.all;
+  int? _selectedFolderId;
+  String _selectedFolderName = '';
+
   List<FeedSource> get feeds => _feeds;
   List<RssArticle> get articles => _articles;
   FeedSource? get currentFeed => _currentFeed;
@@ -30,6 +38,32 @@ class RssProvider extends ChangeNotifier {
   bool get hasMoreArticles => _hasMoreArticles;
   int get totalUnreadCount => _repository.getTotalUnreadCount();
   int get syncIntervalMinutes => _syncIntervalMinutes;
+
+  // 视图模式
+  ViewMode get viewMode => _viewMode;
+  int? get selectedFolderId => _selectedFolderId;
+  String get selectedFolderName => _selectedFolderName;
+
+  void switchToAll() {
+    _viewMode = ViewMode.all;
+    _selectedFolderId = null;
+    _selectedFolderName = '';
+    loadAllArticles(refresh: true);
+  }
+
+  void switchToStarred() {
+    _viewMode = ViewMode.starred;
+    _selectedFolderId = null;
+    _selectedFolderName = '';
+    loadStarredArticles(refresh: true);
+  }
+
+  void switchToFolder(int folderId, String folderName) {
+    _viewMode = ViewMode.folder;
+    _selectedFolderId = folderId;
+    _selectedFolderName = folderName;
+    loadFolderArticles(folderId, refresh: true);
+  }
 
   String getFeedTitle(int feedSourceId) {
     final feed = _feeds.where((f) => f.id == feedSourceId).toList();
@@ -69,7 +103,7 @@ class RssProvider extends ChangeNotifier {
     try {
       final existing = _repository.getFeedSourceByUrl(source.url);
       if (existing != null) {
-        _error = '该订阅源已存在';
+        _error = 'rssFeedExists';
         notifyListeners();
         return false;
       }
@@ -77,7 +111,7 @@ class RssProvider extends ChangeNotifier {
       loadFeedSources();
       return true;
     } catch (e) {
-      _error = '添加失败: $e';
+      _error = 'rssAddFailed';
       notifyListeners();
       return false;
     }
@@ -91,7 +125,7 @@ class RssProvider extends ChangeNotifier {
     try {
       final existing = _repository.getFeedSourceByUrl(url);
       if (existing != null) {
-        _error = '该订阅源已存在';
+        _error = 'rssFeedExists';
         _isLoading = false;
         notifyListeners();
         return false;
@@ -102,7 +136,7 @@ class RssProvider extends ChangeNotifier {
       final id = _repository.addFeedSource(source);
       final savedSource = _repository.getFeedSource(id);
       if (savedSource == null) {
-        _error = '添加失败';
+        _error = 'rssAddFailed';
         _isLoading = false;
         notifyListeners();
         return false;
@@ -115,7 +149,7 @@ class RssProvider extends ChangeNotifier {
       loadFeedSources();
       return true;
     } catch (e) {
-      _error = '添加失败，请检查URL是否正确: $e';
+      _error = 'rssAddFailedCheckUrl';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -253,6 +287,15 @@ class RssProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void markAsUnread(int articleId) {
+    _repository.markAsUnread(articleId);
+    final index = _articles.indexWhere((a) => a.id == articleId);
+    if (index >= 0) {
+      _articles[index] = _articles[index].copyWith(isRead: false);
+    }
+    notifyListeners();
+  }
+
   void markAllAsRead(int feedSourceId) {
     _repository.markAllAsRead(feedSourceId);
     _articles = _articles.map((a) {
@@ -302,7 +345,7 @@ class RssProvider extends ChangeNotifier {
         loadAllArticles(refresh: true);
       }
     } catch (e) {
-      _error = '同步失败: $e';
+      _error = 'rssSyncFailed';
     }
 
     _isSyncing = false;
@@ -323,7 +366,7 @@ class RssProvider extends ChangeNotifier {
         loadArticles(feedSourceId, refresh: true);
       }
     } catch (e) {
-      _error = '同步失败: $e';
+      _error = 'rssSyncFailed';
     }
 
     _isSyncing = false;

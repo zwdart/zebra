@@ -464,9 +464,10 @@ class _TerminalScreenState extends State<TerminalScreen> {
 
     final success = await sshProvider.addTerminalSession(cols: 120, rows: 30);
     if (!success && mounted) {
+      final loc = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Maximum ${SshProvider.maxSessions} tabs reached'),
+          content: Text(loc.maxTabsReached(SshProvider.maxSessions)),
         ),
       );
     }

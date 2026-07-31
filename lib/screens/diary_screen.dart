@@ -1,10 +1,8 @@
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
-import '../database/database_service.dart';
 import '../models/diary_entry.dart';
-import '../utils/zebra_paths.dart';
+import '../providers/diary_provider.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'rss/rss_explore_screen.dart';
@@ -17,15 +15,7 @@ class DiaryScreen extends StatefulWidget {
 }
 
 class _DiaryScreenState extends State<DiaryScreen> {
-  List<DiaryEntry> _entries = [];
-  String _searchQuery = '';
   final _searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadEntries();
-  }
 
   @override
   void dispose() {
@@ -33,25 +23,13 @@ class _DiaryScreenState extends State<DiaryScreen> {
     super.dispose();
   }
 
-  void _loadEntries() {
-    setState(() {
-      if (_searchQuery.isNotEmpty) {
-        _entries = DatabaseService.searchDiaryEntries(_searchQuery);
-      } else {
-        _entries = DatabaseService.getAllDiaryEntries();
-      }
-    });
-  }
-
   void _onSearch(String query) {
-    setState(() => _searchQuery = query);
-    _loadEntries();
+    context.read<DiaryProvider>().onSearch(query);
   }
 
   void _clearSearch() {
     _searchController.clear();
-    setState(() => _searchQuery = '');
-    _loadEntries();
+    context.read<DiaryProvider>().clearSearch();
   }
 
   String _moodEmoji(String mood) {
@@ -91,13 +69,13 @@ class _DiaryScreenState extends State<DiaryScreen> {
         builder: (_) => DiaryEditScreen(existing: existing),
       ),
     );
-    if (result != null) {
+    if (result != null && mounted) {
+      final provider = context.read<DiaryProvider>();
       if (existing == null) {
-        DatabaseService.insertDiaryEntry(result);
+        provider.insertEntry(result);
       } else {
-        DatabaseService.updateDiaryEntry(result.copyWith(id: existing.id, createdAt: existing.createdAt));
+        provider.updateEntry(result.copyWith(id: existing.id, createdAt: existing.createdAt));
       }
-      _loadEntries();
     }
   }
 
@@ -115,9 +93,8 @@ class _DiaryScreenState extends State<DiaryScreen> {
           ),
           TextButton(
             onPressed: () {
-              DatabaseService.deleteDiaryEntry(entry.id!);
+              context.read<DiaryProvider>().deleteEntry(entry);
               Navigator.pop(ctx);
-              _loadEntries();
             },
             child: Text(loc.confirm, style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ),
@@ -128,67 +105,56 @@ class _DiaryScreenState extends State<DiaryScreen> {
 
   Future<void> _exportCsv() async {
     final loc = AppLocalizations.of(context);
-    try {
-      final entries = DatabaseService.getAllDiaryEntries();
-      final csv = StringBuffer('title,content,mood,created_at,updated_at\n');
-      for (final e in entries) {
-        csv.write('${_csvEscape(e.title)},${_csvEscape(e.content)},${e.mood},${e.createdAt.toIso8601String()},${e.updatedAt.toIso8601String()}\n');
-      }
-
-      final ts = _timestamp();
-      final filename = 'diary_export_$ts.csv';
-      final path = await ZebraPaths.filePath('diary', filename);
-      final file = File(path);
-      await file.writeAsString(csv.toString());
-
-      if (mounted) {
-        await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(loc.diaryExportSuccess),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(loc.rssFileSavedTo),
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: SelectableText(
-                    file.path,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(loc.rssClose),
-              ),
-              FilledButton(
-                onPressed: () {
-                  Share.shareXFiles([XFile(file.path)], subject: filename);
-                  Navigator.pop(context);
-                },
-                child: Text(loc.share),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
+    final path = await context.read<DiaryProvider>().exportCsv();
+    if (path == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${loc.diaryExportFailed}: $e')),
+          SnackBar(content: Text(loc.diaryExportFailed)),
         );
       }
+      return;
     }
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(loc.diaryExportSuccess),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(loc.rssFileSavedTo),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: SelectableText(
+                path,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(loc.rssClose),
+          ),
+          FilledButton(
+            onPressed: () {
+              Share.shareXFiles([XFile(path)], subject: 'diary_export.csv');
+              Navigator.pop(context);
+            },
+            child: Text(loc.share),
+          ),
+        ],
+      ),
+    );
   }
 
   void _openDiscover() {
@@ -198,101 +164,13 @@ class _DiaryScreenState extends State<DiaryScreen> {
     );
   }
 
-  String _timestamp() {
-    final now = DateTime.now();
-    return '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
-  }
-
-  Future<void> _importCsv() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-    );
-    if (result == null || result.files.isEmpty) return;
-
-    final loc = AppLocalizations.of(context);
-    try {
-      final file = File(result.files.first.path!);
-      final csvContent = await file.readAsString();
-      final lines = csvContent.split('\n').where((l) => l.trim().isNotEmpty).toList();
-      var imported = 0;
-
-      for (var i = 0; i < lines.length; i++) {
-        final line = lines[i].trim();
-        if (i == 0 && line.toLowerCase().contains('title')) continue;
-
-        final parts = _parseCsvLine(line);
-        if (parts.length >= 3) {
-          final entry = DiaryEntry(
-            title: parts[0].trim(),
-            content: parts[1].trim(),
-            mood: parts[2].trim().isNotEmpty ? parts[2].trim() : 'neutral',
-          );
-          DatabaseService.insertDiaryEntry(entry);
-          imported++;
-        }
-      }
-
-      _loadEntries();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${loc.diaryImportSuccess} ($imported)')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${loc.diaryImportFailed}: $e')),
-        );
-      }
-    }
-  }
-
-  String _csvEscape(String field) {
-    if (field.contains(',') || field.contains('"') || field.contains('\n')) {
-      return '"${field.replaceAll('"', '""')}"';
-    }
-    return field;
-  }
-
-  List<String> _parseCsvLine(String line) {
-    final result = <String>[];
-    final buffer = StringBuffer();
-    var inQuotes = false;
-    final chars = line.split('');
-
-    for (var i = 0; i < chars.length; i++) {
-      final c = chars[i];
-      if (inQuotes) {
-        if (c == '"') {
-          if (i + 1 < chars.length && chars[i + 1] == '"') {
-            buffer.write('"');
-            i++;
-          } else {
-            inQuotes = false;
-          }
-        } else {
-          buffer.write(c);
-        }
-      } else {
-        if (c == '"') {
-          inQuotes = true;
-        } else if (c == ',') {
-          result.add(buffer.toString());
-          buffer.clear();
-        } else {
-          buffer.write(c);
-        }
-      }
-    }
-    result.add(buffer.toString());
-    return result;
-  }
-
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    final provider = context.watch<DiaryProvider>();
+    final entries = provider.entries;
+    final searchQuery = provider.searchQuery;
 
     return Scaffold(
       appBar: CustomTitleBar.isDesktop
@@ -359,7 +237,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
               decoration: InputDecoration(
                 hintText: '${loc.search}...',
                 prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _searchQuery.isNotEmpty
+                suffixIcon: searchQuery.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 20),
                         onPressed: _clearSearch,
@@ -374,7 +252,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
             ),
           ),
           Expanded(
-            child: _entries.isEmpty
+            child: entries.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -387,8 +265,8 @@ class _DiaryScreenState extends State<DiaryScreen> {
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.only(bottom: 80),
-                    itemCount: _entries.length,
-                    itemBuilder: (ctx, i) => _buildEntryCard(_entries[i], theme),
+                    itemCount: entries.length,
+                    itemBuilder: (ctx, i) => _buildEntryCard(entries[i], theme),
                   ),
           ),
         ],
@@ -462,6 +340,24 @@ class _DiaryScreenState extends State<DiaryScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _importCsv() async {
+    final loc = AppLocalizations.of(context);
+    final imported = await context.read<DiaryProvider>().importCsv();
+    if (imported == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(loc.diaryImportFailed)),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${loc.diaryImportSuccess} ($imported)')),
     );
   }
 }
@@ -551,7 +447,6 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Mood selector
                   Text(loc.diaryMood, style: theme.textTheme.titleSmall),
                   const SizedBox(height: 8),
                   Wrap(
@@ -566,7 +461,6 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                     }).toList(),
                   ),
                   const SizedBox(height: 16),
-                  // Title
                   TextField(
                     controller: _titleController,
                     decoration: InputDecoration(
@@ -575,7 +469,6 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Content
                   TextField(
                     controller: _contentController,
                     decoration: InputDecoration(

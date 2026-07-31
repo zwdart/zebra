@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
+import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
-import '../services/feedback_service.dart';
+import '../providers/feedback_provider.dart';
 import '../widgets/custom_title_bar.dart';
 
 class FeedbackScreen extends StatefulWidget {
@@ -16,12 +16,6 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   final _emailController = TextEditingController();
   final _subjectController = TextEditingController();
   final _descriptionController = TextEditingController();
-  bool _isSubmitting = false;
-
-  @override
-  void initState() {
-    super.initState();
-  }
 
   @override
   void dispose() {
@@ -34,56 +28,29 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   Future<void> _submitFeedback() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isSubmitting = true);
+    final provider = context.read<FeedbackProvider>();
+    final success = await provider.submitFeedback(
+      email: _emailController.text.trim(),
+      subject: _subjectController.text.trim(),
+      description: _descriptionController.text.trim(),
+      context: context,
+    );
 
-    try {
-      final info = await PackageInfo.fromPlatform();
-      final platform = Theme.of(context).platform.name;
-
-      final result = await FeedbackService.submitFeedback(
-        email: _emailController.text.trim(),
-        subject: _subjectController.text.trim(),
-        description: _descriptionController.text.trim(),
-        platform: platform,
-        appVersion: info.version,
-      );
-
-      if (!mounted) return;
-
-      if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context).feedbackSubmitSuccess),
-          ),
-        );
-        Navigator.of(context).pop();
-      } else {
-        final error = result['error'] as String? ?? 'Unknown error';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error),
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
+    if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${AppLocalizations.of(context).feedbackSubmitFailed}: $e'),
+          content: Text(AppLocalizations.of(context).feedbackSubmitSuccess),
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      Navigator.of(context).pop();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
-    final isZh = Localizations.localeOf(context).languageCode == 'zh';
     final colorScheme = Theme.of(context).colorScheme;
+    final isSubmitting = context.watch<FeedbackProvider>().isSubmitting;
 
     return Scaffold(
       appBar: CustomTitleBar.isDesktop ? null : AppBar(
@@ -165,8 +132,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                       width: double.infinity,
                       height: 48,
                       child: ElevatedButton(
-                        onPressed: _isSubmitting ? null : _submitFeedback,
-                        child: _isSubmitting
+                        onPressed: isSubmitting ? null : _submitFeedback,
+                        child: isSubmitting
                             ? SizedBox(
                                 width: 20,
                                 height: 20,

@@ -23,6 +23,9 @@ class _LinuxCommandsScreenState extends State<LinuxCommandsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<LinuxCommandProvider>().loadCommands(refresh: true);
     });
+    _searchController.addListener(() {
+      setState(() {});
+    });
     _scrollController.addListener(_onScroll);
   }
 
@@ -73,7 +76,6 @@ class _LinuxCommandsScreenState extends State<LinuxCommandsScreen> {
                     : null,
               ),
               onChanged: (v) {
-                setState(() {});
                 context.read<LinuxCommandProvider>().searchCommands(v);
               },
             ),

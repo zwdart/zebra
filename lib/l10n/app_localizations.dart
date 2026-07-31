@@ -203,6 +203,31 @@ class AppLocalizations {
   String get clearSuccess => translate('clearSuccess');
   String get clearFailed => translate('clearFailed');
   String get close => translate('close');
+  String get back => translate('back');
+  String get exitSftp => translate('exitSftp');
+  String get minimize => translate('minimize');
+  String get monitor => translate('monitor');
+  String get edit => translate('edit');
+  String get view => translate('view');
+  String get scanning => translate('scanning');
+  String errorWithDetail(String detail) => translate('errorWithDetail').replaceAll('{detail}', detail);
+  String sftpErrorWithDetail(String detail) => translate('sftpError').replaceAll('{detail}', detail);
+  String get cannotReadFile => translate('cannotReadFile');
+  String get failedToLoadFile => translate('failedToLoadFile');
+  String get noDiscoveryItems => translate('noDiscoveryItems');
+  String fileSaved(String name) => translate('fileSaved').replaceAll('{name}', name);
+  String deleteFolderConfirm(String name) => translate('deleteFolderConfirm').replaceAll('{name}', name);
+  String deleteFilesConfirm(int count) => translate('deleteFilesConfirm').replaceAll('{count}', '$count');
+  String get apiServer => translate('apiServer');
+  String get apiBaseUrl => translate('apiBaseUrl');
+  String get apiUrlResetDefault => translate('apiUrlResetDefault');
+  String apiUrlUpdated(String url) => translate('apiUrlUpdated').replaceAll('{url}', url);
+  String get shareDatabases => translate('shareDatabases');
+  String readOnlyPreview(String size) => translate('readOnlyPreview').replaceAll('{size}', size);
+  String get databaseDirNotFound => translate('databaseDirNotFound');
+  String get noDatabaseFiles => translate('noDatabaseFiles');
+  String get api => translate('api');
+  String maxTabsReached(int count) => translate('maxTabsReached').replaceAll('{count}', '$count');
   String get newTab => translate('newTab');
   String get noSessions => translate('noSessions');
   String get closeTab => translate('closeTab');
@@ -360,6 +385,7 @@ class AppLocalizations {
   String get rssNoSources => translate('rssNoSources');
   String get rssAddSource => translate('rssAddSource');
   String get rssAddSourceHint => translate('rssAddSourceHint');
+  String get rssOneClickAdd => translate('rssOneClickAdd');
   String get rssNoArticles => translate('rssNoArticles');
   String get rssNoArticlesHint => translate('rssNoArticlesHint');
   String get rssSyncNow => translate('rssSyncNow');
@@ -481,6 +507,11 @@ class AppLocalizations {
   String get rssAddCount => translate('rssAddCount');
   String get rssAddedCount => translate('rssAddedCount');
   String get rssMarkAllReadConfirm => translate('rssMarkAllReadConfirm');
+  String get rssFeedExists => translate('rssFeedExists');
+  String get rssAddFailed => translate('rssAddFailed');
+  String get rssAddFailedCheckUrl => translate('rssAddFailedCheckUrl');
+  String get rssSyncFailed => translate('rssSyncFailed');
+  String get rssFeedAddedToFolder => translate('rssFeedAddedToFolder');
 
   // About
   String get aboutSlogan => translate('aboutSlogan');
@@ -742,6 +773,31 @@ class AppLocalizations {
     'clearSuccess': 'Cleared successfully',
     'clearFailed': 'Clear failed',
     'close': 'Close',
+    'back': 'Back',
+    'exitSftp': 'Exit SFTP',
+    'minimize': 'Minimize',
+    'monitor': 'Monitor',
+    'edit': 'Edit',
+    'view': 'View',
+    'scanning': 'Scanning...',
+    'errorWithDetail': 'Error: {detail}',
+    'sftpError': 'SFTP error: {detail}',
+    'cannotReadFile': 'Cannot read file',
+    'failedToLoadFile': 'Failed to load file',
+    'noDiscoveryItems': 'No discovery items available',
+    'fileSaved': '{name} saved',
+    'deleteFolderConfirm': 'Delete "{name}" and all its contents?',
+    'deleteFilesConfirm': 'Delete {count} files?',
+    'apiServer': 'API Server',
+    'apiBaseUrl': 'API Base URL',
+    'apiUrlResetDefault': 'API URL reset to default',
+    'apiUrlUpdated': 'API URL updated: {url}',
+    'shareDatabases': 'Share Databases',
+    'readOnlyPreview': 'File size: {size} - Read-only preview',
+    'databaseDirNotFound': 'Database directory not found',
+    'noDatabaseFiles': 'No database files found',
+    'api': 'API',
+    'maxTabsReached': 'Maximum {count} tabs reached',
     'newTab': 'New Tab',
     'noSessions': 'No sessions',
     'closeTab': 'Close Tab',
@@ -890,6 +946,7 @@ class AppLocalizations {
     'rssNoSources': 'No feeds yet',
     'rssAddSource': 'Add Feed',
     'rssAddSourceHint': 'Add feeds to see articles here',
+    'rssOneClickAdd': 'One-click add recommended feeds',
     'rssNoArticles': 'No articles',
     'rssNoArticlesHint': 'Tap button to fetch latest',
     'rssSyncNow': 'Sync Now',
@@ -1011,6 +1068,11 @@ class AppLocalizations {
     'rssAddCount': 'Add ({count})',
     'rssAddedCount': 'Added {count} feeds to folder',
     'rssMarkAllReadConfirm': 'All marked as read',
+    'rssFeedExists': 'This feed already exists',
+    'rssAddFailed': 'Failed to add feed',
+    'rssAddFailedCheckUrl': 'Failed to add feed, please check if the URL is correct',
+    'rssSyncFailed': 'Sync failed',
+    'rssFeedAddedToFolder': 'Feed added to folder',
     // About
     'aboutSlogan': 'A Helpful SSH Client',
     'aboutDescription': 'Zebra SSH is a cross-platform SSH client with terminal, SFTP file management, server monitoring, process management and disk cleanup features. Supports Linux, macOS, Windows, Android and iOS.',
@@ -1235,6 +1297,31 @@ class AppLocalizations {
     'clearSuccess': '清理成功',
     'clearFailed': '清理失败',
     'close': '关闭',
+    'back': '返回',
+    'exitSftp': '退出文件管理',
+    'minimize': '最小化',
+    'monitor': '监控',
+    'edit': '编辑',
+    'view': '查看',
+    'scanning': '扫描中...',
+    'errorWithDetail': '错误：{detail}',
+    'sftpError': 'SFTP 错误：{detail}',
+    'cannotReadFile': '无法读取文件',
+    'failedToLoadFile': '文件加载失败',
+    'noDiscoveryItems': '暂无发现内容',
+    'fileSaved': '{name} 已保存',
+    'deleteFolderConfirm': '删除「{name}」及其全部内容？',
+    'deleteFilesConfirm': '删除 {count} 个文件？',
+    'apiServer': 'API 服务器',
+    'apiBaseUrl': 'API 基础地址',
+    'apiUrlResetDefault': 'API 地址已重置为默认值',
+    'apiUrlUpdated': 'API 地址已更新：{url}',
+    'shareDatabases': '分享数据库',
+    'readOnlyPreview': '文件大小：{size} - 只读预览',
+    'databaseDirNotFound': '未找到数据库目录',
+    'noDatabaseFiles': '未找到数据库文件',
+    'api': 'API',
+    'maxTabsReached': '已达到最多 {count} 个标签页',
     'newTab': '新建标签页',
     'noSessions': '无会话',
     'closeTab': '关闭标签页',
@@ -1383,6 +1470,7 @@ class AppLocalizations {
     'rssNoSources': '暂无订阅源',
     'rssAddSource': '添加订阅源',
     'rssAddSourceHint': '添加订阅源后，文章将在此显示',
+    'rssOneClickAdd': '一键添加推荐订阅源',
     'rssNoArticles': '暂无文章',
     'rssNoArticlesHint': '点击下方按钮获取最新内容',
     'rssSyncNow': '同步最新',
@@ -1504,6 +1592,11 @@ class AppLocalizations {
     'rssAddCount': '添加 ({count})',
     'rssAddedCount': '已添加 {count} 个订阅源到收藏夹',
     'rssMarkAllReadConfirm': '已全部标为已读',
+    'rssFeedExists': '该订阅源已存在',
+    'rssAddFailed': '添加失败',
+    'rssAddFailedCheckUrl': '添加失败，请检查URL是否正确',
+    'rssSyncFailed': '同步失败',
+    'rssFeedAddedToFolder': '订阅源已添加到收藏夹',
     // About
     'aboutSlogan': '友好的 SSH 客户端',
     'aboutDescription': 'Zebra SSH 是一款跨平台 SSH 客户端，支持终端、SFTP 文件管理、服务器监控、进程管理和磁盘清理等功能。支持 Linux、macOS、Windows、Android 和 iOS。',

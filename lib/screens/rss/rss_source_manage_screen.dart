@@ -106,11 +106,11 @@ class RssSourceManageScreen extends StatelessWidget {
                   Icon(Icons.auto_awesome, size: 20, color: Theme.of(context).colorScheme.primary),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text('One-click add recommended feeds', style: Theme.of(context).textTheme.bodyMedium),
+                    child: Text(AppLocalizations.of(context).rssOneClickAdd, style: Theme.of(context).textTheme.bodyMedium),
                   ),
                   TextButton(
                     onPressed: () => _showQuickAddDialog(context),
-                    child: const Text('View'),
+                    child: Text(AppLocalizations.of(context).view),
                   ),
                 ],
               ),

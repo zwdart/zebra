@@ -19,6 +19,11 @@ import 'providers/process_provider.dart';
 import 'providers/cleanup_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/rss_provider.dart';
+import 'providers/about_provider.dart';
+import 'providers/blog_provider.dart';
+import 'providers/discovery_provider.dart';
+import 'providers/feedback_provider.dart';
+import 'providers/diary_provider.dart';
 import 'database/rss_database_service.dart';
 import 'services/update_service.dart';
 import 'services/window_service.dart';
@@ -60,6 +65,11 @@ class ZebraApp extends StatelessWidget {
           update: (_, ssh, provider) => provider!..updateSsh(ssh),
         ),
         ChangeNotifierProvider(create: (_) => UpdateProvider()),
+        ChangeNotifierProvider(create: (_) => AboutProvider()..load()),
+        ChangeNotifierProvider(create: (_) => BlogProvider()),
+        ChangeNotifierProvider(create: (_) => DiscoveryProvider()),
+        ChangeNotifierProvider(create: (_) => FeedbackProvider()),
+        ChangeNotifierProvider(create: (_) => DiaryProvider()..loadEntries()),
         ChangeNotifierProvider(create: (_) => RssProvider()..init()),
       ],
       child: Consumer2<ThemeProvider, LocaleProvider>(

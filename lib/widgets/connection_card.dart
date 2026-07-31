@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/ssh_connection.dart';
+import '../l10n/app_localizations.dart';
 
 class ConnectionCard extends StatelessWidget {
   final SshConnection connection;
@@ -89,17 +90,20 @@ class ConnectionCard extends StatelessWidget {
                           break;
                       }
                     },
-                    itemBuilder: (ctx) => [
-                      const PopupMenuItem(value: 'connect', child: Text('Connect')),
-                      const PopupMenuItem(value: 'sftp', child: Text('SFTP')),
-                      PopupMenuItem(value: 'monitor', child: Text('Monitor')),
-                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    itemBuilder: (ctx) {
+                      final loc = AppLocalizations.of(ctx);
+                      return [
+                      PopupMenuItem(value: 'connect', child: Text(loc.connect)),
+                      PopupMenuItem(value: 'sftp', child: Text(loc.sftp)),
+                      PopupMenuItem(value: 'monitor', child: Text(loc.monitor)),
+                      PopupMenuItem(value: 'edit', child: Text(loc.edit)),
                       PopupMenuItem(
                         value: 'delete',
-                        child: Text('Delete',
+                        child: Text(loc.delete,
                             style: TextStyle(color: theme.colorScheme.error)),
                       ),
-                    ],
+                      ];
+                    },
                   ),
                 ],
               ),

@@ -27,18 +27,18 @@ class RssQuickAddScreenState extends State<RssQuickAddScreen> {
   final int _pageSize = 20;
   final ScrollController _scrollController = ScrollController();
 
-  late Set<String> _existingUrls;
-
   // Folder state
   List<Map<String, dynamic>> _folders = [];
   int? _selectedFolderId;
   String? _selectedFolderName;
 
+  /// 已添加的订阅源 URL，实时取自 RssProvider，避免 initState 快照过时。
+  Set<String> get _existingUrls =>
+      context.read<RssProvider>().feeds.map((f) => f.url).toSet();
+
   @override
   void initState() {
     super.initState();
-    final provider = context.read<RssProvider>();
-    _existingUrls = provider.feeds.map((f) => f.url).toSet();
     _loadFolders();
     _loadPage(1);
     _scrollController.addListener(_onScroll);
@@ -63,8 +63,8 @@ class RssQuickAddScreenState extends State<RssQuickAddScreen> {
     }
   }
 
-  Future<void> _loadPage(int page) async {
-    setState(() => _loading = page == 1);
+  Future<void> _loadPage(int page, {bool silent = false}) async {
+    if (!silent) setState(() => _loading = page == 1);
     RssPageResult? result;
     if (_selectedFolderId != null) {
       result = await RssApiService.getFolderSources(_selectedFolderId!, page: page, size: _pageSize);
@@ -87,6 +87,11 @@ class RssQuickAddScreenState extends State<RssQuickAddScreen> {
         _loading = false;
         _loadingMore = false;
       });
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).unknownError)),
+        );
+      }
     }
   }
 
@@ -112,14 +117,16 @@ class RssQuickAddScreenState extends State<RssQuickAddScreen> {
     final success = await provider.addFeedSource(feed);
     if (!mounted) return;
     if (success) {
-      setState(() => _existingUrls.add(feed.url));
+      // _existingUrls 实时取自 provider.feeds，无需手动维护；
+      // setState 触发重建以刷新“已添加”勾选状态。
+      setState(() {});
       // If viewing a folder, also add to local folder
       if (_selectedFolderId != null && feed.id != null) {
         provider.addSourceToFolder(_selectedFolderId!, feed.id!);
       }
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(success ? loc.rssAddedToFolder.replaceAll('{name}', feed.title) : provider.error ?? 'Add failed')),
+      SnackBar(content: Text(success ? loc.rssAddedToFolder.replaceAll('{name}', feed.title) : (provider.error == null ? loc.unknownError : loc.translate(provider.error!)))),
     );
   }
 
@@ -256,12 +263,23 @@ class RssQuickAddScreenState extends State<RssQuickAddScreen> {
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
-              : _feeds.isEmpty
-                  ? Center(child: Text(loc.rssNoSources))
-                  : ListView.builder(
-                      controller: _scrollController,
-                      itemCount: _feeds.length + (_feeds.length < _total ? 1 : 0),
-                      itemBuilder: (context, index) {
+              : RefreshIndicator(
+                  onRefresh: () => _loadPage(1, silent: true),
+                  child: _feeds.isEmpty
+                      ? LayoutBuilder(
+                          builder: (context, constraints) => SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: SizedBox(
+                              height: constraints.maxHeight,
+                              child: Center(child: Text(loc.rssNoSources)),
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollController,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount: _feeds.length + (_feeds.length < _total ? 1 : 0),
+                          itemBuilder: (context, index) {
                         if (index == _feeds.length) {
                           return _loadingMore
                               ? const Padding(
@@ -308,6 +326,7 @@ class RssQuickAddScreenState extends State<RssQuickAddScreen> {
                         );
                       },
                     ),
+                ),
         ),
       ],
     );

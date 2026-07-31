@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import '../l10n/app_localizations.dart';
 
 class CustomTitleBar extends StatelessWidget {
   final String? title;
@@ -29,6 +30,7 @@ class CustomTitleBar extends StatelessWidget {
     if (!isDesktop) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
+    final loc = AppLocalizations.of(context);
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -52,7 +54,7 @@ class CustomTitleBar extends StatelessWidget {
               _WindowButton(
                 icon: Icons.arrow_back,
                 onTap: onBack ?? () => Navigator.of(context).maybePop(),
-                tooltip: 'Back',
+                tooltip: loc.back,
               )
             else ...[
               const SizedBox(width: 12),
@@ -66,7 +68,7 @@ class CustomTitleBar extends StatelessWidget {
               _WindowButton(
                 icon: Icons.close,
                 onTap: onClose ?? () => Navigator.of(context).maybePop(),
-                tooltip: 'Exit SFTP',
+                tooltip: loc.exitSftp,
               ),
             const SizedBox(width: 8),
             Expanded(
@@ -85,7 +87,7 @@ class CustomTitleBar extends StatelessWidget {
             _WindowButton(
               icon: Icons.remove,  // 横线 - 最小化
               onTap: () => windowManager.minimize(),
-              tooltip: 'Minimize',
+              tooltip: loc.minimize,
             ),
             _MaximizeButton(),
             _WindowButton(
@@ -93,7 +95,7 @@ class CustomTitleBar extends StatelessWidget {
               onTap: () async {
                 await windowManager.close();
               },
-              tooltip: 'Close',
+              tooltip: loc.close,
               isClose: true,
             ),
             const SizedBox(width: 4),

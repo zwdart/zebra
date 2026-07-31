@@ -11,6 +11,9 @@ import '../utils/zebra_paths.dart';
 import '../providers/theme_provider.dart';
 import '../providers/locale_provider.dart';
 import '../providers/update_provider.dart';
+import '../providers/connection_provider.dart';
+import '../providers/diary_provider.dart';
+import '../providers/rss_provider.dart';
 import '../services/update_service.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
@@ -99,10 +102,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const Divider(),
                 if (_showApiServer) ...[
-                  _buildSectionHeader(context, 'API'),
+                  _buildSectionHeader(context, loc.api),
                   ListTile(
                     leading: const Icon(Icons.cloud),
-                    title: const Text('API Server'),
+                    title: Text(loc.apiServer),
                     subtitle: Text(
                       UpdateService.apiBaseUrl,
                       style: Theme.of(context).textTheme.bodySmall,
@@ -288,27 +291,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _openDatabaseDirectory(BuildContext context) async {
-    final path = DatabaseService.dbDirPath;
-    if (path.isEmpty) return;
-
-    try {
-      if (Platform.isLinux) {
-        await Process.run('xdg-open', [path]);
-      } else if (Platform.isMacOS) {
-        await Process.run('open', [path]);
-      } else if (Platform.isWindows) {
-        await Process.run('explorer', [path]);
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
-  }
-
   Widget _buildUniqueIdTile(BuildContext context, AppLocalizations loc) {
     return FutureBuilder<String>(
       future: UniqueId.get(),
@@ -333,44 +315,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget? _buildDatabaseTrailing(BuildContext context) {
-    if (Platform.isAndroid || Platform.isIOS) {
-      return IconButton(
-        icon: const Icon(Icons.share),
-        tooltip: AppLocalizations.of(context).shareDatabase,
-        onPressed: () => _shareDatabase(context),
-      );
-    }
-    return const Icon(Icons.folder_open);
-  }
-
-  void _onDatabaseTap(BuildContext context) {
-    if (Platform.isAndroid || Platform.isIOS) {
-      _shareDatabase(context);
-    } else {
-      _openDatabaseDirectory(context);
-    }
-  }
-
-  void _shareDatabase(BuildContext context) async {
-    final dbFile = File(DatabaseService.dbPath);
-    if (!await dbFile.exists()) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Database file not found')),
-        );
-      }
-      return;
-    }
-    await Share.shareXFiles([XFile(dbFile.path)], text: 'zebra.db');
-  }
-
   void _shareAllDatabases(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
     final dirPath = DatabaseService.dbDirPath;
     if (dirPath.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Database directory not found')),
+          SnackBar(content: Text(loc.databaseDirNotFound)),
         );
       }
       return;
@@ -380,7 +331,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!await dir.exists()) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Database directory not found')),
+          SnackBar(content: Text(loc.databaseDirNotFound)),
         );
       }
       return;
@@ -390,14 +341,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (dbFiles.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No database files found')),
+          SnackBar(content: Text(loc.noDatabaseFiles)),
         );
       }
       return;
     }
 
     final xFiles = dbFiles.map((f) => XFile(f.path)).toList();
-    await Share.shareXFiles(xFiles, text: 'zebra databases');
+    await Share.shareXFiles(xFiles, text: loc.shareDatabases);
   }
 
   void _checkForUpdates(BuildContext context) {
@@ -414,13 +365,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('API Server'),
+        title: Text(loc.apiServer),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'API Base URL',
+          decoration: InputDecoration(
+            labelText: loc.apiBaseUrl,
             hintText: 'https://zebra.dart.xin',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
           ),
           keyboardType: TextInputType.url,
         ),
@@ -436,7 +387,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (ctx.mounted) Navigator.pop(ctx);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('API URL reset to default')),
+                  SnackBar(content: Text(loc.apiUrlResetDefault)),
                 );
               }
             },
@@ -450,7 +401,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (ctx.mounted) Navigator.pop(ctx);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('API URL updated: $url')),
+                    SnackBar(content: Text(loc.apiUrlUpdated(url))),
                   );
                 }
               }
@@ -466,7 +417,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final loc = AppLocalizations.of(context);
 
     // 异步获取路径
-    final tempDir = await Directory.systemTemp;
+    final tempDir = Directory.systemTemp;
     final docDir = await getApplicationDocumentsDirectory();
     final rssDir = await ZebraPaths.rss;
     final cachePath = tempDir.path;
@@ -604,6 +555,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _openDirectory(String path) async {
+    final loc = AppLocalizations.of(context);
     try {
       if (Platform.isLinux) {
         await Process.run('xdg-open', [path]);
@@ -615,7 +567,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text(loc.errorWithDetail('$e'))),
         );
       }
     }
@@ -643,7 +595,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (confirmed != true || !context.mounted) return;
       try {
         // 清理系统临时目录下的 zebra 相关缓存
-        final tempDir = await Directory.systemTemp;
+        final tempDir = Directory.systemTemp;
         final zebraTemp = Directory('${tempDir.path}/zebra');
         if (zebraTemp.existsSync()) {
           zebraTemp.deleteSync(recursive: true);
@@ -685,13 +637,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (confirmed != true || !context.mounted) return;
       try {
         // 清理临时目录缓存
-        final tempDir = await Directory.systemTemp;
+        final tempDir = Directory.systemTemp;
         final zebraTemp = Directory('${tempDir.path}/zebra');
         if (zebraTemp.existsSync()) {
           zebraTemp.deleteSync(recursive: true);
         }
 
-        // 删除数据库文件
+        // 删除数据库文件（先关闭连接，避免句柄指向已删除文件）
+        DatabaseService.close();
         final dbFile = File(DatabaseService.dbPath);
         if (dbFile.existsSync()) {
           dbFile.deleteSync();
@@ -704,7 +657,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           zebraData.deleteSync(recursive: true);
         }
 
+        // 重建空数据库，并刷新各 Provider 的内存数据
+        await DatabaseService.init();
         if (context.mounted) {
+          context.read<ConnectionProvider>().loadConnections();
+          context.read<DiaryProvider>().loadEntries();
+          context.read<RssProvider>().loadFeedSources();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(loc.clearSuccess)),
           );

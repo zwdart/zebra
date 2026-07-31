@@ -73,6 +73,10 @@ class RssRepository {
     RssDatabaseService.markAsRead(articleId);
   }
 
+  void markAsUnread(int articleId) {
+    RssDatabaseService.markAsUnread(articleId);
+  }
+
   void markAllAsRead(int feedSourceId) {
     RssDatabaseService.markAllAsRead(feedSourceId);
   }

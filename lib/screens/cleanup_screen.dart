@@ -297,14 +297,14 @@ class _FileBrowser extends StatelessWidget {
                 ),
               ),
             if (provider.isScanningFiles)
-              const Card(
+              Card(
                 child: Padding(
-                  padding: EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(24),
                   child: Column(
                     children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text('Scanning...'),
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(AppLocalizations.of(context).scanning),
                     ],
                   ),
                 ),

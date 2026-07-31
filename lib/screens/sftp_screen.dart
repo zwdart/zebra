@@ -139,13 +139,14 @@ class _SftpScreenState extends State<SftpScreen> {
   Future<void> _initSftp() async {
     final sshProvider = context.read<SshProvider>();
     final sftpProvider = context.read<SftpProvider>();
+    final loc = AppLocalizations.of(context);
     try {
       await sftpProvider.attachToSsh(sshProvider.sshService);
       await sftpProvider.listDirectory('/');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('SFTP error: $e')),
+          SnackBar(content: Text(loc.sftpErrorWithDetail('$e'))),
         );
       }
     }
@@ -293,7 +294,7 @@ class _SftpScreenState extends State<SftpScreen> {
                                   const SizedBox(height: 16),
                                   ElevatedButton(
                                     onPressed: () => sftpProvider.listDirectory(),
-                                    child: const Text('Retry'),
+                                    child: Text(loc.retry),
                                   ),
                                 ],
                               ),
@@ -548,7 +549,7 @@ class _SftpScreenState extends State<SftpScreen> {
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error: $e')),
+              SnackBar(content: Text(loc.errorWithDetail('$e'))),
             );
           }
         }
@@ -655,7 +656,7 @@ class _SftpScreenState extends State<SftpScreen> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e')),
+            SnackBar(content: Text(loc.errorWithDetail('$e'))),
           );
         }
       }
@@ -768,13 +769,13 @@ class _SftpScreenState extends State<SftpScreen> {
       // Other error
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Cannot read file')),
+          SnackBar(content: Text(loc.cannotReadFile)),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text(loc.errorWithDetail('$e'))),
         );
       }
     }
@@ -819,7 +820,7 @@ class _SftpScreenState extends State<SftpScreen> {
         await sftpProvider.sftpService.writeFileContent(remotePath, result);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${p.basename(remotePath)} saved')),
+            SnackBar(content: Text(loc.fileSaved(p.basename(remotePath)))),
           );
         }
       }
@@ -851,7 +852,7 @@ class _SftpScreenState extends State<SftpScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'File size: ${_formatFileSize(fileSize)} - Read-only preview',
+                        loc.readOnlyPreview(_formatFileSize(fileSize)),
                         style: Theme.of(ctx).textTheme.bodySmall,
                       ),
                     ),
@@ -867,7 +868,7 @@ class _SftpScreenState extends State<SftpScreen> {
                       return const Center(child: CircularProgressIndicator());
                     }
                     if (snapshot.hasError || !snapshot.hasData) {
-                      return const Center(child: Text('Failed to load file'));
+                      return Center(child: Text(loc.failedToLoadFile));
                     }
                     return Container(
                       decoration: BoxDecoration(
@@ -1248,7 +1249,7 @@ class _SftpScreenState extends State<SftpScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(loc.delete),
-        content: Text('Delete "$name" and all its contents?'),
+        content: Text(loc.deleteFolderConfirm(name)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(loc.cancel)),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(loc.confirm)),
@@ -1269,7 +1270,7 @@ class _SftpScreenState extends State<SftpScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(loc.delete),
-        content: Text('Delete $count files?'),
+        content: Text(loc.deleteFilesConfirm(count)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(loc.cancel)),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(loc.confirm)),
