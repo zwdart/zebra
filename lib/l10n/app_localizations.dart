@@ -606,6 +606,53 @@ class AppLocalizations {
   String get exportFeeds => translate('exportFeeds');
   String get more => translate('more');
 
+  // QR Tool
+  String get qrTool => translate('qrTool');
+  String get qrGenerate => translate('qrGenerate');
+  String get qrRecognize => translate('qrRecognize');
+  String get qrContent => translate('qrContent');
+  String get qrContentHint => translate('qrContentHint');
+  String get qrSave => translate('qrSave');
+  String get qrShare => translate('qrShare');
+  String get qrBasicSettings => translate('qrBasicSettings');
+  String get qrErrorLevel => translate('qrErrorLevel');
+  String get qrErrorLevelLow => translate('qrErrorLevelLow');
+  String get qrErrorLevelMedium => translate('qrErrorLevelMedium');
+  String get qrErrorLevelQuartile => translate('qrErrorLevelQuartile');
+  String get qrErrorLevelHigh => translate('qrErrorLevelHigh');
+  String get qrForeground => translate('qrForeground');
+  String get qrBackground => translate('qrBackground');
+  String get qrAdvancedSettings => translate('qrAdvancedSettings');
+  String get qrShape => translate('qrShape');
+  String get qrShapeSquares => translate('qrShapeSquares');
+  String get qrShapeSmooth => translate('qrShapeSmooth');
+  String get qrShapeDots => translate('qrShapeDots');
+  String get qrShapeRounded => translate('qrShapeRounded');
+  String get qrGradient => translate('qrGradient');
+  String get qrGradientStart => translate('qrGradientStart');
+  String get qrGradientEnd => translate('qrGradientEnd');
+  String get qrCustomColor => translate('qrCustomColor');
+  String get qrCustomColorDesc => translate('qrCustomColorDesc');
+  String get qrQuietZone => translate('qrQuietZone');
+  String get qrDensity => translate('qrDensity');
+  String get qrRounding => translate('qrRounding');
+  String get qrLogo => translate('qrLogo');
+  String get qrNoLogo => translate('qrNoLogo');
+  String get qrLogoSet => translate('qrLogoSet');
+  String get qrLogoErrorLevelHint => translate('qrLogoErrorLevelHint');
+  String get qrPickLogo => translate('qrPickLogo');
+  String get qrRemoveLogo => translate('qrRemoveLogo');
+  String get qrSavedToGallery => translate('qrSavedToGallery');
+  String get qrSaveSuccess => translate('qrSaveSuccess');
+  String get qrSaveFailed => translate('qrSaveFailed');
+  String get qrShareFailed => translate('qrShareFailed');
+  String get qrPickImage => translate('qrPickImage');
+  String get qrDragHint => translate('qrDragHint');
+  String get qrNoResult => translate('qrNoResult');
+  String get qrDecodeResult => translate('qrDecodeResult');
+  String get qrDecodeTime => translate('qrDecodeTime');
+  String get qrDecodeFailed => translate('qrDecodeFailed');
+
   static const Map<String, String> _en = {
     'appTitle': 'Zebra SSH',
     'connections': 'Connections',
@@ -1128,6 +1175,52 @@ class AppLocalizations {
     'importFeeds': 'Import Feeds',
     'exportFeeds': 'Export Feeds',
     'more': 'More',
+    // QR Tool
+    'qrTool': 'QR Code',
+    'qrGenerate': 'Generate',
+    'qrRecognize': 'Recognize',
+    'qrContent': 'Content',
+    'qrContentHint': 'Enter text, URL, WiFi config, etc.',
+    'qrSave': 'Save Image',
+    'qrShare': 'Share Image',
+    'qrBasicSettings': 'Basic Settings',
+    'qrErrorLevel': 'Error Correction',
+    'qrErrorLevelLow': 'L (7%)',
+    'qrErrorLevelMedium': 'M (15%)',
+    'qrErrorLevelQuartile': 'Q (25%)',
+    'qrErrorLevelHigh': 'H (30%)',
+    'qrForeground': 'Foreground',
+    'qrBackground': 'Background',
+    'qrAdvancedSettings': 'Advanced Settings',
+    'qrShape': 'Shape',
+    'qrShapeSquares': 'Squares',
+    'qrShapeSmooth': 'Smooth',
+    'qrShapeDots': 'Dots',
+    'qrShapeRounded': 'Rounded',
+    'qrGradient': 'Gradient Fill',
+    'qrGradientStart': 'Start Color',
+    'qrGradientEnd': 'End Color',
+    'qrCustomColor': 'Custom Color',
+    'qrCustomColorDesc': 'Choose RGB color values, e.g. 255,0,0',
+    'qrQuietZone': 'Quiet Zone',
+    'qrDensity': 'Density',
+    'qrRounding': 'Rounding',
+    'qrLogo': 'Embedded Logo',
+    'qrNoLogo': 'No logo',
+    'qrLogoSet': 'Logo set',
+    'qrLogoErrorLevelHint': 'Logo covers data modules; error correction is raised to Q (25%) automatically',
+    'qrPickLogo': 'Pick logo image',
+    'qrRemoveLogo': 'Remove logo',
+    'qrSavedToGallery': 'Saved to gallery',
+    'qrSaveSuccess': 'Image saved to:',
+    'qrSaveFailed': 'Save failed',
+    'qrShareFailed': 'Share failed',
+    'qrPickImage': 'Click to pick an image, or drop it here',
+    'qrDragHint': 'Supports PNG / JPG with a QR code',
+    'qrNoResult': 'No QR code detected',
+    'qrDecodeResult': 'Decoded result:',
+    'qrDecodeTime': 'Decoded at:',
+    'qrDecodeFailed': 'Decode failed',
   };
 
   static const Map<String, String> _zh = {
@@ -1652,6 +1745,51 @@ class AppLocalizations {
     'importFeeds': '导入订阅源',
     'exportFeeds': '导出订阅源',
     'more': '更多',
+    // QR Tool
+    'qrTool': '二维码',
+    'qrGenerate': '生成',
+    'qrRecognize': '识别',
+    'qrContent': '内容',
+    'qrContentHint': '输入文本、网址、WiFi 配置等',
+    'qrSave': '保存图片',
+    'qrShare': '分享图片',
+    'qrBasicSettings': '基础设置',
+    'qrErrorLevel': '容错级别',
+    'qrErrorLevelLow': 'L (7%)',
+    'qrErrorLevelMedium': 'M (15%)',
+    'qrErrorLevelQuartile': 'Q (25%)',
+    'qrErrorLevelHigh': 'H (30%)',
+    'qrForeground': '前景色',
+    'qrBackground': '背景色',
+    'qrAdvancedSettings': '高级设置',
+    'qrShape': '形状',
+    'qrShapeSquares': '方块',
+    'qrShapeSmooth': '圆滑',
+    'qrShapeDots': '圆点',
+    'qrShapeRounded': '圆角',
+    'qrGradient': '渐变填充',
+    'qrCustomColor': '自定义颜色',
+    'qrCustomColorDesc': '选择 RGB 颜色值,例如 255,0,0',
+    'qrCustomColorTitle': 'RGB 颜色选择器',
+    'qrQuietZone': '静区宽度',
+    'qrDensity': '密度',
+    'qrRounding': '圆角程度',
+    'qrLogo': '嵌入 Logo',
+    'qrNoLogo': '未设置',
+    'qrLogoSet': '已设置',
+    'qrLogoErrorLevelHint': 'Logo 会覆盖数据模块,纠错级别已自动提升至 Q (25%)',
+    'qrPickLogo': '选择 Logo 图片',
+    'qrRemoveLogo': '移除 Logo',
+    'qrSavedToGallery': '已保存到相册',
+    'qrSaveSuccess': '图片已保存到:',
+    'qrSaveFailed': '保存失败',
+    'qrShareFailed': '分享失败',
+    'qrPickImage': '点击选择图片,或将图片拖拽到此处',
+    'qrDragHint': '支持包含二维码的 PNG / JPG 图片',
+    'qrNoResult': '未识别到二维码',
+    'qrDecodeResult': '识别结果:',
+    'qrDecodeTime': '识别时间:',
+    'qrDecodeFailed': '识别失败',
   };
 }
 

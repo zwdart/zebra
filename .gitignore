@@ -50,6 +50,7 @@ app.*.map.json
 zebra.desktop
 
 /.mimocode/
+/.atomcode/
 
 # Auto-generated
 lib/build_info.dart

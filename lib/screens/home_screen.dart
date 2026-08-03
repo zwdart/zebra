@@ -10,6 +10,7 @@ import '../providers/connection_provider.dart';
 import '../providers/ssh_provider.dart';
 import '../utils/zebra_paths.dart';
 import '../widgets/custom_title_bar.dart';
+import '../features/qr_tool/screens/qr_tool_screen.dart';
 import '../l10n/app_localizations.dart';
 import 'connection_form_screen.dart';
 import 'terminal_screen.dart';
@@ -43,12 +44,14 @@ class _HomeScreenState extends State<HomeScreen> {
               if (v == 'export_csv') _exportCsv(context);
               else if (v == 'import_csv') _importCsv(context);
               else if (v == 'discover') _openDiscover(context);
+              else if (v == 'qr_tool') _openQrTool(context);
             },
             itemBuilder: (_) => [
               PopupMenuItem(value: 'export_csv', child: Text(loc.exportCsv)),
               PopupMenuItem(value: 'import_csv', child: Text(loc.importCsv)),
               const PopupMenuDivider(),
               PopupMenuItem(value: 'discover', child: Text(loc.rssExplore)),
+              PopupMenuItem(value: 'qr_tool', child: Text(loc.qrTool)),
             ],
           ),
         ],
@@ -72,12 +75,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (v == 'export_csv') _exportCsv(context);
                     else if (v == 'import_csv') _importCsv(context);
                     else if (v == 'discover') _openDiscover(context);
+                    else if (v == 'qr_tool') _openQrTool(context);
                   },
                   itemBuilder: (_) => [
                     PopupMenuItem(value: 'export_csv', child: Text(loc.exportCsv)),
                     PopupMenuItem(value: 'import_csv', child: Text(loc.importCsv)),
                     const PopupMenuDivider(),
                     PopupMenuItem(value: 'discover', child: Text(loc.rssExplore)),
+                    PopupMenuItem(value: 'qr_tool', child: Text(loc.qrTool)),
                   ],
                 ),
               ],
@@ -150,6 +155,13 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const RssExploreScreen(initialTab: 1)),
+    );
+  }
+
+  void _openQrTool(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const QrToolScreen()),
     );
   }
 

@@ -19,6 +19,7 @@ import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'about_screen.dart';
 import 'rss/rss_explore_screen.dart';
+import '../features/qr_tool/screens/qr_tool_screen.dart';
 import 'update_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -97,6 +98,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const RssExploreScreen(initialTab: 1)),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.qr_code_2),
+                  title: Text(loc.qrTool),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const QrToolScreen()),
                     );
                   },
                 ),

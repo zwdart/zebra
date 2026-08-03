@@ -16,7 +16,7 @@ dependencies:
   provider: ^6.1.2
   dartssh2: ^2.8.2
   xterm: ^4.0.0
-  file_picker: ^8.1.7
+  file_picker: ^10.3.10
   path: ^1.9.0
   shared_preferences: ^2.3.4
   desktop_drop: ^0.5.0
@@ -31,6 +31,10 @@ dependencies:
   http: ^1.2.0
   xml: ^6.5.0
   package_info_plus: ^8.0.0
+  pretty_qr_code: ^3.6.0
+  zxing2: ^0.2.4
+  image: ^4.3.0
+  gal: ^2.3.3
 
 dev_dependencies:
   flutter_test:
