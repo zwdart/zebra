@@ -108,7 +108,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const QrToolScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const QrToolScreen(showBackButton: true),
+                      ),
                     );
                   },
                 ),

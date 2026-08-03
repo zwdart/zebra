@@ -11,7 +11,17 @@ import 'qr_recognize_tab.dart';
 class QrToolScreen extends StatefulWidget {
   final int initialTab;
 
-  const QrToolScreen({super.key, this.initialTab = 0});
+  /// 是否显示返回按钮。
+  ///
+  /// 作为主 Tab 嵌入 shell 时无需返回(与日记页一致);
+  /// 从设置页 / 主页菜单 push 进入时才需要。
+  final bool showBackButton;
+
+  const QrToolScreen({
+    super.key,
+    this.initialTab = 0,
+    this.showBackButton = false,
+  });
 
   @override
   State<QrToolScreen> createState() => _QrToolScreenState();
@@ -54,7 +64,7 @@ class _QrToolScreenState extends State<QrToolScreen>
             if (CustomTitleBar.isDesktop) ...[
               CustomTitleBar(
                 title: loc.qrTool,
-                showBackButton: true,
+                showBackButton: widget.showBackButton,
               ),
               Material(
                 color: Theme.of(context).colorScheme.surface,

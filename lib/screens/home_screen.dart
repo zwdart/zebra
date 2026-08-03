@@ -161,7 +161,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openQrTool(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const QrToolScreen()),
+      MaterialPageRoute(
+        builder: (_) => const QrToolScreen(showBackButton: true),
+      ),
     );
   }
 

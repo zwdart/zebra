@@ -1,0 +1,288 @@
+# Zebra SSH — 桌面免安装应用自动构建
+#
+# 触发方式:
+#   - push 到 master:构建 Linux/Windows 并上传 Actions Artifact
+#   - 打 tag (v*):构建三平台并自动发布 GitHub Release(可直接下载)
+#   - 手动触发:Actions 页面 Run workflow
+#
+# 产物(均"免安装、点击即用"):
+#   - Linux   : zebra-linux.zip(内含 zebra 单文件 + linux_install.sh 安装脚本:
+#               解压后 ./zebra 直接运行,或 ./linux_install.sh 安装到系统)
+#   - Windows : packer/target/release/zebra.exe(自解压单文件)
+#   - macOS   : Zebra.app 打包为 zebra-macos.zip(解压后拖出即用)
+#
+# 打包方式与本地 build_*.sh 完全一致:Flutter release 构建 →
+# packer/zebra-pack 压缩进 data.bin → packer/zebra 自解压单文件。
+#
+# ==================== 操作流程(完整命令) ====================
+#
+# 一、首次发布(完整流程):
+#   1. 提交并推送代码(触发 Linux + Windows 构建)
+#      git add -A
+#      git commit -m "feat: 你的改动说明"
+#      git push origin master
+#   2. 等待构建完成(约 15~25 分钟),在仓库 Actions 页面
+#      点最新一次 run,底部 Artifacts 可下载 Linux/Windows 包
+#   3. 打 tag 并推送(触发 macOS 构建 + 自动发 Release)
+#      git tag -a v1.0.0 -m "release v1.0.0"
+#      git push origin v1.0.0
+#   4. 等 macOS 构建完成(约 25~35 分钟),到仓库 Releases 页面
+#      下载三平台安装包(长期可下载的正式入口)
+#
+# 二、日常更新版本:
+#   1. git add -A && git commit -m "..." && git push origin master
+#   2. git tag -a v1.0.1 -m "release v1.0.1" && git push origin v1.0.1
+#   3. 版本号按语义化递增:v1.0.0 → v1.0.1 → v1.1.0 → v2.0.0
+#
+# 三、只想手动构建一次(不发布):
+#   Actions 页面 → Build Desktop Apps → Run workflow
+#   (手动触发会构建三平台,但不会发 Release,产物只在 Artifacts 里)
+#
+# ==================== 注意事项 ====================
+#   1. git tag 只存在本地,必须 git push origin <tag> 推送后 GitHub 才认;
+#      用 git ls-remote --tags origin 可验证是否真的推送成功。
+#   2. tag 触发是"另一次独立 run",与 push master 那次互不干扰;
+#      判定依据是 github.ref:分支为 refs/heads/master,tag 为 refs/tags/v*。
+#   3. tag 必须打在要发布的 commit 上:先 push master 再打 tag,
+#      否则 tag 指向的提交里没有最新代码。
+#   4. tag 名必须以 v 开头(如 v1.0.0),否则不会触发本工作流。
+#   5. macOS 平时 push 不构建(macOS runner 分钟数按 10 倍扣私有仓库额度),
+#      只有打 tag 或手动触发时才跑。
+#   6. 打错 tag 的删除方法:
+#      git tag -d v1.0.0 && git push origin :v1.0.0
+#   7. 已发布的 tag 不要覆盖,改代码请递增版本号,避免 Release 混乱。
+#   8. 首次配置完本文件后,记得先 commit + push 到 master,
+#      否则工作流尚未生效(文件只在本地/暂存区)。
+name: Build Desktop Apps
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  # ==================== Linux ====================
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libsecret-1-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate build info
+        run: |
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > lib/build_info.dart << EOF
+          // Auto-generated build info - overwritten by build scripts
+          const String buildTime = '$BUILD_TIME';
+          EOF
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build Flutter Linux release
+        run: flutter build linux --release
+
+      - name: Pack single-file binary
+        run: |
+          cd packer
+          cargo build --release --bin zebra-pack
+          target/release/zebra-pack -f ../build/linux/x64/release/bundle -e zebra -n zebra-ssh
+          cargo build --release --bin zebra
+
+      - name: Create install zip (zebra + linux_install.sh)
+        run: |
+          cd packer/target/release
+          cp "$GITHUB_WORKSPACE/linux_install.sh" ./linux_install.sh
+          chmod +x ./linux_install.sh
+          zip -j zebra-linux.zip linux_install.sh zebra
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zebra-linux
+          path: packer/target/release/zebra-linux.zip
+
+  # ==================== Windows ====================
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate build info
+        shell: bash
+        run: |
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > lib/build_info.dart << EOF
+          // Auto-generated build info - overwritten by build scripts
+          const String buildTime = '$BUILD_TIME';
+          EOF
+
+      - name: Flutter pub get
+        shell: bash
+        run: flutter pub get
+
+      - name: Build Flutter Windows release
+        shell: bash
+        run: flutter build windows --release
+
+      - name: Pack self-extracting exe
+        shell: bash
+        run: |
+          cd packer
+          cargo build --release --bin zebra-pack
+          target/release/zebra-pack.exe -f ../build/windows/x64/runner/Release -e zebra.exe -n zebra-ssh
+          cargo build --release --bin zebra
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zebra-windows
+          path: packer/target/release/zebra.exe
+
+  # ==================== macOS ====================
+  # macOS runner 分钟数按 10 倍加权消耗私有仓库额度,平时 push 不构建;
+  # 仅打 tag(发布 Release)或手动触发时才跑。
+  macos:
+    name: macOS
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate build info
+        run: |
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > lib/build_info.dart << EOF
+          // Auto-generated build info - overwritten by build scripts
+          const String buildTime = '$BUILD_TIME';
+          EOF
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build Flutter macOS release
+        run: flutter build macos --release
+
+      - name: Pack self-extracting binary
+        run: |
+          cd packer
+          cargo build --release --bin zebra-pack
+          target/release/zebra-pack \
+            -f ../build/macos/Build/Products/Release/Runner.app \
+            -e Contents/MacOS/Runner -n zebra-ssh
+          cargo build --release --bin zebra
+
+      - name: Assemble Zebra.app bundle
+        run: |
+          APP_BUNDLE="$PWD/packer/target/release/Zebra.app"
+          rm -rf "$APP_BUNDLE"
+          mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
+          cp packer/target/release/zebra "$APP_BUNDLE/Contents/MacOS/zebra"
+          chmod +x "$APP_BUNDLE/Contents/MacOS/zebra"
+
+          # 图标:优先用 packer/macos_iconset,否则从 AppIcon 源图生成
+          ICONSET="packer/macos_iconset"
+          ICON_SRC="macos/Runner/Assets.xcassets/AppIcon.appiconset"
+          if [ -d "$ICONSET" ]; then
+            iconutil -c icns "$ICONSET" --output "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+          else
+            TMP="$APP_BUNDLE/Contents/Resources/AppIcon.iconset"
+            mkdir -p "$TMP"
+            sips -z 16 16   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_16x16.png"        2>/dev/null
+            sips -z 32 32   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_16x16@2x.png"     2>/dev/null
+            sips -z 32 32   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_32x32.png"        2>/dev/null
+            sips -z 64 64   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_32x32@2x.png"     2>/dev/null
+            sips -z 128 128 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_128x128.png"      2>/dev/null
+            sips -z 256 256 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_128x128@2x.png"   2>/dev/null
+            sips -z 256 256 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_256x256.png"      2>/dev/null
+            sips -z 512 512 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_256x256@2x.png"   2>/dev/null
+            sips -z 512 512 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_512x512.png"      2>/dev/null
+            cp "$ICON_SRC/app_icon_1024.png" "$TMP/icon_512x512@2x.png"
+            iconutil -c icns "$TMP" --output "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+            rm -rf "$TMP"
+          fi
+
+          cat > "$APP_BUNDLE/Contents/Info.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>Zebra</string>
+              <key>CFBundleDisplayName</key>
+              <string>Zebra SSH</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.zebra.ssh</string>
+              <key>CFBundleVersion</key>
+              <string>1.0.0</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0.0</string>
+              <key>CFBundleExecutable</key>
+              <string>zebra</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleIconFile</key>
+              <string>AppIcon</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Zip Zebra.app
+        run: |
+          cd packer/target/release
+          zip -r zebra-macos.zip Zebra.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zebra-macos
+          path: packer/target/release/zebra-macos.zip
+
+  # ==================== 发布 Release(仅打 tag 时) ====================
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          draft: false
+          generate_release_notes: true
