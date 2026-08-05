@@ -61,6 +61,37 @@ class DatabaseService {
         updated_at TEXT NOT NULL
       )
     ''');
+
+    _db!.execute('''
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message_id TEXT NOT NULL,
+        peer_id TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        sender_name TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'text',
+        content TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        is_me INTEGER NOT NULL DEFAULT 0,
+        is_read INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+
+    _db!.execute('''
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_peer
+      ON chat_messages(peer_id, timestamp DESC)
+    ''');
+
+    _db!.execute('''
+      CREATE TABLE IF NOT EXISTS chat_peers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        peer_id TEXT NOT NULL UNIQUE,
+        peer_name TEXT NOT NULL,
+        last_message TEXT,
+        last_time TEXT,
+        unread_count INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
   }
 
   // ==================== Connections ====================
@@ -127,6 +158,80 @@ class DatabaseService {
     final stmt = _db!.prepare('DELETE FROM connections WHERE id = ?');
     stmt.execute([id]);
     stmt.close();
+  }
+
+  // ==================== Chat Messages ====================
+
+  static List<Map<String, dynamic>> getChatMessages(String peerId,
+      {int page = 1, int size = 50}) {
+    final offset = (page - 1) * size;
+    final results = _db!.select(
+      'SELECT * FROM chat_messages WHERE peer_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?',
+      [peerId, size, offset],
+    );
+    return results.map((r) {
+      final map = <String, dynamic>{};
+      for (final col in r.keys) {
+        map[col] = r[col];
+      }
+      return map;
+    }).toList();
+  }
+
+  static void insertChatMessage(Map<String, dynamic> msg) {
+    final stmt = _db!.prepare('''
+      INSERT INTO chat_messages (message_id, peer_id, sender_id, sender_name, type, content, timestamp, is_me, is_read)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''');
+    stmt.execute([
+      msg['message_id'],
+      msg['peer_id'],
+      msg['sender_id'],
+      msg['sender_name'],
+      msg['type'],
+      msg['content'],
+      msg['timestamp'],
+      msg['is_me'] ?? 0,
+      msg['is_read'] ?? 0,
+    ]);
+    stmt.close();
+  }
+
+  static void updateChatPeerLastMessage(String peerId, String peerName,
+      String lastMessage, String lastTime) {
+    final stmt = _db!.prepare('''
+      INSERT INTO chat_peers (peer_id, peer_name, last_message, last_time, unread_count)
+      VALUES (?, ?, ?, ?, 1)
+      ON CONFLICT(peer_id) DO UPDATE SET
+        peer_name = excluded.peer_name,
+        last_message = excluded.last_message,
+        last_time = excluded.last_time,
+        unread_count = unread_count + 1
+    ''');
+    stmt.execute([peerId, peerName, lastMessage, lastTime]);
+    stmt.close();
+  }
+
+  static void markChatPeerRead(String peerId) {
+    _db!.execute('UPDATE chat_peers SET unread_count = 0 WHERE peer_id = ?', [peerId]);
+  }
+
+  static List<Map<String, dynamic>> getChatPeers() {
+    final results = _db!.select(
+      'SELECT * FROM chat_peers ORDER BY last_time DESC',
+    );
+    return results.map((r) {
+      final map = <String, dynamic>{};
+      for (final col in r.keys) {
+        map[col] = r[col];
+      }
+      return map;
+    }).toList();
+  }
+
+  static void deleteChatMessages(String peerId) {
+    _db!.execute('DELETE FROM chat_messages WHERE peer_id = ?', [peerId]);
+    _db!.execute('DELETE FROM chat_peers WHERE peer_id = ?', [peerId]);
   }
 
   static void close() {

@@ -18,8 +18,12 @@ import '../services/update_service.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'about_screen.dart';
+import 'diary_screen.dart';
 import 'rss/rss_explore_screen.dart';
 import '../features/qr_tool/screens/qr_tool_screen.dart';
+import '../features/lan_chat/screens/lan_chat_home_screen.dart';
+import '../features/lan_chat/providers/lan_discovery_provider.dart';
+import '../features/lan_chat/services/lan_chat_settings.dart';
 import 'update_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -80,6 +84,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Divider(),
                 _buildSectionHeader(context, loc.more),
                 ListTile(
+                  leading: const Icon(Icons.book_outlined),
+                  title: Text(loc.diary),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DiaryScreen()),
+                    );
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.article_outlined),
                   title: Text(loc.blog),
                   trailing: const Icon(Icons.chevron_right),
@@ -113,6 +128,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     );
                   },
+                ),
+                const Divider(),
+                _buildSectionHeader(context, '本地聊天'),
+                ListTile(
+                  leading: const Icon(Icons.wifi),
+                  title: const Text('本地聊天'),
+                  subtitle: const Text('发现设备、P2P 聊天与文件传输'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LanChatHomeScreen()),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.settings_ethernet),
+                  title: const Text('发现端口'),
+                  subtitle: const Text('搜索设备用端口,需所有设备一致'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showDiscoveryPortDialog(context),
                 ),
                 const Divider(),
                 if (_showApiServer) ...[
@@ -195,6 +231,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildUniqueIdTile(context, loc),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 配置发现端口:输入 1~65535 的端口号,留空恢复默认端口
+  Future<void> _showDiscoveryPortDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    final provider = context.read<LanDiscoveryProvider>();
+    final current = await LanChatSettings.getDiscoveryPort();
+    if (!context.mounted) return;
+    if (current != null) controller.text = '$current';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('发现端口'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                hintText: '留空恢复默认端口',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '默认端口 ${LanChatSettings.defaultDiscoveryPort},用于搜索局域网设备,所有设备需保持一致。',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                final port = int.tryParse(text);
+                if (port == null || port < 1 || port > 65535) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('请输入 1~65535 之间的端口号')),
+                  );
+                  return;
+                }
+                await LanChatSettings.setDiscoveryPort(port);
+              } else {
+                await LanChatSettings.setDiscoveryPort(null);
+              }
+              // 重启发现服务,让新端口立即生效
+              if (provider.isRunning) {
+                provider.stop();
+                await provider.start();
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('保存'),
           ),
         ],
       ),

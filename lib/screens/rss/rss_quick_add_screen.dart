@@ -200,7 +200,7 @@ class RssQuickAddScreenState extends State<RssQuickAddScreen> {
 
     return Column(
       children: [
-        if (isDesktop)
+        if (!widget.embedded && isDesktop)
           CustomTitleBar(
             title: _selectedFolderName ?? loc.rssRecommendedSources,
             showBackButton: true,

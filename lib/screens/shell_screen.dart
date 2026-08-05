@@ -9,7 +9,7 @@ import 'rss/rss_feed_list_screen.dart';
 import 'home_screen.dart';
 import 'diary_screen.dart';
 import 'settings_screen.dart';
-import '../features/qr_tool/screens/qr_tool_screen.dart';
+import '../features/lan_chat/screens/lan_chat_home_screen.dart';
 import 'update_dialog.dart';
 
 class ShellScreen extends StatefulWidget {
@@ -54,8 +54,8 @@ class _ShellScreenState extends State<ShellScreen> {
     final tabs = [
       const RssFeedListScreen(),
       const HomeScreen(),
+      const LanChatHomeScreen(),
       const DiaryScreen(),
-      const QrToolScreen(),
       const SettingsScreen(),
     ];
 
@@ -71,14 +71,14 @@ class _ShellScreenState extends State<ShellScreen> {
         label: 'SSH',
       ),
       NavigationDestination(
+        icon: const Icon(Icons.chat_outlined),
+        selectedIcon: const Icon(Icons.chat),
+        label: '聊天',
+      ),
+      NavigationDestination(
         icon: const Icon(Icons.book_outlined),
         selectedIcon: const Icon(Icons.book),
         label: loc.diary,
-      ),
-      NavigationDestination(
-        icon: const Icon(Icons.qr_code_2_outlined),
-        selectedIcon: const Icon(Icons.qr_code_2),
-        label: loc.qrTool,
       ),
       NavigationDestination(
         icon: const Icon(Icons.settings_outlined),
@@ -117,14 +117,14 @@ class _ShellScreenState extends State<ShellScreen> {
                   label: Text('SSH'),
                 ),
                 NavigationRailDestination(
+                  icon: const Icon(Icons.chat_outlined),
+                  selectedIcon: const Icon(Icons.chat),
+                  label: const Text('聊天'),
+                ),
+                NavigationRailDestination(
                   icon: const Icon(Icons.book_outlined),
                   selectedIcon: const Icon(Icons.book),
                   label: Text(loc.diary),
-                ),
-                NavigationRailDestination(
-                  icon: const Icon(Icons.qr_code_2_outlined),
-                  selectedIcon: const Icon(Icons.qr_code_2),
-                  label: Text(loc.qrTool),
                 ),
                 NavigationRailDestination(
                   icon: const Icon(Icons.settings_outlined),
