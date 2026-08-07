@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import '../models/chat_message.dart';
 import '../models/file_transfer_session.dart' show kSmallFileThresholdBytes;
@@ -12,7 +13,9 @@ class ChatClient {
   Socket? _socket;
   StreamSubscription<Uint8List>? _sub; // socket 数据订阅(背压 pause/resume 用)
   bool _isConnected = false;
-  final List<int> _buffer = [];
+  // E方案: 接收缓冲改用 BytesBuilder 累积(BytesBuilder 内部按 Uint8List
+  // 块持有,不逐字节装箱),解析时 takeBytes 合并后零拷贝切帧
+  final BytesBuilder _buffer = BytesBuilder(copy: false);
   int _msgLen = -1;
   int? _frameType; // 当前帧类型（kJsonMarker/kFileMarker）
   String? _currentTransferId; // 当前文件传输 ID（file_meta 之后有效）
@@ -155,9 +158,9 @@ class ChatClient {
       final totalBytes =
           readStream != null ? fileSize : await File(filePath ?? '').length();
       var sentBytes = offset;
-      // S3: filePath 源发送完成后在后台 isolate 一次性计算 MD5(不占主 isolate);
-      // readStream 源(无法重读文件)保留逐块增量累加
-      final md5Acc = readStream != null ? Md5Accumulator() : null;
+      // C方案: 发送侧统一逐块增量累加 MD5(文件源在压缩前对原始字节累加),
+      // 不再在发送完成后重读整个文件计算,消除完成瞬间的全文件二次读取
+      final md5Acc = Md5Accumulator();
 
       // 发送一块数据:帧封装 + MD5 + 进度;返回 null 表示已取消
       // S2: 每 kChunksPerFlush 块 flush 一次(替代逐块 flush),减少系统调用;
@@ -205,7 +208,6 @@ class ChatClient {
           ]);
         }
         _socket!.add(chunk);
-        md5Acc?.add(chunk);
         chunksSinceFlush++;
         if (chunksSinceFlush >= kChunksPerFlush) {
           await _socket!.flush();
@@ -220,19 +222,21 @@ class ChatClient {
         // 流式源:调用方保证流已定位到 offset(原生直读流重开时 seek/skip),
         // 直接逐块消费,不再在此处跳过字节
         await for (final chunk in readStream) {
+          md5Acc.add(chunk);
           final p = await sendChunk(chunk);
           if (p == null) return;
           yield p;
         }
       } else {
-        // 文件路径:RandomAccessFile 按 1MB 大块读取
+        // 文件路径:RandomAccessFile 按 512KB 大块读取
         final raf = await File(filePath ?? '').open();
         try {
           await raf.setPosition(offset);
           var remaining = totalBytes - offset;
-          // S1: 1MB 大块减少系统调用与帧头开销;接收端已有 pause/resume
-          // 背压保护,不再需要 256KB 细粒度块来避免缓冲溢出
-          const chunkSize = 1024 * 1024;
+          // E方案: 1MB → 512KB,单帧更小,接收端解析/落盘交错更细,
+          // 主 isolate 单次占用更短,UI 更流畅;配合 kMaxFramesPerBatch=16
+          // 每批约 8MB,吞吐损失可忽略(局域网仍可跑满)
+          const chunkSize = 512 * 1024;
           // S4: 压缩传输——原始块经流式 zlib 压缩后发送;
           // 压缩器内部可能缓冲,add 可能返回空,进度按原始字节计
           final compressor = compressed ? StreamCompressor() : null;
@@ -240,6 +244,8 @@ class ChatClient {
             final readLen = remaining < chunkSize ? remaining : chunkSize;
             final chunk = await raf.read(readLen);
             if (chunk.isEmpty) break;
+            // C方案: 压缩前对原始字节累加 MD5(与接收端解压后校验的字节一致)
+            md5Acc.add(chunk);
             if (compressor != null) {
               final wire = compressor.add(chunk);
               if (wire.isNotEmpty) {
@@ -272,17 +278,9 @@ class ChatClient {
 
       // 确保文件内容全部写入内核,再发完成标记(保持帧序)
       await _socket!.flush();
-      // S3: 发送完成标记(携带 MD5 供接收方校验)。
-      // filePath 源在后台 isolate 重读文件计算(与接收端语义对称,从 offset 起算);
-      // readStream 源用逐块增量累加结果。
-      String md5;
-      if (md5Acc != null) {
-        md5 = md5Acc.close();
-      } else if (filePath != null && filePath.isNotEmpty) {
-        md5 = await computeFileMd5Segment(filePath, offset);
-      } else {
-        md5 = ''; // 兜底:无路径可重读,发空校验值(接收端跳过校验)
-      }
+      // C方案: 发送完成标记(携带 MD5 供接收方校验)——发送期间增量累加结果,
+      // 覆盖本次发送的 [offset..end] 段,与接收端语义对称。
+      final md5 = md5Acc.close();
       _sendJson({
         'type': 'file_done',
         'id': transferId,
@@ -375,27 +373,30 @@ class ChatClient {
   }
 
   /// 处理接收的数据（标记 + TLV 格式，支持跨包拼接）
+  /// E方案: 缓冲为 BytesBuilder,每次调用先 takeBytes 合并为单块
+  /// Uint8List,帧切片用 sublistView 零拷贝视图,未消费剩余字节以视图放回。
   void _handleData(List<int> data) {
-    _buffer.addAll(data);
+    _buffer.add(data);
+    final bytes = _buffer.takeBytes();
 
     var processed = 0;
     // 已消费字节偏移:替代每帧 removeRange(0, n) 的 O(n) 移位,
-    // 大文件接收时逐帧移位是主 isolate 的隐藏开销,统一在批尾压缩一次
+    // 大文件接收时逐帧移位是主 isolate 的隐藏开销,统一在批尾处理一次
     var consumed = 0;
     while (true) {
       if (_frameType == null) {
-        if (_buffer.length - consumed < 5) break; // 1 标记 + 4 长度
-        _frameType = _buffer[consumed];
-        _msgLen = (_buffer[consumed + 1] << 24) |
-            (_buffer[consumed + 2] << 16) |
-            (_buffer[consumed + 3] << 8) |
-            _buffer[consumed + 4];
+        if (bytes.length - consumed < 5) break; // 1 标记 + 4 长度
+        _frameType = bytes[consumed];
+        _msgLen = (bytes[consumed + 1] << 24) |
+            (bytes[consumed + 2] << 16) |
+            (bytes[consumed + 3] << 8) |
+            bytes[consumed + 4];
         consumed += 5;
       }
 
-      if (_buffer.length - consumed < _msgLen) break;
+      if (bytes.length - consumed < _msgLen) break;
 
-      final chunk = _buffer.sublist(consumed, consumed + _msgLen);
+      final chunk = Uint8List.sublistView(bytes, consumed, consumed + _msgLen);
       consumed += _msgLen;
       final frameType = _frameType!;
       _msgLen = -1;
@@ -405,8 +406,11 @@ class ChatClient {
       // 大文件接收时数据连续到达,若一次性解析完会长时间占用主 isolate,
       // 接收端 UI 事件得不到执行 → 界面卡死;达到上限后让出事件循环分批继续。
       processed++;
-      if (processed >= kMaxFramesPerBatch && _buffer.length - consumed >= 5) {
-        _buffer.removeRange(0, consumed);
+      if (processed >= kMaxFramesPerBatch && bytes.length - consumed >= 5) {
+        // 未消费部分零拷贝放回,让出事件循环
+        if (consumed < bytes.length) {
+          _buffer.add(Uint8List.sublistView(bytes, consumed));
+        }
         Timer.run(() => _handleData(const []));
         return;
       }
@@ -420,8 +424,8 @@ class ChatClient {
               (chunk[2] << 8) |
               chunk[3];
           if (chunk.length < 4 + tidLen) continue;
-          final tid = utf8.decode(chunk.sublist(4, 4 + tidLen));
-          final data = chunk.sublist(4 + tidLen);
+          final tid = utf8.decode(Uint8List.sublistView(chunk, 4, 4 + tidLen));
+          final data = Uint8List.sublistView(chunk, 4 + tidLen);
           onFileChunk?.call(tid, data);
         } catch (e, st) {
           // 恶意/损坏帧:记录并跳过,不能因此取消 socket 监听
@@ -494,10 +498,10 @@ class ChatClient {
         debugPrint('[ChatClient] frame parse error: $e\n$st');
       }
     }
-    // 循环正常退出(数据不足等下一包):一次性移除已消费字节,
+    // 循环正常退出(数据不足等下一包):未消费的剩余字节以零拷贝视图放回,
     // 保持 _buffer 从下一未解析字节开始(与逐帧 removeRange 语义一致)
-    if (consumed > 0) {
-      _buffer.removeRange(0, consumed);
+    if (consumed < bytes.length) {
+      _buffer.add(Uint8List.sublistView(bytes, consumed));
     }
   }
 

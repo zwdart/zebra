@@ -1370,26 +1370,10 @@ class ChatProvider extends ChangeNotifier {
 
     try {
       await writer.close();
-      // MD5 校验:发送方携带且已完整接收时校验,不匹配则删除 .part 并失败。
-      // 大文件在后台 isolate 计算(纯 Dart MD5 在主 isolate 逐块计算会
-      // 占满事件循环导致接收端 UI 卡死——Windows 发大文件到 Linux 卡死根因)。
-      if (expectedMd5 != null && expectedMd5.isNotEmpty) {
-        final actual = await md5SumFileSegment(partPath, session.resumeFrom);
-        if (actual != expectedMd5) {
-          await ReceiveDirectory.deletePartFile(partPath);
-          await ReceiveDirectory.removeResumeIndex(transferId);
-          session.update(
-            status: TransferStatus.failed,
-            errorMessage: '文件校验失败(MD5 不匹配)',
-          );
-          // 校验失败回发,让发送方消息也标记为失败
-          _sendFileErrorToPeer(transferId, peerId, '文件校验失败(MD5 不匹配)',
-              viaServer: viaServer);
-          notifyListeners();
-          return;
-        }
-      }
-      // 按平台策略转正 .part(Android 走 MediaStore,其余平台改名)
+      // C方案: 转正先行——先完成文件转正与消息入库,UI 立即显示完成;
+      // MD5 校验改为后台 isolate 异步执行(见 _verifyReceivedFileAsync),
+      // 不再阻塞完成路径(原实现先同步校验再转正,大文件整文件重读期间
+      // 完成流程被长时间挂起,是接收端"发送完成即卡死"的根因之一)。
       final location = await ReceiveDirectory.finalizePartFile(partPath, session.fileName);
       if (location.isEmpty) {
         throw Exception('finalize part failed');
@@ -1399,6 +1383,12 @@ class ChatProvider extends ChangeNotifier {
 
       _buildReceivedMessage(session, peerId, location);
       session.update(status: TransferStatus.done, progress: 1.0);
+      // 后台异步校验:仅真实文件路径可读(Android MediaStore 展示路径不可读时跳过);
+      // 校验失败由该方法补标记 failed、回发 file_error,并尽量删除已转正文件
+      if (expectedMd5 != null && expectedMd5.isNotEmpty) {
+        unawaited(_verifyReceivedFileAsync(
+            transferId, location, expectedMd5, session, peerId, viaServer));
+      }
     } catch (e, st) {
       debugPrint('[ChatProvider] finalize receive error: $e\n$st');
       await ReceiveDirectory.deletePartFile(partPath);
@@ -1409,6 +1399,43 @@ class ChatProvider extends ChangeNotifier {
       );
     }
     notifyListeners();
+  }
+
+  /// C方案: 转正完成后在后台校验接收文件 MD5(不阻塞完成路径)。
+  /// 仅对真实文件路径校验(Android MediaStore 展示路径不可读时跳过);
+  /// 校验失败时补标记 failed、回发 file_error,并尽量删除已转正的文件。
+  Future<void> _verifyReceivedFileAsync(
+    String transferId,
+    String location,
+    String expectedMd5,
+    FileTransferSession session,
+    String peerId,
+    bool viaServer,
+  ) async {
+    try {
+      final file = File(location);
+      if (!await file.exists()) {
+        debugPrint('[ChatProvider] MD5 verify skipped (path not readable): $location');
+        return;
+      }
+      final actual = await md5SumFileSegment(location, session.resumeFrom);
+      if (actual == expectedMd5) return;
+      debugPrint('[ChatProvider] MD5 mismatch after finalize: $location');
+      // 尽量删除已转正文件(桌面真实路径可删;不可删时仅标记失败)
+      try {
+        await file.delete();
+      } catch (_) {}
+      session.update(
+        status: TransferStatus.failed,
+        errorMessage: '文件校验失败(MD5 不匹配)',
+      );
+      // 校验失败回发,让发送方消息也标记为失败
+      _sendFileErrorToPeer(transferId, peerId, '文件校验失败(MD5 不匹配)',
+          viaServer: viaServer);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[ChatProvider] MD5 verify error: $e');
+    }
   }
 
   /// 为接收完成的文件生成消息记录

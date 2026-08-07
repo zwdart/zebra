@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -17,7 +16,9 @@ const int kFileChunkV2Marker = 0x47; // 'G' 新版文件数据块(自带 transfe
 /// 大文件接收时数据连续到达,若一次性解析完缓冲里所有帧,
 /// 主 isolate 会被持续占满,接收端 UI 事件永远得不到执行 → 卡死;
 /// 超过该帧数后让出事件循环(Timer.run),分批继续解析。
-const int kMaxFramesPerBatch = 32;
+/// E方案: 32 → 16,单批处理量减半,让出事件循环更频繁,
+/// 配合 512KB 发送块,每批约 8MB,主 isolate 单次占用时间更短。
+const int kMaxFramesPerBatch = 16;
 
 /// 发送端每积累多少块才 flush 一次(替代逐块 flush):
 /// 减少系统调用次数,吞吐提升;接收端已有背压(pause/resume),
@@ -52,29 +53,6 @@ class _DigestSink implements Sink<Digest> {
 
   @override
   void close() {}
-}
-
-/// 在后台 isolate 中流式计算文件从 [offset] 到 EOF 的 MD5。
-/// 发送端使用(S3):filePath 源发送完成后后台一次性重读计算,
-/// 不再在主 isolate 逐块算(纯 Dart MD5 是千兆传输的 CPU 瓶颈);
-/// 与接收端校验语义对称——都只算续传段 [offset..end]。
-/// [offset] 为断点续传起点,首传为 0(即整文件)。
-Future<String> computeFileMd5Segment(String path, int offset) {
-  return Isolate.run(() async {
-    final raf = await File(path).open();
-    try {
-      await raf.setPosition(offset);
-      final acc = Md5Accumulator();
-      while (true) {
-        final chunk = await raf.read(1024 * 1024);
-        if (chunk.isEmpty) break;
-        acc.add(chunk);
-      }
-      return acc.close();
-    } finally {
-      await raf.close();
-    }
-  });
 }
 
 /// 流式 zlib 压缩器(dart:io zlib 的 chunkedConversion 包装)。
@@ -370,9 +348,9 @@ class ChatServer {
       final totalBytes =
           readStream != null ? fileSize : await File(filePath ?? '').length();
       var sentBytes = offset;
-      // S3: filePath 源发送完成后在后台 isolate 一次性计算 MD5(不占主 isolate);
-      // readStream 源(无法重读文件)保留逐块增量累加
-      final md5Acc = readStream != null ? Md5Accumulator() : null;
+      // C方案: 发送侧统一逐块增量累加 MD5(文件源在压缩前对原始字节累加),
+      // 不再在发送完成后重读整个文件计算,消除完成瞬间的全文件二次读取
+      final md5Acc = Md5Accumulator();
 
       // 发送一块数据:帧封装 + MD5 + 进度;返回 null 表示已取消
       // S2: 每 kChunksPerFlush 块 flush 一次(替代逐块 flush),减少系统调用;
@@ -420,7 +398,6 @@ class ChatServer {
           ]);
         }
         socket.add(chunk);
-        md5Acc?.add(chunk);
         chunksSinceFlush++;
         if (chunksSinceFlush >= kChunksPerFlush) {
           await socket.flush();
@@ -435,19 +412,21 @@ class ChatServer {
         // 流式源:调用方保证流已定位到 offset(原生直读流重开时 seek/skip),
         // 直接逐块消费,不再在此处跳过字节
         await for (final chunk in readStream) {
+          md5Acc.add(chunk);
           final p = await sendChunk(chunk);
           if (p == null) return;
           yield p;
         }
       } else {
-        // 文件路径:RandomAccessFile 按 1MB 大块读取
+        // 文件路径:RandomAccessFile 按 512KB 大块读取
         final raf = await File(filePath ?? '').open();
         try {
           await raf.setPosition(offset);
           var remaining = totalBytes - offset;
-          // S1: 1MB 大块减少系统调用与帧头开销;接收端已有 pause/resume
-          // 背压保护,不再需要 256KB 细粒度块来避免缓冲溢出
-          const chunkSize = 1024 * 1024;
+          // E方案: 1MB → 512KB,单帧更小,接收端解析/落盘交错更细,
+          // 主 isolate 单次占用更短,UI 更流畅;配合 kMaxFramesPerBatch=16
+          // 每批约 8MB,吞吐损失可忽略(局域网仍可跑满)
+          const chunkSize = 512 * 1024;
           // S4: 压缩传输——原始块经流式 zlib 压缩后发送;
           // 压缩器内部可能缓冲,add 可能返回空,进度按原始字节计
           final compressor = compressed ? StreamCompressor() : null;
@@ -455,6 +434,8 @@ class ChatServer {
             final readLen = remaining < chunkSize ? remaining : chunkSize;
             final chunk = await raf.read(readLen);
             if (chunk.isEmpty) break;
+            // C方案: 压缩前对原始字节累加 MD5(与接收端解压后校验的字节一致)
+            md5Acc.add(chunk);
             if (compressor != null) {
               final wire = compressor.add(chunk);
               if (wire.isNotEmpty) {
@@ -487,17 +468,9 @@ class ChatServer {
 
       // 确保文件内容全部写入内核,再发完成标记(保持帧序)
       await socket.flush();
-      // S3: 发送完成标记(携带 MD5 供接收方校验)。
-      // filePath 源在后台 isolate 重读文件计算(与接收端语义对称,从 offset 起算);
-      // readStream 源用逐块增量累加结果。
-      String md5;
-      if (md5Acc != null) {
-        md5 = md5Acc.close();
-      } else if (filePath != null && filePath.isNotEmpty) {
-        md5 = await computeFileMd5Segment(filePath, offset);
-      } else {
-        md5 = ''; // 兜底:无路径可重读,发空校验值(接收端跳过校验)
-      }
+      // C方案: 发送完成标记(携带 MD5 供接收方校验)——发送期间增量累加结果,
+      // 覆盖本次发送的 [offset..end] 段,与接收端语义对称。
+      final md5 = md5Acc.close();
       _sendJson(socket, {
         'type': 'file_done',
         'id': transferId,
@@ -587,12 +560,14 @@ class ChatServer {
     final peerInfo = _PeerInfo(socket: client, ip: ip);
     _pendingPeers.add(peerInfo);
 
-    // 重置缓冲区，每个客户端独立
-    final buffer = <int>[];
+    // 重置缓冲区,每个客户端独立。
+    // E方案: 用 BytesBuilder 累积(BytesBuilder 内部按 Uint8List 块持有,
+    // 不逐字节装箱),解析时 takeBytes 合并为单块 Uint8List 后零拷贝切帧。
+    final buffer = BytesBuilder(copy: false);
 
     peerInfo.sub = client.listen(
       (data) {
-        buffer.addAll(data);
+        buffer.add(data);
         _processBuffer(client, buffer, remoteAddr, peerInfo);
       },
       onDone: () {
@@ -626,25 +601,29 @@ class ChatServer {
   }
 
   /// 处理缓冲区中的数据（标记 + TLV 格式，支持跨包解析）
-  void _processBuffer(Socket client, List<int> buffer, String remoteAddr, _PeerInfo peerInfo) {
+  /// E方案: 缓冲改为 BytesBuilder,每次调用先 takeBytes 合并为单块
+  /// Uint8List,帧切片用 sublistView 零拷贝视图(不再逐帧 sublist 拷贝),
+  /// 未消费的剩余字节以视图形式放回 builder,供下一轮/下一包继续解析。
+  void _processBuffer(Socket client, BytesBuilder buffer, String remoteAddr, _PeerInfo peerInfo) {
+    final bytes = buffer.takeBytes();
     var processed = 0;
     // 已消费字节偏移:替代每帧 removeRange(0, n) 的 O(n) 移位,
-    // 大文件接收时逐帧移位是主 isolate 的隐藏开销,统一在批尾压缩一次
+    // 大文件接收时逐帧移位是主 isolate 的隐藏开销,统一在批尾处理一次
     var consumed = 0;
     while (true) {
       if (peerInfo.frameType == null) {
-        if (buffer.length - consumed < 5) break; // 1 标记 + 4 长度
-        peerInfo.frameType = buffer[consumed];
-        peerInfo.msgLen = (buffer[consumed + 1] << 24) |
-            (buffer[consumed + 2] << 16) |
-            (buffer[consumed + 3] << 8) |
-            buffer[consumed + 4];
+        if (bytes.length - consumed < 5) break; // 1 标记 + 4 长度
+        peerInfo.frameType = bytes[consumed];
+        peerInfo.msgLen = (bytes[consumed + 1] << 24) |
+            (bytes[consumed + 2] << 16) |
+            (bytes[consumed + 3] << 8) |
+            bytes[consumed + 4];
         consumed += 5;
       }
 
-      if (buffer.length - consumed < peerInfo.msgLen) break;
+      if (bytes.length - consumed < peerInfo.msgLen) break;
 
-      final chunk = buffer.sublist(consumed, consumed + peerInfo.msgLen);
+      final chunk = Uint8List.sublistView(bytes, consumed, consumed + peerInfo.msgLen);
       consumed += peerInfo.msgLen;
       final frameType = peerInfo.frameType!;
       peerInfo.msgLen = -1;
@@ -655,8 +634,11 @@ class ChatServer {
       // 占满,接收端 UI 事件得不到执行 → 界面卡死。达到上限后让出事件循环
       // (Timer.run),剩余数据下一轮再解析,UI 得以正常刷新。
       processed++;
-      if (processed >= kMaxFramesPerBatch && buffer.length - consumed >= 5) {
-        buffer.removeRange(0, consumed);
+      if (processed >= kMaxFramesPerBatch && bytes.length - consumed >= 5) {
+        // 未消费部分零拷贝放回,让出事件循环
+        if (consumed < bytes.length) {
+          buffer.add(Uint8List.sublistView(bytes, consumed));
+        }
         Timer.run(() => _processBuffer(client, buffer, remoteAddr, peerInfo));
         return;
       }
@@ -670,8 +652,8 @@ class ChatServer {
               (chunk[2] << 8) |
               chunk[3];
           if (chunk.length < 4 + tidLen) continue;
-          final tid = utf8.decode(chunk.sublist(4, 4 + tidLen));
-          final data = chunk.sublist(4 + tidLen);
+          final tid = utf8.decode(Uint8List.sublistView(chunk, 4, 4 + tidLen));
+          final data = Uint8List.sublistView(chunk, 4 + tidLen);
           onFileChunk?.call(tid, data);
         } catch (e, st) {
           // 恶意/损坏帧:记录并跳过,不能因此取消 socket 监听
@@ -757,10 +739,10 @@ class ChatServer {
         debugPrint('[ChatServer] Parse error: $e\n$st');
       }
     }
-    // 循环正常退出(数据不足等下一包):一次性移除已消费字节,
+    // 循环正常退出(数据不足等下一包):未消费的剩余字节以零拷贝视图放回,
     // 保持 buffer 从下一未解析字节开始(与逐帧 removeRange 语义一致)
-    if (consumed > 0) {
-      buffer.removeRange(0, consumed);
+    if (consumed < bytes.length) {
+      buffer.add(Uint8List.sublistView(bytes, consumed));
     }
   }
 
