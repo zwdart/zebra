@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import '../../../utils/zebra_paths.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/file_transfer_session.dart' show kSmallFileThresholdBytes;
@@ -78,8 +78,7 @@ class ReceiveDirectory {
       // 降级到应用文档目录
     }
     try {
-      final docs = await getApplicationDocumentsDirectory();
-      final dir = Directory(p.join(docs.path, 'zebra_received'));
+      final dir = await ZebraPaths.received;
       // 目录不存在时先创建,避免打开不存在的路径
       await dir.create(recursive: true);
       final ok = await launchUrl(Uri.directory(dir.path));
@@ -96,8 +95,7 @@ class ReceiveDirectory {
   /// [transferId] 来自网络不可信,先消毒再拼入文件名,防止路径穿越。
   static Future<String> createPartFile(
       String transferId, String fileName) async {
-    final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docs.path, 'zebra_received'));
+    final dir = await ZebraPaths.received;
     await dir.create(recursive: true);
     final safeName = _safeName(fileName);
     // 只保留安全字符,杜绝 ../ 等路径穿越
@@ -149,8 +147,7 @@ class ReceiveDirectory {
         return '';
       }
     }
-    final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docs.path, 'zebra_received'));
+    final dir = await ZebraPaths.received;
     final safeName = _safeName(fileName);
     var target = File(p.join(dir.path, safeName));
     if (await target.exists()) {
@@ -165,8 +162,7 @@ class ReceiveDirectory {
   static Future<String> _finalizePartToDocumentsStream(
       File part, String fileName) async {
     try {
-      final docs = await getApplicationDocumentsDirectory();
-      final dir = Directory(p.join(docs.path, 'zebra_received'));
+      final dir = await ZebraPaths.received;
       await dir.create(recursive: true);
       final safeName = _safeName(fileName);
       var target = File(p.join(dir.path, safeName));
@@ -259,8 +255,7 @@ class ReceiveDirectory {
 
   static Future<String> _saveToDocuments(
       List<int> bytes, String fileName) async {
-    final docs = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docs.path, 'zebra_received'));
+    final dir = await ZebraPaths.received;
     await dir.create(recursive: true);
 
     final safeName = _safeName(fileName);

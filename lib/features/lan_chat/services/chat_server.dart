@@ -509,7 +509,6 @@ class ChatServer {
       if (frameType == kFileMarker) {
         final tid = peerInfo.currentTransferId;
         if (tid != null) {
-          debugPrint('[ChatServer] file chunk from $remoteAddr: transfer=$tid ${chunk.length}B');
           onFileChunk?.call(tid, chunk);
         } else {
           debugPrint('[ChatServer] file chunk dropped: no active transfer');

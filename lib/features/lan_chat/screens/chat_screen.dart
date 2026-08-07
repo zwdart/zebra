@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/lan_device.dart';
@@ -48,6 +49,8 @@ class _ChatScreenState extends State<ChatScreen> {
   // ---- 多选模式状态 ----
   bool _selectionMode = false;
   final Set<String> _selectedIds = {};
+  // ---- 拖拽发送状态(桌面端拖文件进聊天窗口直接发送)----
+  bool _isDragOver = false;
 
   @override
   void initState() {
@@ -348,6 +351,35 @@ class _ChatScreenState extends State<ChatScreen> {
         );
         sent++;
       }
+    }
+    if (sent == 0) return;
+
+    setState(() {
+      _messages = chatProvider.getMessages(widget.peerId);
+    });
+    _scrollToBottom();
+  }
+
+  /// 处理拖拽进入的文件列表(桌面端拖文件进聊天窗口直接发送)。
+  /// 逐文件发送到当前聊天对象;跳过无法读取的路径。
+  Future<void> _handleDroppedFiles(List<DropItem> files) async {
+    if (files.isEmpty || !mounted) return;
+    final chatProvider = context.read<ChatProvider>();
+    final peer = _makePeerDevice();
+    var sent = 0;
+    for (final f in files) {
+      final path = f.path;
+      if (path.isEmpty) continue;
+      // 目录不支持直接发送,跳过
+      if (await FileSystemEntity.isDirectory(path)) continue;
+      final size = await f.length();
+      chatProvider.sendFile(
+        target: peer,
+        filePath: path,
+        fileName: f.name,
+        fileSize: size,
+      );
+      sent++;
     }
     if (sent == 0) return;
 
@@ -749,8 +781,21 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
         ),
       ),
-      body: Column(
-        children: [
+      body: DropTarget(
+        onDragEntered: (_) {
+          if (mounted) setState(() => _isDragOver = true);
+        },
+        onDragExited: (_) {
+          if (mounted) setState(() => _isDragOver = false);
+        },
+        onDragDone: (details) {
+          if (mounted) setState(() => _isDragOver = false);
+          _handleDroppedFiles(details.files);
+        },
+        child: Stack(
+          children: [
+            Column(
+              children: [
           // 重连中提示条(发送/文件传输前自动重连时显示)
           Consumer<ChatProvider>(
             builder: (ctx, provider, _) {
@@ -911,7 +956,43 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
-        ],
+              ],
+            ),
+            // 拖拽悬停提示层:提示松开即可发送文件
+            if (_isDragOver)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    color: colorScheme.primaryContainer.withValues(alpha: 0.35),
+                    alignment: Alignment.center,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.file_upload_outlined,
+                              color: colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Text(AppLocalizations.of(context).dragFilesHere),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

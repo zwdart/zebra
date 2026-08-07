@@ -304,7 +304,7 @@ class MainActivity : FlutterActivity() {
         }
 
         val baseDir = getExternalFilesDir(null) ?: filesDir
-        val dir = File(baseDir, "zebra_received").apply { mkdirs() }
+        val dir = File(baseDir, "zebra.dart.xin/zebra_received").apply { mkdirs() }
         val target = uniqueFile(dir, fileName)
         FileOutputStream(target).use { it.write(bytes) }
         return mapOf("path" to target.absolutePath)

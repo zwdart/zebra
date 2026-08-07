@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -32,8 +33,6 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, BytesBuilder> _receiveSmallBuffers = {}; // transferId -> 累积字节
   // ---- 接收等待缓冲软上限:writer 未就绪时暂存数据的最大字节数 ----
   static const int _receivePendingLimit = 64 * 1024 * 1024; // 64MB
-  // ---- 大文件接收侧增量 MD5(随落盘同步计算,file_done 时与发送方校验)----
-  final Map<String, Md5Accumulator> _receiveMd5 = {}; // transferId -> MD5 累加器
   // ---- 接收侧通道来源(决定 file_ready 回复走 server 还是 client 通道)----
   final Map<String, bool> _receiveViaServer = {}; // transferId -> 是否经 server 通道接收
   final Map<String, DateTime> _prepareStartedAt = {}; // transferId -> 开始准备 .part 的时间(诊断超时)
@@ -884,7 +883,6 @@ class ChatProvider extends ChangeNotifier {
     _receivePending.remove(transferId);
     _receiveWriting.remove(transferId);
     _receiveSmallBuffers.remove(transferId);
-    _receiveMd5.remove(transferId);
     _receiveViaServer.remove(transferId);
     _prepareStartedAt.remove(transferId);
     _receiveLastProgressAt.remove(transferId);
@@ -1048,8 +1046,6 @@ class ChatProvider extends ChangeNotifier {
       _receiveWriters[transferId] = writer;
       _receivePartPaths[transferId] = partPath;
       _receiveOffsets[transferId] = baseBytes;
-      // 增量 MD5 累加器:发送方从同一 offset 起算,续传时两边对称可比
-      _receiveMd5[transferId] = Md5Accumulator();
       // writer 就绪即开始计时(接收侧停滞看门狗:就绪后长时间无 chunk 视为发送方卡死)
       _receiveLastProgressAt[transferId] = DateTime.now();
 
@@ -1099,7 +1095,6 @@ class ChatProvider extends ChangeNotifier {
     if (small != null) {
       // 小文件快速通道:累积到内存,file_done 时一次性落盘
       small.add(chunk);
-      _receiveMd5[transferId]?.add(chunk);
       final session = _fileTransfers[transferId];
       if (session != null) {
         final total = small.length;
@@ -1190,7 +1185,6 @@ class ChatProvider extends ChangeNotifier {
       final session = _fileTransfers[transferId];
       if (writer != null && session != null) {
         await writer.writeFrom(chunk);
-        _receiveMd5[transferId]?.add(chunk); // 随落盘增量计算 MD5
         _receiveLastProgressAt[transferId] = DateTime.now(); // 停滞看门狗
         final total = (_receiveOffsets[transferId] ?? 0) + chunk.length;
         _receiveOffsets[transferId] = total;
@@ -1255,7 +1249,6 @@ class ChatProvider extends ChangeNotifier {
     // ---- 小文件快速通道:内存缓冲直接落盘(不建 .part、不存断点索引)----
     final small = _receiveSmallBuffers.remove(transferId);
     if (small != null) {
-      final md5 = _receiveMd5.remove(transferId);
       final peerId = _transferPeers.remove(transferId) ?? '';
       final viaServer = _receiveViaServer.remove(transferId) ?? false;
       _receiveLastProgressAt.remove(transferId);
@@ -1263,7 +1256,7 @@ class ChatProvider extends ChangeNotifier {
         final bytes = small.takeBytes();
         // 校验 MD5(发送方未携带时跳过)
         if (expectedMd5 != null && expectedMd5.isNotEmpty) {
-          final actual = md5?.close() ?? md5Sum(bytes);
+          final actual = md5Sum(bytes);
           if (actual != expectedMd5) {
             throw Exception('文件校验失败(MD5 不匹配)');
           }
@@ -1288,7 +1281,6 @@ class ChatProvider extends ChangeNotifier {
     // ---- 大文件:.part 流式落盘后转正 ----
     final writer = _receiveWriters.remove(transferId);
     final partPath = _receivePartPaths.remove(transferId);
-    final md5 = _receiveMd5.remove(transferId);
     final peerId = _transferPeers.remove(transferId) ?? '';
     final viaServer = _receiveViaServer.remove(transferId) ?? false;
     _receiveOffsets.remove(transferId);
@@ -1302,9 +1294,11 @@ class ChatProvider extends ChangeNotifier {
 
     try {
       await writer.close();
-      // MD5 校验:发送方携带且已完整接收时校验,不匹配则删除 .part 并失败
+      // MD5 校验:发送方携带且已完整接收时校验,不匹配则删除 .part 并失败。
+      // 大文件在后台 isolate 计算(纯 Dart MD5 在主 isolate 逐块计算会
+      // 占满事件循环导致接收端 UI 卡死——Windows 发大文件到 Linux 卡死根因)。
       if (expectedMd5 != null && expectedMd5.isNotEmpty) {
-        final actual = md5?.close() ?? '';
+        final actual = await md5SumFileSegment(partPath, session.resumeFrom);
         if (actual != expectedMd5) {
           await ReceiveDirectory.deletePartFile(partPath);
           await ReceiveDirectory.removeResumeIndex(transferId);
@@ -1359,6 +1353,30 @@ class ChatProvider extends ChangeNotifier {
   /// 计算字节序列的 MD5(小文件缓冲落盘校验兜底)
   static String md5Sum(List<int> bytes) => md5.convert(bytes).toString();
 
+  /// 在后台 isolate 中流式计算文件 MD5(从 [offset] 起,与发送方增量计算对称)。
+  /// 纯 Dart MD5 在主 isolate 上逐块计算会占满事件循环,大文件接收时
+  /// 导致 UI 卡死(Windows 发大文件到 Linux 卡死根因),故改为落盘完成后
+  /// 一次性在后台 isolate 计算,期间主 isolate 只负责 IO 与 UI。
+  static Future<String> md5SumFileSegment(String path, int offset) {
+    return Isolate.run(() async {
+      final file = File(path);
+      final raf = await file.open();
+      try {
+        await raf.setPosition(offset);
+        final acc = Md5Accumulator();
+        final chunkSize = 1024 * 1024;
+        while (true) {
+          final chunk = await raf.read(chunkSize);
+          if (chunk.isEmpty) break;
+          acc.add(chunk);
+        }
+        return acc.close();
+      } finally {
+        await raf.close();
+      }
+    });
+  }
+
   /// 保存消息到内存和数据库
   void _saveMessage(ChatMessage msg, String peerId) {
     _messages.putIfAbsent(peerId, () => []);
@@ -1397,7 +1415,6 @@ class ChatProvider extends ChangeNotifier {
     _receivePending.clear();
     _receiveWriting.clear();
     _receiveSmallBuffers.clear();
-    _receiveMd5.clear();
     _receiveViaServer.clear();
     _receiveLastProgressAt.clear();
     _sendLastProgressAt.clear();

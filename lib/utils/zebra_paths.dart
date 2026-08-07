@@ -50,6 +50,16 @@ class ZebraPaths {
     return sshDir;
   }
 
+  /// LAN chat received files: appDocumentsDir/zebra.dart.xin/zebra_received/
+  static Future<Directory> get received async {
+    final base = await root;
+    final recvDir = Directory(p.join(base.path, 'zebra_received'));
+    if (!await recvDir.exists()) {
+      await recvDir.create(recursive: true);
+    }
+    return recvDir;
+  }
+
   /// Get a file path under a specific subdirectory.
   static Future<String> filePath(String subdirectory, String filename) async {
     final dir = await root;
