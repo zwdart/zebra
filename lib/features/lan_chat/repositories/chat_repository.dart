@@ -52,6 +52,11 @@ class ChatRepository {
     DatabaseService.deleteChatMessages(peerId);
   }
 
+  /// 删除与某个 peer 的单条/多条消息(保留会话)
+  void deleteMessagesByIds(String peerId, List<String> ids) {
+    DatabaseService.deleteChatMessagesByIds(peerId, ids);
+  }
+
   ChatMessage _rowToMessage(Map<String, dynamic> row) {
     return ChatMessage(
       id: row['message_id'] as String? ?? '',

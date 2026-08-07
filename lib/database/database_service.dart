@@ -234,6 +234,16 @@ class DatabaseService {
     _db!.execute('DELETE FROM chat_peers WHERE peer_id = ?', [peerId]);
   }
 
+  /// 按消息 ID 删除与某 peer 的单条/多条消息(不删除会话本身)
+  static void deleteChatMessagesByIds(String peerId, List<String> ids) {
+    if (ids.isEmpty) return;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    _db!.execute(
+      'DELETE FROM chat_messages WHERE peer_id = ? AND message_id IN ($placeholders)',
+      [peerId, ...ids],
+    );
+  }
+
   static void close() {
     _db?.close();
     _db = null;

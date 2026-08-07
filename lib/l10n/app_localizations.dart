@@ -606,6 +606,99 @@ class AppLocalizations {
   String get exportFeeds => translate('exportFeeds');
   String get more => translate('more');
 
+  // LAN Chat
+  String get chat => translate('chat');
+  String get lanChat => translate('lanChat');
+  String get chatHistory => translate('chatHistory');
+  String get deviceList => translate('deviceList');
+  String get viewDetail => translate('viewDetail');
+  String get messageDetail => translate('messageDetail');
+  String get copied => translate('copied');
+  String get fileNotShareable => translate('fileNotShareable');
+  String get fileInfoMissing => translate('fileInfoMissing');
+  String get multiSelect => translate('multiSelect');
+  String get mergeShare => translate('mergeShare');
+  String get deleteMessages => translate('deleteMessages');
+  String get confirmDeleteMessage => translate('confirmDeleteMessage');
+  String confirmDeleteMessagesValue(int count) =>
+      translate('confirmDeleteMessages').replaceAll('{count}', '$count');
+  String selectedCountValue(int count) =>
+      translate('selectedCount').replaceAll('{count}', '$count');
+  String get deleteDevice => translate('deleteDevice');
+  String confirmDeleteDeviceValue(String name, String addr) {
+    return translate('confirmDeleteDevice')
+        .replaceAll('{name}', name)
+        .replaceAll('{addr}', addr);
+  }
+  String get fileDefaultName => translate('fileDefaultName');
+  String get viewFolderHint => translate('viewFolderHint');
+  String get cannotOpenDownloads => translate('cannotOpenDownloads');
+  String get downloadsUnavailable => translate('downloadsUnavailable');
+  String get cannotOpenFolder => translate('cannotOpenFolder');
+  String get openFolderFailed => translate('openFolderFailed');
+  String get discoveryPortNonDefault => translate('discoveryPortNonDefault');
+  String discoveryPortWarningValue(int configured, int defaultValue) {
+    return translate('discoveryPortWarning')
+        .replaceAll('{configured}', '$configured')
+        .replaceAll('{default}', '$defaultValue');
+  }
+  String get gotIt => translate('gotIt');
+  String get resetNow => translate('resetNow');
+  String get discoveryPortReset => translate('discoveryPortReset');
+  String get localInfo => translate('localInfo');
+  String get localInfoIp => translate('localInfoIp');
+  String get localInfoPort => translate('localInfoPort');
+  String get localInfoDeviceName => translate('localInfoDeviceName');
+  String get editNickname => translate('editNickname');
+  String get changeNickname => translate('changeNickname');
+  String get nicknameHint => translate('nicknameHint');
+  String get nicknameNotEmpty => translate('nicknameNotEmpty');
+  String nicknameUpdatedValue(String name) =>
+      translate('nicknameUpdated').replaceAll('{name}', name);
+  String discoveryStartFailedValue(String error) =>
+      translate('discoveryStartFailed').replaceAll('{error}', error);
+  String get deleteChatHistory => translate('deleteChatHistory');
+  String confirmDeleteChatHistoryValue(String name) =>
+      translate('confirmDeleteChatHistory').replaceAll('{name}', name);
+  String get connected => translate('connected');
+  String get disconnected => translate('disconnected');
+  String get chatDetails => translate('chatDetails');
+  String get peerDevice => translate('peerDevice');
+  String get localDevice => translate('localDevice');
+  String get deviceName => translate('deviceName');
+  String get ipAddress => translate('ipAddress');
+  String get portNumber => translate('portNumber');
+  String get sendFile => translate('sendFile');
+  String get send => translate('send');
+  String get reconnect => translate('reconnect');
+  String get startChat => translate('startChat');
+  String get pickingFiles => translate('pickingFiles');
+  String preparingFiles(int count) {
+    return translate('preparingFiles').replaceAll('{count}', '$count');
+  }
+  String get messageHint => translate('messageHint');
+  String get transferPending => translate('transferPending');
+  String get transferTransferring => translate('transferTransferring');
+  String get transferPaused => translate('transferPaused');
+  String get transferPause => translate('transferPause');
+  String get transferResume => translate('transferResume');
+  String get transferDone => translate('transferDone');
+  String get transferFailed => translate('transferFailed');
+  String get transferCancelled => translate('transferCancelled');
+  String get remainingTimeLabel => translate('remainingTimeLabel');
+  String get elapsedTimeLabel => translate('elapsedTimeLabel');
+  String get enableDiscovery => translate('enableDiscovery');
+  String get disableDiscovery => translate('disableDiscovery');
+  String get enableDiscoveryHint => translate('enableDiscoveryHint');
+  String lastStartFailedValue(String error) =>
+      translate('lastStartFailed').replaceAll('{error}', error);
+  String get searchingDevices => translate('searchingDevices');
+  String get noChatHistory => translate('noChatHistory');
+  String get waitingForPeer => translate('waitingForPeer');
+  String get timeJustNow => translate('timeJustNow');
+  String timeMinutesAgoValue(int minutes) =>
+      translate('timeMinutesAgo').replaceAll('{minutes}', '$minutes');
+
   // QR Tool
   String get qrTool => translate('qrTool');
   String get qrGenerate => translate('qrGenerate');
@@ -1175,6 +1268,81 @@ class AppLocalizations {
     'importFeeds': 'Import Feeds',
     'exportFeeds': 'Export Feeds',
     'more': 'More',
+    // LAN Chat
+    'chat': 'Chat',
+    'lanChat': 'LAN Chat',
+    'chatHistory': 'Chat History',
+    'deviceList': 'Device List',
+    'viewDetail': 'View Details',
+    'messageDetail': 'Message Details',
+    'copied': 'Copied',
+    'fileNotShareable': 'The file is not shareable from this device. Open its folder to view it.',
+    'fileInfoMissing': 'Missing file information',
+    'multiSelect': 'Multi-select',
+    'mergeShare': 'Merge & Share',
+    'deleteMessages': 'Delete Messages',
+    'confirmDeleteMessage': 'Delete this message? This cannot be undone.',
+    'confirmDeleteMessages': 'Delete the selected {count} messages? This cannot be undone.',
+    'selectedCount': '{count} selected',
+    'deleteDevice': 'Delete Device',
+    'confirmDeleteDevice': 'Remove "{name}" ({addr}) from the device list?\n\nOnly the list entry is removed; it does not affect the peer. If the device is still online, it will reappear after the next heartbeat.',
+    'fileDefaultName': 'File',
+    'viewFolderHint': 'Tap to open folder',
+    'cannotOpenDownloads': 'Cannot open downloads folder',
+    'downloadsUnavailable': 'System file manager unavailable. Please open the "Downloads" folder manually.',
+    'cannotOpenFolder': 'Cannot open folder',
+    'openFolderFailed': 'Failed to open folder',
+    'discoveryPortNonDefault': 'Non-default discovery port',
+    'discoveryPortWarning': 'Current discovery port is {configured}, not the default {default}.\n\nAll devices must use the same discovery port, otherwise other clients may not be found. You can ignore this if you confirm others use the same port.',
+    'gotIt': 'Got it',
+    'resetNow': 'Reset now',
+    'discoveryPortReset': 'Discovery port restored to default',
+    'localInfo': 'Local Info',
+    'localInfoIp': 'IP Address',
+    'localInfoPort': 'Port',
+    'localInfoDeviceName': 'Device Name',
+    'editNickname': 'Edit Nickname',
+    'changeNickname': 'Change Nickname',
+    'nicknameHint': 'Enter nickname',
+    'nicknameNotEmpty': 'Nickname cannot be empty',
+    'nicknameUpdated': 'Nickname changed to {name}',
+    'discoveryStartFailed': 'Failed to start device discovery: {error}',
+    'deleteChatHistory': 'Delete Chat History',
+    'confirmDeleteChatHistory': 'Delete chat history with "{name}"? This cannot be undone.',
+    'connected': 'Connected',
+    'disconnected': 'Disconnected',
+    'chatDetails': 'Chat Details',
+    'peerDevice': 'Peer Device',
+    'localDevice': 'Local Device',
+    'deviceName': 'Device Name',
+    'ipAddress': 'IP Address',
+    'portNumber': 'Port',
+    'sendFile': 'Send File',
+    'send': 'Send',
+    'reconnect': 'Reconnect',
+    'preparingFiles': 'Preparing {count} files...',
+    'pickingFiles': 'Opening file picker...',
+    'startChat': 'Start chatting',
+    'messageHint': 'Type a message...',
+    'transferPending': 'Pending...',
+    'transferTransferring': 'Transferring...',
+    'transferPaused': 'Paused',
+    'transferPause': 'Pause',
+    'transferResume': 'Resume',
+    'transferDone': 'Completed',
+    'transferFailed': 'Transfer failed',
+    'transferCancelled': 'Cancelled',
+    'remainingTimeLabel': 'ETA',
+    'elapsedTimeLabel': 'Elapsed',
+    'enableDiscovery': 'Enable discovery',
+    'disableDiscovery': 'Disable discovery',
+    'enableDiscoveryHint': 'Tap the WiFi icon in the top-right to enable discovery',
+    'lastStartFailed': 'Last start failed: {error}',
+    'searchingDevices': 'Searching for LAN devices...',
+    'noChatHistory': 'No chat history',
+    'waitingForPeer': 'Waiting for the peer to connect...',
+    'timeJustNow': 'Just now',
+    'timeMinutesAgo': '{minutes} min ago',
     // QR Tool
     'qrTool': 'QR Code',
     'qrGenerate': 'Generate',
@@ -1488,7 +1656,7 @@ class AppLocalizations {
     'downloadComplete': '下载完成',
     'downloadCompleteMsg': '更新已下载完成，点击「安装」开始安装。',
     'downloadPathLabel': '保存路径：',
-    'openFolder': '打开文件夹',
+    'openFolder': '打开目录',
     'installNow': '安装',
     'skip': '跳过',
     'forceUpdateRequired': '需要更新',
@@ -1745,6 +1913,81 @@ class AppLocalizations {
     'importFeeds': '导入订阅源',
     'exportFeeds': '导出订阅源',
     'more': '更多',
+    // LAN Chat
+    'chat': '聊天',
+    'lanChat': '本地聊天',
+    'chatHistory': '聊天记录',
+    'deviceList': '设备列表',
+    'viewDetail': '查看详情',
+    'messageDetail': '消息详情',
+    'copied': '已复制',
+    'fileNotShareable': '文件不在本机可分享的位置,请打开所在文件夹查看',
+    'fileInfoMissing': '文件信息缺失',
+    'multiSelect': '多选',
+    'mergeShare': '合并分享',
+    'deleteMessages': '删除消息',
+    'confirmDeleteMessage': '确定删除这条消息吗?删除后不可恢复。',
+    'confirmDeleteMessages': '确定删除选中的 {count} 条消息吗?删除后不可恢复。',
+    'selectedCount': '已选 {count} 条',
+    'deleteDevice': '删除设备',
+    'confirmDeleteDevice': '确定要从设备列表中移除 "{name}"({addr})吗?\n\n仅移除列表中的条目,不会影响对方。若该设备仍在线,收到下一次心跳后会自动重新出现。',
+    'fileDefaultName': '文件',
+    'viewFolderHint': '点击查看目录',
+    'cannotOpenDownloads': '无法打开下载目录',
+    'downloadsUnavailable': '系统文件管理器不可用,请手动打开"下载"目录查看文件。',
+    'cannotOpenFolder': '无法打开目录',
+    'openFolderFailed': '打开目录失败',
+    'discoveryPortNonDefault': '发现端口非默认',
+    'discoveryPortWarning': '当前发现端口为 {configured},不是默认端口 {default}。\n\n发现端口需要所有设备一致,否则可能无法正常搜索到本地其他客户端。若确认其他客户端也使用相同端口,可忽略本提示。',
+    'gotIt': '知道了',
+    'resetNow': '一键重置',
+    'discoveryPortReset': '已恢复默认发现端口',
+    'localInfo': '本机信息',
+    'localInfoIp': 'IP 地址',
+    'localInfoPort': '端口号',
+    'localInfoDeviceName': '设备名',
+    'editNickname': '编辑昵称',
+    'changeNickname': '修改昵称',
+    'nicknameHint': '请输入昵称',
+    'nicknameNotEmpty': '昵称不能为空',
+    'nicknameUpdated': '昵称已修改为 {name}',
+    'discoveryStartFailed': '无法开启设备发现:{error}',
+    'deleteChatHistory': '删除聊天记录',
+    'confirmDeleteChatHistory': '确定要删除与 "{name}" 的聊天记录吗?删除后不可恢复。',
+    'connected': '已连接',
+    'disconnected': '未连接',
+    'chatDetails': '对话详情',
+    'peerDevice': '对方设备',
+    'localDevice': '本机',
+    'deviceName': '设备名',
+    'ipAddress': 'IP 地址',
+    'portNumber': '端口号',
+    'sendFile': '发送文件',
+    'send': '发送',
+    'reconnect': '重新连接',
+    'preparingFiles': '正在准备传输 {count} 个文件...',
+    'pickingFiles': '正在打开文件选择器...',
+    'startChat': '开始聊天吧',
+    'messageHint': '输入消息...',
+    'transferPending': '等待中...',
+    'transferTransferring': '传输中...',
+    'transferPaused': '已暂停',
+    'transferPause': '暂停',
+    'transferResume': '恢复',
+    'transferDone': '传输完成',
+    'transferFailed': '传输失败',
+    'transferCancelled': '已取消',
+    'remainingTimeLabel': '剩余',
+    'elapsedTimeLabel': '已用',
+    'enableDiscovery': '开启发现',
+    'disableDiscovery': '关闭发现',
+    'enableDiscoveryHint': '点击右上角 WiFi 图标开启发现',
+    'lastStartFailed': '上次启动失败:{error}',
+    'searchingDevices': '正在搜索局域网设备...',
+    'noChatHistory': '暂无聊天记录',
+    'waitingForPeer': '等待对方连接中...',
+    'timeJustNow': '刚刚',
+    'timeMinutesAgo': '{minutes}分钟前',
     // QR Tool
     'qrTool': '二维码',
     'qrGenerate': '生成',

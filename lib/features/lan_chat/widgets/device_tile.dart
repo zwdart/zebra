@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/lan_device.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// 设备列表项组件
 class DeviceTile extends StatelessWidget {
@@ -80,13 +81,13 @@ class DeviceTile extends StatelessWidget {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: const Text('聊天', style: TextStyle(fontSize: 12)),
+                child: Text(AppLocalizations.of(context).chat, style: const TextStyle(fontSize: 12)),
               ),
             // 离线设备提供删除入口,用于清理残留条目
             if (!device.isOnline && onDelete != null)
               IconButton(
                 icon: const Icon(Icons.delete_outline, size: 18),
-                tooltip: '删除设备',
+                tooltip: AppLocalizations.of(context).deleteDevice,
                 onPressed: onDelete,
               ),
           ],

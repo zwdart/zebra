@@ -8,6 +8,8 @@ import '../repositories/chat_repository.dart';
 import '../services/lan_chat_settings.dart';
 import '../widgets/device_tile.dart';
 import '../../../widgets/window_drag_region.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../utils/relative_time.dart';
 import 'chat_screen.dart';
 
 /// 本地聊天首页：设备列表 + 会话列表
@@ -44,20 +46,21 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('发现端口非默认'),
+        title: Text(AppLocalizations.of(ctx).discoveryPortNonDefault),
         content: Text(
-          '当前发现端口为 $configured,不是默认端口 ${LanChatSettings.defaultDiscoveryPort}。\n\n'
-          '发现端口需要所有设备一致,否则可能无法正常搜索到本地其他客户端。'
-          '若确认其他客户端也使用相同端口,可忽略本提示。',
+          AppLocalizations.of(ctx).discoveryPortWarningValue(
+            configured,
+            LanChatSettings.defaultDiscoveryPort,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('知道了'),
+            child: Text(AppLocalizations.of(ctx).gotIt),
           ),
           FilledButton(
             onPressed: () => _resetDiscoveryPort(ctx),
-            child: const Text('一键重置'),
+            child: Text(AppLocalizations.of(ctx).resetNow),
           ),
         ],
       ),
@@ -76,7 +79,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
     Navigator.pop(dialogContext);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已恢复默认发现端口')),
+      SnackBar(content: Text(AppLocalizations.of(context).discoveryPortReset)),
     );
   }
 
@@ -115,19 +118,19 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('删除设备'),
+        title: Text(AppLocalizations.of(ctx).deleteDevice),
         content: Text(
-          '确定要从设备列表中移除 "${device.name}"(${device.ip}:${device.port})吗?\n\n'
-          '仅移除列表中的条目,不会影响对方。若该设备仍在线,收到下一次心跳后会自动重新出现。',
+          AppLocalizations.of(ctx)
+              .confirmDeleteDeviceValue(device.name, '${device.ip}:${device.port}'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: Text(AppLocalizations.of(ctx).cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
+            child: Text(AppLocalizations.of(ctx).delete),
           ),
         ],
       ),
@@ -164,27 +167,35 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.info_outline, size: 20),
-            SizedBox(width: 8),
-            Text('本机信息'),
+            const Icon(Icons.info_outline, size: 20),
+            const SizedBox(width: 8),
+            Text(AppLocalizations.of(ctx).localInfo),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _infoRow(Icons.lan, 'IP 地址', ip),
+            _infoRow(Icons.lan, AppLocalizations.of(ctx).localInfoIp, ip),
             const SizedBox(height: 12),
-            _infoRow(Icons.settings_ethernet, '端口号', '$port'),
+            _infoRow(
+              Icons.settings_ethernet,
+              AppLocalizations.of(ctx).localInfoPort,
+              '$port',
+            ),
             const SizedBox(height: 12),
-            _infoRow(Icons.person, '设备名', chatProvider.selfName),
+            _infoRow(
+              Icons.person,
+              AppLocalizations.of(ctx).localInfoDeviceName,
+              chatProvider.selfName,
+            ),
           ],
         ),
         actions: [
           TextButton.icon(
             icon: const Icon(Icons.edit, size: 16),
-            label: const Text('编辑昵称'),
+            label: Text(AppLocalizations.of(ctx).editNickname),
             onPressed: () {
               Navigator.pop(ctx);
               _editNickname(context, chatProvider, discoveryProvider);
@@ -192,7 +203,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
+            child: Text(AppLocalizations.of(ctx).close),
           ),
         ],
       ),
@@ -208,12 +219,12 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('修改昵称'),
+        title: Text(AppLocalizations.of(ctx).changeNickname),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            hintText: '请输入昵称',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            hintText: AppLocalizations.of(ctx).nicknameHint,
+            border: const OutlineInputBorder(),
           ),
           autofocus: true,
           maxLength: 20,
@@ -221,25 +232,27 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
+            child: Text(AppLocalizations.of(ctx).cancel),
           ),
           FilledButton(
             onPressed: () {
               final name = controller.text.trim();
               if (name.isEmpty) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('昵称不能为空')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(AppLocalizations.of(ctx).nicknameNotEmpty)),
+                );
                 return;
               }
               chatProvider.setSelfName(name);
               discoveryProvider.setDeviceName(name);
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text('昵称已修改为 $name')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(AppLocalizations.of(ctx).nicknameUpdatedValue(name)),
+                ),
+              );
             },
-            child: const Text('保存'),
+            child: Text(AppLocalizations.of(ctx).save),
           ),
         ],
       ),
@@ -271,18 +284,18 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
     return Scaffold(
       appBar: WindowDragRegion(
         child: AppBar(
-          title: const Text('本地聊天'),
+          title: Text(AppLocalizations.of(context).lanChat),
           bottom: TabBar(
             controller: _tabController,
-            tabs: const [
+            tabs: [
               // 图标放在文字前面,避免竖排堆叠占用过多高度
               Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.computer, size: 18),
-                    SizedBox(width: 4),
-                    Text('设备列表'),
+                    const Icon(Icons.computer, size: 18),
+                    const SizedBox(width: 4),
+                    Text(AppLocalizations.of(context).deviceList),
                   ],
                 ),
               ),
@@ -290,9 +303,9 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.chat, size: 18),
-                    SizedBox(width: 4),
-                    Text('聊天记录'),
+                    const Icon(Icons.chat, size: 18),
+                    const SizedBox(width: 4),
+                    Text(AppLocalizations.of(context).chatHistory),
                   ],
                 ),
               ),
@@ -301,14 +314,16 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
           actions: [
             IconButton(
               icon: const Icon(Icons.info_outline),
-              tooltip: '本机信息',
+              tooltip: AppLocalizations.of(context).localInfo,
               onPressed: () => _showLocalInfo(context),
             ),
             Consumer<LanDiscoveryProvider>(
               builder: (ctx, provider, _) {
                 return IconButton(
                   icon: Icon(provider.isRunning ? Icons.wifi : Icons.wifi_off),
-                  tooltip: provider.isRunning ? '关闭发现' : '开启发现',
+                  tooltip: provider.isRunning
+                      ? AppLocalizations.of(ctx).disableDiscovery
+                      : AppLocalizations.of(ctx).enableDiscovery,
                   onPressed: () async {
                     if (provider.isRunning) {
                       provider.stop();
@@ -318,7 +333,13 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
                     if (!ctx.mounted) return;
                     if (provider.error != null) {
                       ScaffoldMessenger.of(ctx).showSnackBar(
-                        SnackBar(content: Text('无法开启设备发现:${provider.error}')),
+                        SnackBar(
+                          content: Text(
+                            AppLocalizations.of(
+                              ctx,
+                            ).discoveryStartFailedValue(provider.error!),
+                          ),
+                        ),
                       );
                     }
                   },
@@ -355,7 +376,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  '点击右上角 WiFi 图标开启发现',
+                  AppLocalizations.of(context).enableDiscoveryHint,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -365,7 +386,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Text(
-                      '上次启动失败:${provider.error}',
+                      AppLocalizations.of(context).lastStartFailedValue(provider.error!),
                       textAlign: TextAlign.center,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
@@ -389,7 +410,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
                 const CircularProgressIndicator(strokeWidth: 2),
                 const SizedBox(height: 12),
                 Text(
-                  '正在搜索局域网设备...',
+                  AppLocalizations.of(context).searchingDevices,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -426,15 +447,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
   String _formatPeerTime(String iso) {
     final dt = DateTime.tryParse(iso);
     if (dt == null) return '';
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return '刚刚';
-    if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
-    if (diff.inDays < 1) {
-      return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    }
-    if (diff.inDays < 7) return '${dt.month}/${dt.day}';
-    return '${dt.year}/${dt.month}/${dt.day}';
+    return RelativeTime.peerTime(AppLocalizations.of(context), dt);
   }
 
   Widget _buildChatHistory() {
@@ -454,7 +467,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
             ),
             const SizedBox(height: 12),
             Text(
-              '暂无聊天记录',
+              AppLocalizations.of(context).noChatHistory,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -485,90 +498,8 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              child: Text(
-                peerName.isNotEmpty ? peerName[0].toUpperCase() : '?',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
-              ),
-            ),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    peerName,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                ),
-                if (lastTimeStr.isNotEmpty)
-                  Text(
-                    _formatPeerTime(lastTimeStr),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                if (unreadCount > 0) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.error,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      unreadCount.toString(),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onError,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            subtitle: Text(
-              lastMessage,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            trailing: IconButton(
-              icon: const Icon(Icons.delete_outline, size: 18),
-              onPressed: () async {
-                // 删除单个对话前二次确认,避免误删
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('删除聊天记录'),
-                    content: Text('确定要删除与 "$peerName" 的聊天记录吗?删除后不可恢复。'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('取消'),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: const Text('删除'),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirmed != true || !context.mounted) return;
-                _repository.deleteMessages(peerId);
-                setState(() {});
-              },
-            ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
             onTap: () {
               _repository.markRead(peerId);
               Navigator.push(
@@ -583,6 +514,131 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
                 ),
               );
             },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor:
+                        Theme.of(context).colorScheme.primaryContainer,
+                    child: Text(
+                      peerName.isNotEmpty ? peerName[0].toUpperCase() : '?',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 第一行:用户名(可省略)+ 时间(右上角)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                peerName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            if (lastTimeStr.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                _formatPeerTime(lastTimeStr),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        // 第二行:消息预览(可省略)+ 未读徽标(右下角)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                lastMessage,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            if (unreadCount > 0) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.error,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  unreadCount.toString(),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(context).colorScheme.onError,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // 删除对话按钮
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    onPressed: () async {
+                      // 删除单个对话前二次确认,避免误删
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: Text(AppLocalizations.of(ctx).deleteChatHistory),
+                          content: Text(
+                            AppLocalizations.of(ctx)
+                                .confirmDeleteChatHistoryValue(peerName),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: Text(AppLocalizations.of(ctx).cancel),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: Text(AppLocalizations.of(ctx).delete),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true || !context.mounted) return;
+                      _repository.deleteMessages(peerId);
+                      setState(() {});
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },

@@ -4,20 +4,34 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/chat_message.dart';
+import '../providers/chat_provider.dart';
 import '../services/receive_directory.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../utils/relative_time.dart';
 
 /// 消息气泡组件
 class MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final String peerId;
+  final bool selectionMode;
+  final bool isSelected;
+  final VoidCallback? onToggleSelect;
+  final VoidCallback? onMultiSelect;
+  final VoidCallback? onDelete;
 
   const MessageBubble({
     super.key,
     required this.message,
     required this.peerId,
+    this.selectionMode = false,
+    this.isSelected = false,
+    this.onToggleSelect,
+    this.onMultiSelect,
+    this.onDelete,
   });
 
   @override
@@ -31,6 +45,7 @@ class MessageBubble extends StatelessWidget {
         mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          if (selectionMode && !isMe) _buildSelectCheck(context),
           if (!isMe) _buildAvatar(context),
           const SizedBox(width: 8),
           Flexible(
@@ -56,6 +71,9 @@ class MessageBubble extends StatelessWidget {
                     color: isMe
                         ? colorScheme.primaryContainer
                         : colorScheme.surfaceContainerHighest,
+                    border: isSelected
+                        ? Border.all(color: colorScheme.primary, width: 2)
+                        : null,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
@@ -66,10 +84,14 @@ class MessageBubble extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: GestureDetector(
                     // 长按(移动端)与右键(桌面端)呼出菜单
-                    onLongPressStart: (d) =>
-                        _showMessageMenu(context, d.globalPosition),
-                    onSecondaryTapDown: (d) =>
-                        _showMessageMenu(context, d.globalPosition),
+                    onLongPressStart: selectionMode
+                        ? null
+                        : (d) => _showMessageMenu(context, d.globalPosition),
+                    onSecondaryTapDown: selectionMode
+                        ? null
+                        : (d) => _showMessageMenu(context, d.globalPosition),
+                    // 多选模式下点击切换选中
+                    onTap: selectionMode ? () => onToggleSelect?.call() : null,
                     child: _buildContent(context),
                   ),
                 ),
@@ -83,7 +105,7 @@ class MessageBubble extends StatelessWidget {
                       if (isMe && message.sendStatus != SendStatus.sent)
                         const SizedBox(width: 4),
                       Text(
-                        _formatTime(message.timestamp),
+                        _formatTime(context, message.timestamp),
                         style: TextStyle(
                           fontSize: 10,
                           color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
@@ -97,7 +119,32 @@ class MessageBubble extends StatelessWidget {
           ),
           if (isMe) const SizedBox(width: 8),
           if (isMe) _buildAvatar(context),
+          if (selectionMode && isMe) _buildSelectCheck(context),
         ],
+      ),
+    );
+  }
+
+  /// 多选模式下显示的圆形勾选框
+  Widget _buildSelectCheck(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(left: 6, right: 6, bottom: 2),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isSelected ? colorScheme.primary : Colors.transparent,
+          border: Border.all(
+            color: isSelected ? colorScheme.primary : colorScheme.outline,
+            width: 1.5,
+          ),
+        ),
+        child: isSelected
+            ? Icon(Icons.check, size: 14, color: colorScheme.onPrimary)
+            : null,
       ),
     );
   }
@@ -163,19 +210,29 @@ class MessageBubble extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     // 解析文件信息（content 为 JSON）
-    String fileName = '文件';
+    final loc = AppLocalizations.of(context);
+    String fileName = loc.fileDefaultName;
     String fileSize = '';
     String? path;
+    String? transferId;
     try {
       final map = jsonDecode(message.content) as Map<String, dynamic>;
-      fileName = map['fileName'] as String? ?? '文件';
+      fileName = map['fileName'] as String? ?? loc.fileDefaultName;
       final size = map['fileSize'] as int? ?? 0;
-      fileSize = _formatSize(size);
+      fileSize = FileTransferInfo.formatSize(size);
       path = map['path'] as String?;
+      transferId = map['transferId'] as String?;
     } catch (_) {}
 
+    // 传输中的会话:watch 监听进度变化,实时刷新速度/剩余时间
+    final session = (transferId != null && transferId.isNotEmpty)
+        ? context.watch<ChatProvider>().getFileTransfer(transferId)
+        : null;
     return InkWell(
-      onTap: path == null ? null : () => _onFileTap(context, path!),
+      // 多选模式下禁用文件点击,让外层 GestureDetector 处理选中
+      onTap: (selectionMode || path == null)
+          ? null
+          : () => _onFileTap(context, path!),
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.all(2),
@@ -197,9 +254,39 @@ class MessageBubble extends StatelessWidget {
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (fileSize.isNotEmpty)
+                  if (session != null &&
+                      (session.status == TransferStatus.pending ||
+                          session.status == TransferStatus.transferring)) ...[
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: session.progress,
+                        minHeight: 4,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     Text(
-                      path == null ? fileSize : '$fileSize 点击查看目录',
+                      '${(session.progress * 100).toStringAsFixed(0)}% '
+                      '${FileTransferInfo.formatSize(session.transferredBytes)} / $fileSize',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      session.progressLine(
+                        remainingLabel: loc.remainingTimeLabel,
+                      ),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ] else if (fileSize.isNotEmpty)
+                    Text(
+                      path == null ? fileSize : '$fileSize ${loc.viewFolderHint}',
                       style: TextStyle(
                         fontSize: 11,
                         color: colorScheme.onSurfaceVariant,
@@ -208,6 +295,16 @@ class MessageBubble extends StatelessWidget {
                 ],
               ),
             ),
+            if (message.isMe && message.sendStatus == SendStatus.failed &&
+                transferId != null && transferId.isNotEmpty)
+              IconButton(
+                icon: Icon(Icons.refresh, size: 16, color: colorScheme.error),
+                tooltip: loc.retry,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                onPressed: () =>
+                    context.read<ChatProvider>().retryTransfer(transferId!),
+              ),
             if (message.isMe && message.sendStatus == SendStatus.sent)
               Icon(Icons.check_circle, size: 16, color: colorScheme.primary),
           ],
@@ -218,12 +315,13 @@ class MessageBubble extends StatelessWidget {
 
   /// 点击文件:打开所在目录,而不是直接打开文件
   void _onFileTap(BuildContext context, String path) {
+    final loc = AppLocalizations.of(context);
     if (Platform.isAndroid && !path.startsWith('/')) {
       // Android 上通过 MediaStore 保存时,path 是展示路径(如 Download/zebra/x.pdf),
       // 不是真实路径,直接打开系统"下载"目录
       ReceiveDirectory.openDownloadsFolder().then((ok) {
         if (!ok && context.mounted) {
-          _showErrorDialog(context, '无法打开下载目录', '系统文件管理器不可用,请手动打开"下载"目录查看文件。');
+          _showErrorDialog(context, loc.cannotOpenDownloads, loc.downloadsUnavailable);
         }
       });
       return;
@@ -237,17 +335,29 @@ class MessageBubble extends StatelessWidget {
     // 系统消息不提供菜单
     if (message.type == MessageType.system) return;
 
+    // 移动端弹出菜单前先收起输入法:showMenu 出栈后会恢复输入框焦点,
+    // 导致取消/选择菜单后键盘自动弹出;桌面端无软键盘,保持原样
+    if (Platform.isAndroid || Platform.isIOS) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
+
     final actions = <PopupMenuEntry<String>>[];
+    final loc = AppLocalizations.of(context);
     if (message.type == MessageType.text) {
       actions
-        ..add(const PopupMenuItem(value: 'detail', child: Text('查看详情')))
-        ..add(const PopupMenuItem(value: 'copy', child: Text('复制')))
-        ..add(const PopupMenuItem(value: 'share', child: Text('分享')));
+        ..add(PopupMenuItem(value: 'detail', child: Text(loc.viewDetail)))
+        ..add(PopupMenuItem(value: 'copy', child: Text(loc.copy)))
+        ..add(PopupMenuItem(value: 'share', child: Text(loc.share)));
     } else if (message.type == MessageType.file) {
       actions
-        ..add(const PopupMenuItem(value: 'folder', child: Text('打开文件夹')))
-        ..add(const PopupMenuItem(value: 'share', child: Text('分享')));
+        ..add(PopupMenuItem(value: 'folder', child: Text(loc.openFolder)))
+        ..add(PopupMenuItem(value: 'copyPath', child: Text(loc.copyPath)))
+        ..add(PopupMenuItem(value: 'share', child: Text(loc.share)));
     }
+    // 多选 / 删除(所有非系统消息通用)
+    actions
+      ..add(PopupMenuItem(value: 'multiSelect', child: Text(loc.multiSelect)))
+      ..add(PopupMenuItem(value: 'delete', child: Text(loc.delete)));
 
     final screenSize = MediaQuery.of(context).size;
     final action = await showMenu<String>(
@@ -274,15 +384,48 @@ class MessageBubble extends StatelessWidget {
       case 'folder':
         _openFileFolder(context);
         break;
+      case 'copyPath':
+        await _copyFilePath(context);
+        break;
+      case 'multiSelect':
+        onMultiSelect?.call();
+        break;
+      case 'delete':
+        await _confirmDelete(context);
+        break;
     }
+  }
+
+  /// 删除消息二次确认,确认后回调删除
+  Future<void> _confirmDelete(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.deleteMessages),
+        content: Text(loc.confirmDeleteMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(loc.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(loc.delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) onDelete?.call();
   }
 
   /// 文字消息:弹窗查看完整内容(可选中复制)
   void _showTextDetail(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('消息详情'),
+        title: Text(loc.messageDetail),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420, maxHeight: 360),
           child: SingleChildScrollView(
@@ -298,7 +441,7 @@ class MessageBubble extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
+            child: Text(loc.close),
           ),
         ],
       ),
@@ -307,13 +450,32 @@ class MessageBubble extends StatelessWidget {
 
   /// 复制消息内容(文字直接复制;文件复制文件名)
   Future<void> _copyMessage(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
     final text = message.type == MessageType.text
         ? message.content
-        : (_fileInfo()?.fileName ?? message.content);
+        : (_fileInfo(fallbackName: loc.fileDefaultName)?.fileName ?? message.content);
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已复制')),
+      SnackBar(content: Text(loc.copied)),
+    );
+  }
+
+  /// 复制文件消息的本地路径到剪贴板
+  Future<void> _copyFilePath(BuildContext context) async {
+    final loc = AppLocalizations.of(context);
+    final path = _fileInfo()?.filePath;
+    if (path == null || path.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.fileInfoMissing)),
+      );
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: path));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(loc.pathCopied)),
     );
   }
 
@@ -323,6 +485,7 @@ class MessageBubble extends StatelessWidget {
       await Share.share(message.content);
       return;
     }
+    final loc = AppLocalizations.of(context);
     final path = _fileInfo()?.filePath;
     if (path == null || !File(path).existsSync()) {
       if (!context.mounted) return;
@@ -331,7 +494,7 @@ class MessageBubble extends StatelessWidget {
         ReceiveDirectory.openDownloadsFolder();
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('文件不在本机可分享的位置,请打开所在文件夹查看')),
+        SnackBar(content: Text(loc.fileNotShareable)),
       );
       return;
     }
@@ -340,10 +503,11 @@ class MessageBubble extends StatelessWidget {
 
   /// 打开文件所在文件夹(复用点击文件的逻辑)
   void _openFileFolder(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final path = _fileInfo()?.filePath;
     if (path == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('文件信息缺失')),
+        SnackBar(content: Text(loc.fileInfoMissing)),
       );
       return;
     }
@@ -351,11 +515,11 @@ class MessageBubble extends StatelessWidget {
   }
 
   /// 从文件消息的 JSON 内容中解析文件信息
-  FileTransferInfo? _fileInfo() {
+  FileTransferInfo? _fileInfo({String fallbackName = '文件'}) {
     try {
       final map = jsonDecode(message.content) as Map<String, dynamic>;
       return FileTransferInfo(
-        fileName: map['fileName'] as String? ?? '文件',
+        fileName: map['fileName'] as String? ?? fallbackName,
         fileSize: map['fileSize'] as int? ?? 0,
         filePath: map['path'] as String?,
       );
@@ -366,21 +530,23 @@ class MessageBubble extends StatelessWidget {
 
   /// 打开文件所在目录
   Future<void> _openContainingDirectory(BuildContext context, String path) async {
+    final loc = AppLocalizations.of(context);
     final dir = p.dirname(path);
     try {
       final ok = await launchUrl(Uri.directory(dir));
       if (!ok && context.mounted) {
-        _showErrorDialog(context, '无法打开目录', '没有可用的应用能打开该目录:\n$dir');
+        _showErrorDialog(context, loc.cannotOpenFolder, loc.openFolderFailed);
       }
     } catch (e) {
       if (context.mounted) {
-        _showErrorDialog(context, '打开目录失败', '$e');
+        _showErrorDialog(context, loc.openFolderFailed, '$e');
       }
     }
   }
 
   /// 显示居中的错误信息弹框:不占满屏幕,内容可滚动查看,带关闭按钮
   void _showErrorDialog(BuildContext context, String title, String message) {
+    final loc = AppLocalizations.of(context);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -400,27 +566,14 @@ class MessageBubble extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
+            child: Text(loc.close),
           ),
         ],
       ),
     );
   }
 
-  String _formatTime(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return '刚刚';
-    if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
-    if (diff.inDays < 1) {
-      return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    }
-    return '${dt.month}/${dt.day} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _formatSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  String _formatTime(BuildContext context, DateTime dt) {
+    return RelativeTime.messageTime(AppLocalizations.of(context), dt);
   }
 }

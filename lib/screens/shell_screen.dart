@@ -73,7 +73,7 @@ class _ShellScreenState extends State<ShellScreen> {
       NavigationDestination(
         icon: const Icon(Icons.chat_outlined),
         selectedIcon: const Icon(Icons.chat),
-        label: '聊天',
+        label: loc.chat,
       ),
       NavigationDestination(
         icon: const Icon(Icons.book_outlined),
@@ -119,7 +119,7 @@ class _ShellScreenState extends State<ShellScreen> {
                 NavigationRailDestination(
                   icon: const Icon(Icons.chat_outlined),
                   selectedIcon: const Icon(Icons.chat),
-                  label: const Text('聊天'),
+                  label: Text(loc.chat),
                 ),
                 NavigationRailDestination(
                   icon: const Icon(Icons.book_outlined),

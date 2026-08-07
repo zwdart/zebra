@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/lan_device.dart';
 import 'lan_chat_settings.dart';
 
-/// UDP 广播发现服务
+/// UDP 广播/组播发现服务
 /// 每 3 秒发送心跳广播，同时监听其他设备的心跳
 class LanDiscoveryService {
   int _tcpPort = 19423;
@@ -13,9 +13,17 @@ class LanDiscoveryService {
   int _discoveryPort = LanChatSettings.defaultDiscoveryPort;
   static const Duration _heartbeatInterval = Duration(seconds: 3);
 
+  /// 组播发现组地址:与受限广播(255.255.255.255)配合使用。
+  /// 受限广播在"同一端口被多个 socket 绑定(reuseAddress)"时,
+  /// 内核只把包投递给其中一个 socket,导致两台设备同时搜索时
+  /// 互相收不到心跳(UI 一直转圈);组播允许多个 socket join 同一组、
+  /// 各自独立收到组的包,从根上解决"两个同时搜索"的互斥问题。
+  static final InternetAddress _multicastGroup = InternetAddress('239.255.0.250');
+
   RawDatagramSocket? _socket;
   Timer? _heartbeatTimer;
   Timer? _offlineCheckTimer;
+  bool _multicastJoined = false; // 组播加入是否已成功(失败时在心跳里重试)
 
   final String _deviceId;
   String _deviceName;
@@ -72,6 +80,19 @@ class LanDiscoveryService {
       );
       _socket!.broadcastEnabled = true;
 
+      // 加入组播组:多实例/多设备可同时 join 并各自收到心跳,
+      // 解决"两台同时搜索时广播只投递一个 socket"导致的转圈。
+      // 部分环境(如 Android 未持 MulticastLock)不支持组播,失败不影响广播通道;
+      // 失败时由心跳节拍持续重试(网络接口可能尚未就绪,重启后正常即此原因)。
+      _multicastJoined = false;
+      try {
+        _socket!.joinMulticast(_multicastGroup);
+        _multicastJoined = true;
+        debugPrint('[LAN] Joined multicast group $_multicastGroup');
+      } catch (e) {
+        debugPrint('[LAN] Join multicast failed (广播仍可用,将重试): $e');
+      }
+
       // 监听广播
       _socket!.listen((event) {
         if (event == RawSocketEvent.read) {
@@ -121,15 +142,32 @@ class LanDiscoveryService {
   void _sendHeartbeat() {
     if (_socket == null) return;
     try {
+      // 组播加入失败时持续重试(接口未就绪/首次启动竞态),成功后即可收组播
+      if (!_multicastJoined) {
+        try {
+          _socket!.joinMulticast(_multicastGroup);
+          _multicastJoined = true;
+          debugPrint('[LAN] Joined multicast group (retry) $_multicastGroup');
+        } catch (_) {
+          // 仍不可用,下个心跳节拍继续尝试
+        }
+      }
       final payload = utf8.encode(jsonEncode({
         'type': 'heartbeat',
         'deviceId': _deviceId,
         'name': _deviceName,
         'port': _tcpPort,
       }));
+      // 受限广播:兼容旧版本/Android 等不支持组播的环境
       _socket!.send(
         payload,
         InternetAddress('255.255.255.255'),
+        _discoveryPort,
+      );
+      // 组播:多实例同端口共存时各自都能收到(避免同时搜索互斥转圈)
+      _socket!.send(
+        payload,
+        _multicastGroup,
         _discoveryPort,
       );
     } catch (e) {

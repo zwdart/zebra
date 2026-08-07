@@ -8,7 +8,7 @@ enum SendStatus { sending, sent, failed }
 enum TransferDirection { send, receive }
 
 /// 文件传输状态
-enum TransferStatus { pending, transferring, done, failed, cancelled }
+enum TransferStatus { pending, transferring, paused, done, failed, cancelled }
 
 /// 聊天消息
 class ChatMessage {
@@ -101,10 +101,13 @@ class FileTransferInfo {
     this.errorMessage,
   });
 
-  String get sizeFormatted {
-    if (fileSize < 1024) return '$fileSize B';
-    if (fileSize < 1024 * 1024) return '${(fileSize / 1024).toStringAsFixed(1)} KB';
-    return '${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB';
+  String get sizeFormatted => FileTransferInfo.formatSize(fileSize);
+
+  /// 字节数格式化:123 B / 4.5 KB / 3.2 MB
+  static String formatSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   Map<String, dynamic> toJson() => {

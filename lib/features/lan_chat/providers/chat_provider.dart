@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/chat_message.dart';
+import '../models/file_transfer_session.dart';
 import '../models/lan_device.dart';
 import '../repositories/chat_repository.dart';
 import '../services/chat_server.dart';
@@ -15,17 +19,92 @@ class ChatProvider extends ChangeNotifier {
   final ChatServer _server = ChatServer();
   final Map<String, ChatClient> _clients = {};
   final Map<String, List<ChatMessage>> _messages = {};
-  final Map<String, FileTransferInfo> _fileTransfers = {};
-  final Map<String, List<int>> _receiveBuffers = {}; // transferId -> 接收中的文件数据
+  final Map<String, FileTransferSession> _fileTransfers = {};
+  // ---- 接收侧 .part 流式落盘状态(替代原内存 List<int> 缓冲)----
+  final Map<String, RandomAccessFile> _receiveWriters = {}; // transferId -> 打开的追加写句柄
+  final Map<String, String> _receivePartPaths = {}; // transferId -> .part 路径
+  final Map<String, int> _receiveOffsets = {}; // transferId -> 已落盘字节数
+  final Map<String, List<int>> _receivePending = {}; // writer 就绪前/写入中的缓冲
+  final Map<String, bool> _receiveWriting = {}; // 防止同一 transfer 并发写入乱序
   final Map<String, String> _transferPeers = {}; // transferId -> 对方设备 ID
   final Map<String, String> _transferMessageIds = {}; // transferId -> 发送方消息 ID
+  // ---- 小文件快速通道:内存缓冲直接落盘(不建 .part、不存断点索引)----
+  final Map<String, BytesBuilder> _receiveSmallBuffers = {}; // transferId -> 累积字节
+  // ---- 接收等待缓冲软上限:writer 未就绪时暂存数据的最大字节数 ----
+  static const int _receivePendingLimit = 64 * 1024 * 1024; // 64MB
+  // ---- 大文件接收侧增量 MD5(随落盘同步计算,file_done 时与发送方校验)----
+  final Map<String, Md5Accumulator> _receiveMd5 = {}; // transferId -> MD5 累加器
+  // ---- 接收侧通道来源(决定 file_ready 回复走 server 还是 client 通道)----
+  final Map<String, bool> _receiveViaServer = {}; // transferId -> 是否经 server 通道接收
+  final Map<String, DateTime> _prepareStartedAt = {}; // transferId -> 开始准备 .part 的时间(诊断超时)
+
+  // ---- 批量发送队列 ----
+  final List<String> _sendQueue = []; // 等待发送的 transferId(小文件 insert(0) 插队)
+  // 串行发送(方案 A):一次只传一个文件,完成后再传下一个。
+  // 背景:单连接多文件并发时,TCP 只提供连接级背压、没有逐传输流控,
+  // 接收端 writer 未就绪时 chunk 只能暂存内存,曾反复触发 pending 溢出 abort
+  // (多文件只收到 1 个)。串行后 writer 永远先于 chunk 就绪,该整类 bug 消失;
+  // 局域网单连接本就能跑满带宽,串行吞吐损失可忽略,小文件仍可插队优先。
+  static const int _maxConcurrentSends = 1; // 同时进行的发送上限(串行=1)
+  int _activeSends = 0; // 当前正在发送的数量
+  // ---- 发送看门狗:防止传输卡死导致 UI 永久转圈/队列被阻塞 ----
+  final Map<String, DateTime> _sendStartedAt = {}; // transferId -> 开始发送时间
+  final Map<String, DateTime> _sendLastProgressAt = {}; // transferId -> 最近产出进度时间
+  final Map<String, DateTime> _receiveLastProgressAt = {}; // transferId -> 最近落盘/缓冲时间
+  static const Duration _sendWatchdogInterval = Duration(seconds: 5);
+  static const Duration _sendWatchdogTimeout = Duration(seconds: 45); // 从未产出进度
+  static const Duration _transferStallTimeout = Duration(seconds: 45); // 传输中零进展
+  Timer? _sendWatchdogTimer;
+  final Map<String, LanDevice> _sendTargets = {}; // transferId -> 目标设备(排队后使用)
+  final Map<String, Stream<List<int>>> _sendStreams = {}; // transferId -> 一次性流式源(替代文件路径)
+  final Map<String, Stream<List<int>> Function(int offset)> _sendStreamFactories = {}; // transferId -> 可重开流工厂(原生直读流,按 offset 重开定位)
   final String _selfId;
   String _selfName;
   bool _isServerRunning = false;
 
+  /// 是否正在重连(发送/文件传输前建连失败时置位,供 UI 提示"重连中...")
+  bool _isReconnecting = false;
+  bool get isReconnecting => _isReconnecting;
+
+  /// 传输进度通知节流:避免大文件传输时每个 chunk(约 64KB)都触发全量重建
+  DateTime? _lastTransferNotifyAt;
+  static const Duration _transferNotifyInterval = Duration(milliseconds: 150);
+
+  /// 距上次传输进度通知超过间隔时返回 true,并刷新时间戳
+  bool _shouldNotifyTransferProgress() {
+    final now = DateTime.now();
+    if (_lastTransferNotifyAt == null ||
+        now.difference(_lastTransferNotifyAt!) >= _transferNotifyInterval) {
+      _lastTransferNotifyAt = now;
+      return true;
+    }
+    return false;
+  }
+
+  /// 断点索引持久化节流:避免大文件传输期间每 150ms 全量 JSON 读写
+  /// SharedPreferences,改为每秒最多一次(与进度通知节流解耦)
+  DateTime? _lastResumeIndexSaveAt;
+  static const Duration _resumeIndexSaveInterval = Duration(seconds: 1);
+
+  /// 距上次断点索引保存超过间隔时返回 true,并刷新时间戳
+  bool _shouldSaveResumeIndex() {
+    final now = DateTime.now();
+    if (_lastResumeIndexSaveAt == null ||
+        now.difference(_lastResumeIndexSaveAt!) >= _resumeIndexSaveInterval) {
+      _lastResumeIndexSaveAt = now;
+      return true;
+    }
+    return false;
+  }
+
   ChatProvider({required String selfId, String? selfName})
       : _selfId = selfId,
-        _selfName = selfName ?? 'Unknown';
+        _selfName = selfName ?? 'Unknown' {
+    // 发送看门狗:周期检查卡死的发送(从未产出进度且超时),自动失败并继续泵队列,
+    // 保证任何情况下 UI 都不会"永久转圈"、队列不会被一个僵尸传输卡死
+    _sendWatchdogTimer = Timer.periodic(
+        _sendWatchdogInterval, (_) => _checkSendWatchdog());
+  }
 
   String get selfId => _selfId;
   String get selfName => _selfName;
@@ -52,16 +131,25 @@ class ChatProvider extends ChangeNotifier {
       _handleIncomingMessage(msg, msg.senderId);
     };
 
-    _server.onFileMeta = (transferId, fileName, fileSize, peerId) {
-      _handleIncomingFileMeta(transferId, fileName, fileSize, peerId);
+    _server.onFileMeta = (transferId, fileName, fileSize, peerId, offset) {
+      _handleIncomingFileMeta(
+          transferId, fileName, fileSize, peerId, offset, viaServer: true);
     };
 
     _server.onFileChunk = (transferId, chunk) {
       _receiveFileChunk(transferId, chunk);
     };
 
-    _server.onFileDone = (transferId) {
-      _finalizeFileReceive(transferId);
+    _server.onFileDone = (transferId, md5) {
+      _finalizeFileReceive(transferId, md5);
+    };
+
+    _server.onFileError = (transferId, error) {
+      _handleReceiveFileError(transferId, error);
+    };
+
+    _server.onFileControl = (transferId, action) {
+      _handleFileControl(transferId, action);
     };
 
     _server.onPeerConnected = (peerId, _, _) {
@@ -116,14 +204,21 @@ class ChatProvider extends ChangeNotifier {
     client.onMessage = (msg) {
       _handleIncomingMessage(msg, msg.senderId);
     };
-    client.onFileMeta = (transferId, fileName, fileSize, _) {
-      _handleIncomingFileMeta(transferId, fileName, fileSize, device.id);
+    client.onFileMeta = (transferId, fileName, fileSize, _, offset) {
+      _handleIncomingFileMeta(transferId, fileName, fileSize, device.id, offset,
+          viaServer: false);
     };
     client.onFileChunk = (transferId, chunk) {
       _receiveFileChunk(transferId, chunk);
     };
-    client.onFileDone = (transferId) {
-      _finalizeFileReceive(transferId);
+    client.onFileDone = (transferId, md5) {
+      _finalizeFileReceive(transferId, md5);
+    };
+    client.onFileError = (transferId, error) {
+      _handleReceiveFileError(transferId, error);
+    };
+    client.onFileControl = (transferId, action) {
+      _handleFileControl(transferId, action);
     };
     final success = await client.connect(device.ip, device.port);
 
@@ -174,22 +269,38 @@ class ChatProvider extends ChangeNotifier {
     _sendToDevice(target, msg, target.id);
   }
 
-  /// 发送文件
+  /// 发送文件(加入批量队列,受并发上限约束)
+  /// [filePath] 可为空(流式源场景);[readStream] 提供按块读取的流,
+  /// 有流时发送侧直接消费流,避免依赖真实文件路径。
+  /// [readStreamFactory] 提供"可重开"的流式源(Android/iOS 原生直读流):
+  /// 每次发送/重试时按已传 offset 重新打开流,支持断点续传;
+  /// 与 [readStream](一次性流)二选一,优先使用工厂。
   void sendFile({
     required LanDevice target,
-    required String filePath,
+    String? filePath,
     required String fileName,
     required int fileSize,
+    Stream<List<int>>? readStream,
+    Stream<List<int>> Function(int offset)? readStreamFactory,
   }) {
     final transferId = const Uuid().v4();
-    final transferInfo = FileTransferInfo(
-      fileName: fileName,
-      fileSize: fileSize,
-      filePath: filePath,
-      direction: TransferDirection.send,
-      status: TransferStatus.pending,
+    final session = FileTransferSession(
+      transferId: transferId,
+      info: FileTransferInfo(
+        fileName: fileName,
+        fileSize: fileSize,
+        filePath: filePath,
+        direction: TransferDirection.send,
+        status: TransferStatus.pending,
+      ),
     );
-    _fileTransfers[transferId] = transferInfo;
+    _fileTransfers[transferId] = session;
+    if (readStream != null) {
+      _sendStreams[transferId] = readStream;
+    }
+    if (readStreamFactory != null) {
+      _sendStreamFactories[transferId] = readStreamFactory;
+    }
 
     // 立即生成发送方的文件消息,让发送方马上看到"发送中"状态
     final msg = ChatMessage(
@@ -207,7 +318,155 @@ class ChatProvider extends ChangeNotifier {
     _saveMessage(msg, target.id);
     notifyListeners();
 
-    _sendFileToDevice(target, transferId, filePath, fileName, fileSize);
+    // 入队等待发送(受并发上限控制)
+    _sendTargets[transferId] = target;
+    // 小文件插队优先,避免被前面的大文件长时间阻塞
+    if (fileSize <= kSmallFileThresholdBytes) {
+      _sendQueue.insert(0, transferId);
+    } else {
+      _sendQueue.add(transferId);
+    }
+    _pumpSendQueue();
+  }
+
+  /// 批量发送队列泵:并发未满时逐个启动
+  void _pumpSendQueue() {
+    while (_activeSends < _maxConcurrentSends && _sendQueue.isNotEmpty) {
+      final transferId = _sendQueue.removeAt(0);
+      final target = _sendTargets[transferId];
+      final session = _fileTransfers[transferId];
+      if (target == null || session == null) continue;
+      _activeSends++;
+      _sendStartedAt[transferId] = DateTime.now();
+      final info = session.info;
+      _sendFileToDevice(
+        target,
+        transferId,
+        info.filePath ?? '',
+        info.fileName,
+        info.fileSize,
+      );
+    }
+  }
+
+  /// 所有传输会话(供传输列表 UI 使用)
+  List<FileTransferSession> get transfers => _fileTransfers.values.toList();
+
+  /// 指定会话的传输会话(按发送目标/接收来源关联 peerId)。
+  /// 发送方向经 [_sendTargets] 关联,接收方向经 [_transferPeers] 关联;
+  /// 已完成发送会移除 target,故只用于活动传输的展示过滤。
+  List<FileTransferSession> transfersForPeer(String peerId) {
+    return _fileTransfers.values.where((t) {
+      final tid = t.transferId;
+      if (t.direction == TransferDirection.send) {
+        return _sendTargets[tid]?.id == peerId;
+      }
+      return _transferPeers[tid] == peerId;
+    }).toList();
+  }
+
+  /// 暂停传输:发送方向本地暂停发送循环;接收方向通知对方暂停
+  void pauseTransfer(String transferId) {
+    final session = _fileTransfers[transferId];
+    if (session == null || session.status != TransferStatus.transferring) return;
+    session.pause();
+    if (session.direction == TransferDirection.receive) {
+      final peerId = _transferPeers[transferId];
+      if (peerId != null) _sendFileControlToPeer(peerId, transferId, 'pause');
+    }
+    notifyListeners();
+  }
+
+  /// 恢复传输:发送方向唤醒发送循环;接收方向通知对方恢复
+  void resumeTransfer(String transferId) {
+    final session = _fileTransfers[transferId];
+    if (session == null || !session.isPaused) return;
+    session.resume();
+    if (session.direction == TransferDirection.receive) {
+      final peerId = _transferPeers[transferId];
+      if (peerId != null) _sendFileControlToPeer(peerId, transferId, 'resume');
+    }
+    notifyListeners();
+  }
+
+  /// 取消传输:发送方向中止发送循环;接收方向清理 .part 并通知对方
+  void cancelTransfer(String transferId) {
+    final session = _fileTransfers[transferId];
+    if (session == null) return;
+    final peerId = _transferPeers[transferId];
+    if (session.direction == TransferDirection.receive && peerId != null) {
+      _sendFileControlToPeer(peerId, transferId, 'cancel');
+    }
+    // 若还在排队,移出队列
+    _sendQueue.remove(transferId);
+    _sendStreams.remove(transferId); // 取消后一次性流式源作废
+    _sendStreamFactories.remove(transferId); // 取消后可重开工厂作废
+    _sendStartedAt.remove(transferId);
+    _sendLastProgressAt.remove(transferId);
+    session.cancel();
+    if (session.direction == TransferDirection.receive) {
+      _cleanupReceivePart(transferId);
+    } else {
+      final msgId = _transferMessageIds[transferId];
+      if (msgId != null) {
+        _updateSendStatus(peerId ?? '', msgId, SendStatus.failed);
+      }
+      // 保留 target 供重试按钮使用;offset 归 0 让重试从头发送
+      // (接收端取消后 .part 已清理,续传会拼接空洞)
+      session.offset = 0;
+      session.resumeFrom = 0;
+    }
+    notifyListeners();
+  }
+
+  /// 重试发送:失败/取消的发送从已传偏移续传
+  void retryTransfer(String transferId) {
+    final session = _fileTransfers[transferId];
+    final target = _sendTargets[transferId];
+    if (session == null || target == null) return;
+    if (session.direction != TransferDirection.send) return;
+    // 重试续传依赖可重开的源:真实文件路径,或可重开流工厂(原生直读流)。
+    // 一次性流(file_picker withReadStream)已被消费,无法续传。
+    final hasFactory = _sendStreamFactories.containsKey(transferId);
+    final hasPath =
+        session.info.filePath != null && session.info.filePath!.isNotEmpty;
+    if (!hasFactory && !hasPath) {
+      session.update(status: TransferStatus.failed, errorMessage: '流式源已消费,无法重试');
+      final msgId = _transferMessageIds[transferId];
+      if (msgId != null) {
+        _updateSendStatus(target.id, msgId, SendStatus.failed);
+      }
+      notifyListeners();
+      return;
+    }
+    // 小文件快速通道接收侧无断点索引,重试必须从头全量发送;
+    // 大文件保留 offset 实现断点续传
+    if (session.fileSize <= kSmallFileThresholdBytes) {
+      session.offset = 0;
+    }
+    // 重置为待发送并重新入队(保留 offset 实现续传)
+    session.update(
+      status: TransferStatus.pending,
+      progress: session.fileSize > 0
+          ? (session.offset / session.fileSize).clamp(0.0, 1.0)
+          : 0.0,
+    );
+    final msgId = _transferMessageIds[transferId];
+    if (msgId != null) {
+      _updateSendStatus(target.id, msgId, SendStatus.sending);
+    }
+    _sendQueue.add(transferId);
+    _pumpSendQueue();
+    notifyListeners();
+  }
+
+  /// 向对方发送文件控制消息(优先 server 通道,否则 client 通道)
+  void _sendFileControlToPeer(String peerId, String transferId, String action) {
+    if (_server.isPeerConnected(peerId)) {
+      _server.sendFileControl(peerId, transferId, action);
+      return;
+    }
+    _clients[peerId]?.sendFileControl(transferId, action);
   }
 
   /// 获取与某个设备的聊天客户端
@@ -229,8 +488,8 @@ class ChatProvider extends ChangeNotifier {
     return List.unmodifiable(history);
   }
 
-  /// 获取文件传输状态
-  FileTransferInfo? getFileTransfer(String transferId) {
+  /// 获取文件传输会话(含进度、速度、剩余时间等运行时状态)
+  FileTransferSession? getFileTransfer(String transferId) {
     return _fileTransfers[transferId];
   }
 
@@ -240,7 +499,21 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 删除与某个 peer 的单条/多条消息(保留会话,删除后不可恢复)
+  void deleteMessages(String peerId, List<String> ids) {
+    if (ids.isEmpty) return;
+    final msgs = _messages[peerId];
+    if (msgs != null) {
+      final idSet = ids.toSet();
+      msgs.removeWhere((m) => idSet.contains(m.id));
+    }
+    _repository.deleteMessagesByIds(peerId, ids);
+    notifyListeners();
+  }
+
   /// 发送消息到设备
+  /// 优先 server 通道;其次 client 通道;两者都不可用时自动重连
+  /// (带"重连中"状态,失败自动重试 1 次),成功后才发送。
   void _sendToDevice(LanDevice target, ChatMessage msg, String peerId) {
     // 优先：对方已连接我们的服务器时，通过同一连接回写
     if (_server.isPeerConnected(target.id) &&
@@ -249,26 +522,50 @@ class ChatProvider extends ChangeNotifier {
       _updateSendStatus(peerId, msg.id, SendStatus.sent);
       return;
     }
-    // server 通道已失效时回退到客户端通道
 
     final client = _clients[target.id];
     if (client != null && client.isConnected) {
       debugPrint('[ChatProvider] send via client channel -> ${target.id}');
       client.sendMessage(msg);
       _updateSendStatus(peerId, msg.id, SendStatus.sent);
-    } else {
-      // 自动重新连接
-      debugPrint('[ChatProvider] no channel to ${target.id}, reconnect...');
-      connectToDevice(target).then((ok) {
-        if (ok) {
-          debugPrint('[ChatProvider] reconnected, send -> ${target.id}');
-          _clients[target.id]?.sendMessage(msg);
-          _updateSendStatus(peerId, msg.id, SendStatus.sent);
-        } else {
-          debugPrint('[ChatProvider] reconnect FAILED -> ${target.id}');
-          _updateSendStatus(peerId, msg.id, SendStatus.failed);
-        }
-      });
+      return;
+    }
+
+    // 连接异常:进入重连流程(UI 显示"重连中..."),成功后才补发
+    debugPrint('[ChatProvider] no channel to ${target.id}, reconnecting...');
+    _ensureConnection(target).then((ok) {
+      if (ok) {
+        debugPrint('[ChatProvider] reconnected, send -> ${target.id}');
+        _clients[target.id]?.sendMessage(msg);
+        _updateSendStatus(peerId, msg.id, SendStatus.sent);
+      } else {
+        debugPrint('[ChatProvider] reconnect FAILED -> ${target.id}');
+        _updateSendStatus(peerId, msg.id, SendStatus.failed);
+      }
+    });
+  }
+
+  /// 发送前确保连接可用(server/client 任一通道可用即通过);
+  /// 不可用时尝试建连,失败自动重试 1 次(应对瞬时抖动)。
+  /// 重连期间置位 [isReconnecting] 供 UI 提示"重连中..."。
+  Future<bool> _ensureConnection(LanDevice target) async {
+    if (_server.isPeerConnected(target.id) ||
+        (_clients[target.id]?.isConnected ?? false)) {
+      return true;
+    }
+    _isReconnecting = true;
+    notifyListeners();
+    try {
+      var ok = await connectToDevice(target);
+      if (!ok) {
+        // 首次失败自动重试 1 次
+        await Future.delayed(const Duration(milliseconds: 500));
+        ok = await connectToDevice(target);
+      }
+      return ok;
+    } finally {
+      _isReconnecting = false;
+      notifyListeners();
     }
   }
 
@@ -285,10 +582,29 @@ class ChatProvider extends ChangeNotifier {
   void _sendFileToDevice(
     LanDevice target,
     String transferId,
-    String filePath,
+    String? filePath,
     String fileName,
     int fileSize,
   ) async {
+    final session = _fileTransfers[transferId];
+    final offset = session?.offset ?? 0;
+    // 可重开流工厂优先(Android/iOS 原生直读流):按已传 offset 重开并定位,
+    // 支持断点续传;否则使用一次性流(仅首次发送 offset=0 场景)
+    final factory = _sendStreamFactories[transferId];
+    final readStream =
+        factory != null ? factory(offset) : _sendStreams[transferId];
+    // 暂停等待 + 取消检查(由发送循环每块调用)
+    Future<void> beforeChunk() async {
+      await session?.waitIfPaused();
+    }
+
+    // 取消或已失败(对方报错/校验失败)都停止推流:
+    // 否则接收端 abort 清理后,发送端还会继续空推到文件读完
+    // (表现为发送端一直有进度、接收端反复 pending overflow abort)
+    bool isCancelled() =>
+        session?.status == TransferStatus.cancelled ||
+        session?.status == TransferStatus.failed;
+
     // 1) server 通道：对方已连到我们，通过同一连接发送
     if (_server.isPeerConnected(target.id)) {
       final stream = _server.sendFile(
@@ -297,23 +613,45 @@ class ChatProvider extends ChangeNotifier {
         filePath: filePath,
         fileName: fileName,
         fileSize: fileSize,
+        offset: offset,
+        readStream: readStream,
+        beforeChunk: beforeChunk,
+        isCancelled: isCancelled,
       );
       await _finishFileSend(stream, target.id, transferId);
       return;
     }
 
-    // 2) 客户端通道：没有可用连接时先建立
+    // 2) 客户端通道：没有可用连接时先建立(带重连与失败重试)
     var client = _clients[target.id];
     if (client == null || !client.isConnected) {
-      final ok = await connectToDevice(target);
-      if (!ok) return;
+      final ok = await _ensureConnection(target);
+      if (!ok) {
+        // 连接失败:标记失败而不是卡在 pending,并释放并发槽继续泵队列
+        _updateFileSendResult(transferId, target.id,
+            success: false, error: '连接失败');
+        if (_activeSends > 0) _activeSends--;
+        _pumpSendQueue();
+        return;
+      }
       client = _clients[target.id];
     }
 
+    // 重连期间用户可能已点了取消:取消后不再发送(避免"点叉号后仍重连重发")
+    if (session?.status == TransferStatus.cancelled) {
+      debugPrint('[ChatProvider] send cancelled during reconnect: $transferId');
+      _updateFileSendResult(transferId, target.id, success: false, cancelled: true);
+      if (_activeSends > 0) _activeSends--;
+      _pumpSendQueue();
+      return;
+    }
+
     if (client == null || !client.isConnected) {
-      // 通道不可用，标记失败而不是崩溃
+      // 通道不可用，标记失败而不是崩溃(并释放并发槽,继续泵队列)
       _updateFileSendResult(transferId, target.id,
           success: false, error: '连接不可用');
+      if (_activeSends > 0) _activeSends--;
+      _pumpSendQueue();
       return;
     }
 
@@ -322,11 +660,15 @@ class ChatProvider extends ChangeNotifier {
       filePath: filePath,
       fileName: fileName,
       fileSize: fileSize,
+      offset: offset,
+      readStream: readStream,
+      beforeChunk: beforeChunk,
+      isCancelled: isCancelled,
     );
     await _finishFileSend(stream, target.id, transferId);
   }
 
-  /// 跟踪文件发送进度并完成收尾(更新消息状态为发送成功/失败)
+  /// 跟踪文件发送进度并完成收尾(更新消息状态为发送成功/失败/取消)
   Future<void> _finishFileSend(
     Stream<double> stream,
     String peerId,
@@ -334,22 +676,138 @@ class ChatProvider extends ChangeNotifier {
   ) async {
     try {
       await for (final progress in stream) {
-        final info = _fileTransfers[transferId];
-        if (info != null) {
-          _fileTransfers[transferId] = info.copyWith(
+        final session = _fileTransfers[transferId];
+        if (session != null) {
+          session.update(
             status: TransferStatus.transferring,
             progress: progress,
           );
-          notifyListeners();
+          // 记录已传字节,供断点续传使用
+          session.offset = (progress * session.fileSize).round();
+          // 记录最近产出进度时间(停滞看门狗用)
+          _sendLastProgressAt[transferId] = DateTime.now();
+          // 进度通知节流;传输结束/失败路径(_updateFileSendResult)会兜底通知
+          if (_shouldNotifyTransferProgress()) notifyListeners();
         }
       }
-      // 流正常结束 = 发送成功
-      _updateFileSendResult(transferId, peerId, success: true);
+      // 流正常结束:取消则标记取消;对方已报失败则保持失败;
+      // 从未产出进度(仍 pending)说明连接在发送前就失效,按失败处理;
+      // 否则视为发送成功
+      final session = _fileTransfers[transferId];
+      if (session != null && session.status == TransferStatus.cancelled) {
+        _updateFileSendResult(transferId, peerId, success: false, cancelled: true);
+      } else if (session != null && session.status == TransferStatus.failed) {
+        _updateFileSendResult(transferId, peerId,
+            success: false, error: session.errorMessage ?? '对方中止了传输');
+      } else if (session != null && session.status == TransferStatus.pending) {
+        // 流结束但零进度:发送在开始前就中断(如 peer 连接已失效)
+        _updateFileSendResult(transferId, peerId,
+            success: false, error: '连接异常,未能开始传输');
+      } else {
+        _updateFileSendResult(transferId, peerId, success: true);
+      }
     } catch (e) {
       // 发送失败(连接断开/文件不可读等)
       debugPrint('[ChatProvider] file send FAILED: $e');
       _updateFileSendResult(transferId, peerId, success: false, error: e.toString());
+    } finally {
+      // 流式源是一次性的,发送结束(成功/失败/取消)后即作废;
+      // 后续重试回退到文件路径(filePath 为空则无法续传)
+      _sendStreams.remove(transferId);
+      _sendStartedAt.remove(transferId);
+      _sendLastProgressAt.remove(transferId);
+      // 释放并发槽,继续泵下一个排队任务
+      if (_activeSends > 0) _activeSends--;
+      _pumpSendQueue();
     }
+  }
+
+  /// 传输看门狗(发送侧 + 接收侧):
+  /// - 发送从未产出进度(pending)超阈值 → 失败并释放并发槽;
+  /// - 发送中零进展超阈值(熄屏挂起/原生直读流挂起/磁盘卡死)→ 失败并通知对端;
+  /// - 对端已报失败但发送流未正常结束 → 立即释放并发槽继续队列;
+  /// - 接收侧发送方卡死时收不到新 chunk → 中止并回发 file_error,让双方收敛。
+  /// 保证任何情况下 UI 都不会永久冻结、队列不会被僵尸传输卡死。
+  void _checkSendWatchdog() {
+    final now = DateTime.now();
+    for (final entry in _sendStartedAt.entries.toList()) {
+      final tid = entry.key;
+      final session = _fileTransfers[tid];
+      if (session == null) {
+        _sendStartedAt.remove(tid);
+        _sendLastProgressAt.remove(tid);
+        continue;
+      }
+      if (session.status == TransferStatus.pending) {
+        // 从未产出进度(卡在握手/建连/流打开)
+        if (now.difference(entry.value) > _sendWatchdogTimeout) {
+          _failStuckSend(tid, '发送超时:对方未就绪或连接异常');
+        }
+      } else if (session.status == TransferStatus.transferring) {
+        // 传输中零进展(熄屏挂起/原生流挂起/磁盘卡死)
+        final last = _sendLastProgressAt[tid];
+        if (last != null && now.difference(last) > _transferStallTimeout) {
+          _failStuckSend(tid, '传输停滞,已中止(可重试续传)');
+        }
+      } else if (session.status == TransferStatus.failed ||
+          session.status == TransferStatus.cancelled) {
+        // 该状态仍留在 _sendStartedAt 说明发送流没有正常结束(卡在读取流上):
+        // 立即释放并发槽继续队列,避免僵尸传输阻塞后续文件
+        debugPrint('[ChatProvider] send watchdog: release stuck slot transfer=$tid');
+        _sendStartedAt.remove(tid);
+        _sendLastProgressAt.remove(tid);
+        if (_activeSends > 0) _activeSends--;
+        _pumpSendQueue();
+      } else if (session.status == TransferStatus.paused) {
+        // 用户主动暂停:不参与看门狗,恢复后由正常收尾负责
+      } else {
+        // done 等正常状态:正常收尾应已移除,保险清理
+        _sendStartedAt.remove(tid);
+        _sendLastProgressAt.remove(tid);
+      }
+    }
+
+    // 接收侧:发送方卡死时接收方收不到新 chunk,同样需要收敛
+    for (final tid in _fileTransfers.keys.toList()) {
+      final session = _fileTransfers[tid];
+      if (session == null || session.direction != TransferDirection.receive) {
+        continue;
+      }
+      if (session.status == TransferStatus.pending) {
+        // writer 就绪后长时间收不到 chunk(发送方卡死/握手丢失)
+        final last = _receiveLastProgressAt[tid];
+        if (last != null && now.difference(last) > _sendWatchdogTimeout) {
+          debugPrint('[ChatProvider] receive watchdog: no chunks, abort transfer=$tid');
+          _abortReceiveTransfer(tid);
+        }
+      } else if (session.status == TransferStatus.transferring) {
+        final last = _receiveLastProgressAt[tid];
+        if (last != null && now.difference(last) > _transferStallTimeout) {
+          debugPrint('[ChatProvider] receive watchdog: stalled, abort transfer=$tid');
+          _abortReceiveTransfer(tid);
+        }
+      }
+      // paused/done/failed 由正常流程处理
+    }
+  }
+
+  /// 看门狗失败处理:标记失败、通知对端(两端同一 transferId)、释放并发槽并泵队列
+  void _failStuckSend(String transferId, String error) {
+    debugPrint('[ChatProvider] send watchdog, fail transfer=$transferId: $error');
+    _sendStartedAt.remove(transferId);
+    _sendLastProgressAt.remove(transferId);
+    final peerId = _sendTargets[transferId]?.id ?? '';
+    _updateFileSendResult(transferId, peerId, success: false, error: error);
+    // 通知对端,让接收侧也收敛(两端使用同一 transferId)
+    if (peerId.isNotEmpty) {
+      if (_server.isPeerConnected(peerId)) {
+        _server.sendFileError(peerId, transferId, error);
+      } else {
+        _clients[peerId]?.sendFileError(transferId, error);
+      }
+    }
+    if (_activeSends > 0) _activeSends--;
+    _pumpSendQueue();
   }
 
   /// 更新文件发送结果:传输状态 + 消息的发送状态
@@ -358,19 +816,29 @@ class ChatProvider extends ChangeNotifier {
     String peerId, {
     required bool success,
     String? error,
+    bool cancelled = false,
   }) {
-    final info = _fileTransfers[transferId];
-    if (info != null) {
-      _fileTransfers[transferId] = info.copyWith(
-        status: success ? TransferStatus.done : TransferStatus.failed,
-        progress: success ? 1.0 : info.progress,
-        errorMessage: error,
-      );
+    final session = _fileTransfers[transferId];
+    if (session != null) {
+      if (cancelled) {
+        session.cancel();
+      } else {
+        session.update(
+          status: success ? TransferStatus.done : TransferStatus.failed,
+          progress: success ? 1.0 : session.progress,
+          errorMessage: error,
+        );
+      }
     }
     final msgId = _transferMessageIds[transferId];
     if (msgId != null) {
       _updateSendStatus(
           peerId, msgId, success ? SendStatus.sent : SendStatus.failed);
+    }
+    // 发送成功后不再需要目标设备引用(避免内存泄漏;失败保留供重试)
+    if (success) {
+      _sendTargets.remove(transferId);
+      _sendStreamFactories.remove(transferId); // 成功后无需再重开
     }
     notifyListeners();
   }
@@ -384,79 +852,512 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 处理收到的文件元信息
-  void _handleIncomingFileMeta(
-      String transferId, String fileName, int fileSize, String peerId) {
-    final info = FileTransferInfo(
-      fileName: fileName,
-      fileSize: fileSize,
-      direction: TransferDirection.receive,
-      status: TransferStatus.pending,
-    );
-    _fileTransfers[transferId] = info;
-    _transferPeers[transferId] = peerId;
-    _receiveBuffers[transferId] = [];
-    debugPrint(
-        '[ChatProvider] file_meta: transfer=$transferId name=$fileName size=$fileSize peer=$peerId');
+  /// 处理对方发来的文件控制消息(pause/resume/cancel)
+  void _handleFileControl(String transferId, String action) {
+    final session = _fileTransfers[transferId];
+    if (session == null) {
+      debugPrint('[ChatProvider] file control ignored: transfer=$transferId not found');
+      return;
+    }
+    debugPrint('[ChatProvider] file control: $action transfer=$transferId');
+    switch (action) {
+      case 'file_pause':
+        session.pause();
+        break;
+      case 'file_resume':
+        session.resume();
+        break;
+      case 'file_cancel':
+        session.cancel();
+        // 接收侧同步清理 .part 与断点索引
+        _cleanupReceivePart(transferId);
+        break;
+    }
     notifyListeners();
   }
 
-  /// 接收文件数据块
-  void _receiveFileChunk(String transferId, List<int> chunk) {
-    _receiveBuffers[transferId]?.addAll(chunk);
-    final info = _fileTransfers[transferId];
-    if (info != null) {
-      final total = _receiveBuffers[transferId]!.length;
-      _fileTransfers[transferId] = info.copyWith(
-        status: TransferStatus.transferring,
-        progress: info.fileSize > 0
-            ? (total / info.fileSize).clamp(0.0, 1.0)
-            : 0.0,
-      );
-      notifyListeners();
+  /// 取消/失败时清理接收侧的 .part 文件、小文件缓冲与断点索引
+  Future<void> _cleanupReceivePart(String transferId) async {
+    final writer = _receiveWriters.remove(transferId);
+    final partPath = _receivePartPaths.remove(transferId);
+    _receiveOffsets.remove(transferId);
+    _receivePending.remove(transferId);
+    _receiveWriting.remove(transferId);
+    _receiveSmallBuffers.remove(transferId);
+    _receiveMd5.remove(transferId);
+    _receiveViaServer.remove(transferId);
+    _prepareStartedAt.remove(transferId);
+    _receiveLastProgressAt.remove(transferId);
+    if (writer != null) {
+      try {
+        await writer.close();
+      } catch (_) {}
+    }
+    if (partPath != null) {
+      await ReceiveDirectory.deletePartFile(partPath);
+    }
+    await ReceiveDirectory.removeResumeIndex(transferId);
+  }
+
+  /// 处理收到的文件元信息(offset 为对方断点续传起始字节)。
+  /// 小文件(<= [kSmallFileThresholdBytes])走快速通道:内存缓冲直接落盘,
+  /// 不建 .part、不存断点索引;大文件异步创建 .part 文件并从断点索引恢复。
+  void _handleIncomingFileMeta(
+    String transferId,
+    String fileName,
+    int fileSize,
+    String peerId,
+    int offset, {
+    required bool viaServer,
+  }) {
+    final session = FileTransferSession(
+      transferId: transferId,
+      info: FileTransferInfo(
+        fileName: fileName,
+        fileSize: fileSize,
+        direction: TransferDirection.receive,
+        status: TransferStatus.pending,
+      ),
+    );
+    session.resumeFrom = offset;
+    _fileTransfers[transferId] = session;
+    _transferPeers[transferId] = peerId;
+    _receiveViaServer[transferId] = viaServer;
+    debugPrint(
+        '[ChatProvider] file_meta: transfer=$transferId name=$fileName size=$fileSize peer=$peerId offset=$offset viaServer=$viaServer');
+    notifyListeners();
+
+    if (fileSize <= kSmallFileThresholdBytes) {
+      // 小文件快速通道:内存缓冲即刻就绪,直接回复 file_ready
+      _receiveSmallBuffers[transferId] = BytesBuilder(copy: false);
+      _sendFileReadyToPeer(transferId);
+    } else {
+      // 大文件:不立即回复 file_ready,等 .part writer 真正就绪后再回
+      // (见 _prepareReceiveFile 末尾)。若立即回复,发送端会在 writer 就绪前
+      // 就以网速强推 1MB 大块;多文件并发时(单连接混合推送)接收端事件循环
+      // 被磁盘写入/断点索引 IO 占住,chunk 只能暂存内存等待,一旦超过
+      // _receivePendingLimit 就被 abort——这正是"多文件只收到 1 个"的根因。
+      // 断点续传(offset>0)同样等断点匹配结果,防止无断点数据时误收。
+      _prepareStartedAt[transferId] = DateTime.now();
+      _prepareReceiveFile(transferId, fileName, fileSize, offset);
     }
   }
 
-  /// 文件接收完成：落盘并生成消息记录
-  Future<void> _finalizeFileReceive(String transferId) async {
-    final info = _fileTransfers[transferId];
-    final bytes = _receiveBuffers.remove(transferId);
+  /// 向发送方回复 file_ready(按接收通道选择 server/client)。
+  /// 优先走接收时的那条通道;通道失效时(单连接收敛把 client 释放、
+  /// 连接重建等)回退另一条通道,避免 ready 发不出去导致发送端
+  /// 超时强推、接收端 pending 溢出 abort。
+  void _sendFileReadyToPeer(String transferId) {
+    final peerId = _transferPeers[transferId];
+    if (peerId == null || peerId.isEmpty) return;
+    if (_receiveViaServer[transferId] ?? false) {
+      if (!_server.sendFileReady(peerId, transferId)) {
+        debugPrint('[ChatProvider] ready via server FAILED, fallback client: $transferId');
+        _clients[peerId]?.sendFileReady(transferId);
+      } else {
+        debugPrint('[ChatProvider] ready sent via server channel: $transferId');
+      }
+    } else {
+      if (!(_clients[peerId]?.sendFileReady(transferId) ?? false)) {
+        debugPrint('[ChatProvider] ready via client FAILED, fallback server: $transferId');
+        _server.sendFileReady(peerId, transferId);
+      } else {
+        debugPrint('[ChatProvider] ready sent via client channel: $transferId');
+      }
+    }
+  }
+
+  /// 向发送方回发 file_error(校验失败等,按接收通道选择 server/client)
+  void _sendFileErrorToPeer(
+      String transferId, String peerId, String error,
+      {required bool viaServer}) {
+    if (peerId.isEmpty) return;
+    if (viaServer) {
+      _server.sendFileError(peerId, transferId, error);
+    } else {
+      _clients[peerId]?.sendFileError(transferId, error);
+    }
+  }
+
+  /// 接收侧异常处理:发送方报错时标记失败并清理,而不是当完成;
+  /// 发送方向收到 file_error(对方校验失败)时,也把本地发送标记为失败。
+  void _handleReceiveFileError(String transferId, String error) {
+    debugPrint('[ChatProvider] receive file error: transfer=$transferId error=$error');
+    final session = _fileTransfers[transferId];
+    if (session == null) return;
+    if (session.direction == TransferDirection.receive) {
+      _cleanupReceivePart(transferId);
+      session.update(status: TransferStatus.failed, errorMessage: error);
+    } else {
+      // 发送方向:对方报告校验失败/接收出错,消息状态改为失败(不释放 target,支持重试)
+      session.update(status: TransferStatus.failed, errorMessage: error);
+      // 接收端可能已清理断点数据(如取消/失败后 .part 被删),
+      // 重置 offset 让重试从头发送,避免续传拼接空洞
+      session.offset = 0;
+      final msgId = _transferMessageIds[transferId];
+      if (msgId != null) {
+        _updateSendStatus(_sendTargets[transferId]?.id ?? '', msgId, SendStatus.failed);
+      }
+    }
+    notifyListeners();
+  }
+
+  /// 创建/复用 .part 文件并恢复断点偏移(异步,完成后开始落盘)
+  Future<void> _prepareReceiveFile(
+      String transferId, String fileName, int fileSize, int offset) async {
+    try {
+      // 1) 尝试从断点索引恢复:仅当索引字节数与对方续传起点一致时才复用 .part,
+      //    否则重建,避免 savedBytes 与 offset 不一致导致拼接空洞(且 MD5 无法发现)
+      final resume = await ReceiveDirectory.getResumeIndex(transferId);
+      String partPath;
+      int baseBytes = offset;
+      final savedBytes = resume?['receivedBytes'] as int? ?? 0;
+      if (resume != null &&
+          (resume['fileSize'] as int? ?? -1) == fileSize &&
+          savedBytes == offset) {
+        partPath = resume['partPath'] as String? ?? '';
+      } else if (offset > 0) {
+        // 发送方要求从 offset 续传,但接收端没有匹配的断点数据(.part 已清理
+        // 或索引不一致):若创建空文件再按 offset 记账,最终文件会缺头损坏
+        // (MD5 两侧都只算续传段,无法发现)。标记失败并回发 file_error,
+        // 让发送方把 offset 归 0 后从头发送。
+        await ReceiveDirectory.removeResumeIndex(transferId);
+        final peerId = _transferPeers[transferId] ?? '';
+        final viaServer = _receiveViaServer[transferId] ?? false;
+        _sendFileErrorToPeer(transferId, peerId, '接收端无断点数据,请从头发送',
+            viaServer: viaServer);
+        final session = _fileTransfers[transferId];
+        if (session != null) {
+          session.update(
+            status: TransferStatus.failed,
+            errorMessage: '接收端无断点数据,请从头发送',
+          );
+          notifyListeners();
+        }
+        return;
+      } else {
+        partPath = await ReceiveDirectory.createPartFile(transferId, fileName);
+        if (resume != null) {
+          // 索引与本次续传起点不一致,旧索引作废,避免后续复用错误字节数
+          await ReceiveDirectory.removeResumeIndex(transferId);
+        }
+      }
+
+      // 2) 打开追加写句柄
+      final writer = await File(partPath).open(mode: FileMode.append);
+      _receiveWriters[transferId] = writer;
+      _receivePartPaths[transferId] = partPath;
+      _receiveOffsets[transferId] = baseBytes;
+      // 增量 MD5 累加器:发送方从同一 offset 起算,续传时两边对称可比
+      _receiveMd5[transferId] = Md5Accumulator();
+      // writer 就绪即开始计时(接收侧停滞看门狗:就绪后长时间无 chunk 视为发送方卡死)
+      _receiveLastProgressAt[transferId] = DateTime.now();
+
+      final session = _fileTransfers[transferId];
+      if (session != null && baseBytes > 0) {
+        session.offset = baseBytes;
+        session.update(
+          status: TransferStatus.transferring,
+          progress: fileSize > 0
+              ? (baseBytes / fileSize).clamp(0.0, 1.0)
+              : 0.0,
+        );
+        notifyListeners();
+      }
+
+      // 3) 落盘等待期间到达的缓冲数据
+      final pending = _receivePending.remove(transferId);
+      if (pending != null && pending.isNotEmpty) {
+        _writeReceiveChunk(transferId, pending);
+      }
+      debugPrint('[ChatProvider] part ready: $partPath base=$baseBytes');
+      // 准备完成,不再需要超时诊断标记
+      _prepareStartedAt.remove(transferId);
+      // 接收就绪,通知发送方开始推数据
+      _sendFileReadyToPeer(transferId);
+    } catch (e) {
+      debugPrint('[ChatProvider] prepare receive FAILED: $e');
+      final session = _fileTransfers[transferId];
+      if (session != null) {
+        session.update(status: TransferStatus.failed, errorMessage: e.toString());
+        notifyListeners();
+      }
+      // 回发 file_error,让发送方停止空推
+      // (否则发送端继续推数据,接收端 writer 未就绪导致 pending 溢出)
+      final peerId = _transferPeers[transferId] ?? '';
+      final viaServer = _receiveViaServer[transferId] ?? false;
+      if (peerId.isNotEmpty) {
+        _sendFileErrorToPeer(transferId, peerId, '接收端准备失败: $e',
+            viaServer: viaServer);
+      }
+    }
+  }
+
+  /// 接收文件数据块:小文件直接进内存缓冲;大文件 writer 就绪则写,否则暂存等待
+  void _receiveFileChunk(String transferId, List<int> chunk) {
+    final small = _receiveSmallBuffers[transferId];
+    if (small != null) {
+      // 小文件快速通道:累积到内存,file_done 时一次性落盘
+      small.add(chunk);
+      _receiveMd5[transferId]?.add(chunk);
+      final session = _fileTransfers[transferId];
+      if (session != null) {
+        final total = small.length;
+        session.offset = total;
+        session.update(
+          status: TransferStatus.transferring,
+          progress: session.fileSize > 0
+              ? (total / session.fileSize).clamp(0.0, 1.0)
+              : 0.0,
+        );
+        if (_shouldNotifyTransferProgress()) notifyListeners();
+      }
+      _receiveLastProgressAt[transferId] = DateTime.now();
+      return;
+    }
+    if (!_receiveWriters.containsKey(transferId)) {
+      // writer 未就绪:暂存等待,但设软上限防止旧版本对端(不回 ready)大文件内存膨胀;
+      // 准备超过 10s(通常意味着 ready 没能送达发送端或准备 IO 卡死)直接中止,
+      // 给出明确错误而不是默默堆到 64MB 再 abort
+      final pending = _receivePending[transferId] ??= [];
+      final started = _prepareStartedAt[transferId];
+      if (started != null &&
+          DateTime.now().difference(started) > const Duration(seconds: 10)) {
+        debugPrint(
+            '[ChatProvider] receive prepare timeout, abort transfer=$transferId '
+            'pending=${pending.length}');
+        _abortReceiveTransfer(transferId);
+        return;
+      }
+      if (pending.length + chunk.length > _receivePendingLimit) {
+        debugPrint(
+            '[ChatProvider] receive pending overflow, abort transfer=$transferId '
+            'pending=${pending.length} prepareMs=${started == null ? -1 : DateTime.now().difference(started).inMilliseconds}');
+        _abortReceiveTransfer(transferId);
+        return;
+      }
+      pending.addAll(chunk);
+      return;
+    }
+    _writeReceiveChunk(transferId, chunk);
+  }
+
+  /// 接收侧异常中止:清理暂存/写句柄并标记失败(如等待缓冲溢出)
+  void _abortReceiveTransfer(String transferId) {
+    final session = _fileTransfers[transferId];
+    // 必须先取 peerId/viaServer 再清理:_cleanupReceivePart 会同步移除
+    // _transferPeers/_receiveViaServer,先清理后读取会让 peerId 变成空,
+    // file_error 永远发不出去,发送端继续空推、反复触发 abort
+    final peerId = _transferPeers[transferId] ?? '';
+    final viaServer = _receiveViaServer[transferId] ?? false;
+    _cleanupReceivePart(transferId);
+    if (session != null) {
+      session.update(
+        status: TransferStatus.failed,
+        errorMessage: '接收缓冲溢出,已中止',
+      );
+      notifyListeners();
+    }
+    // 回发 file_error,让发送方停止空推并标记失败(否则发送端会继续推数据,
+    // 接收端持续打印 chunk 日志且永远不落盘)
+    if (peerId.isNotEmpty) {
+      _sendFileErrorToPeer(transferId, peerId, '接收缓冲溢出,已中止',
+          viaServer: viaServer);
+    }
+  }
+
+  /// 顺序写入 .part(同一 transfer 串行,防止乱序)
+  void _writeReceiveChunk(String transferId, List<int> chunk) {
+    if (_receiveWriting[transferId] ?? false) {
+      // 写入中:暂存等待;同样受软上限保护,防止磁盘慢时暂存无界增长
+      final pending = _receivePending[transferId] ??= [];
+      if (pending.length + chunk.length > _receivePendingLimit) {
+        debugPrint(
+            '[ChatProvider] receive pending overflow, abort transfer=$transferId');
+        _abortReceiveTransfer(transferId);
+        return;
+      }
+      pending.addAll(chunk);
+      return;
+    }
+    _receiveWriting[transferId] = true;
+    _doWriteReceiveChunk(transferId, chunk);
+  }
+
+  Future<void> _doWriteReceiveChunk(String transferId, List<int> chunk) async {
+    try {
+      final writer = _receiveWriters[transferId];
+      final session = _fileTransfers[transferId];
+      if (writer != null && session != null) {
+        await writer.writeFrom(chunk);
+        _receiveMd5[transferId]?.add(chunk); // 随落盘增量计算 MD5
+        _receiveLastProgressAt[transferId] = DateTime.now(); // 停滞看门狗
+        final total = (_receiveOffsets[transferId] ?? 0) + chunk.length;
+        _receiveOffsets[transferId] = total;
+        session.offset = total;
+        session.update(
+          status: TransferStatus.transferring,
+          progress: session.fileSize > 0
+              ? (total / session.fileSize).clamp(0.0, 1.0)
+              : 0.0,
+        );
+        // 进度通知节流(150ms),避免高频全量重建
+        if (_shouldNotifyTransferProgress()) {
+          notifyListeners();
+        }
+        // 断点索引持久化独立节流(1s),避免大文件传输期间高频 JSON 读写
+        if (_shouldSaveResumeIndex()) {
+          ReceiveDirectory.saveResumeIndex(
+            transferId: transferId,
+            fileName: session.fileName,
+            partPath: _receivePartPaths[transferId] ?? '',
+            fileSize: session.fileSize,
+            receivedBytes: total,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[ChatProvider] write part FAILED: $e');
+      // 写盘失败(磁盘满/IO 错误):立即中止传输并回发错误,
+      // 避免后续 chunk 被丢弃、错误被延迟到 MD5 校验时误报
+      final peerId = _transferPeers[transferId] ?? '';
+      final viaServer = _receiveViaServer[transferId] ?? false;
+      _sendFileErrorToPeer(transferId, peerId, '接收落盘失败: $e', viaServer: viaServer);
+      _abortReceiveTransfer(transferId);
+    } finally {
+      _receiveWriting[transferId] = false;
+      // 处理等待中的数据
+      final pending = _receivePending[transferId];
+      if (pending != null && pending.isNotEmpty) {
+        _receivePending[transferId] = [];
+        _writeReceiveChunk(transferId, pending);
+      }
+    }
+  }
+
+  /// 等待该传输的写入链排空(正在写或仍有 pending 时等待),
+  /// 确保 file_done 到达时所有数据都已落盘。
+  Future<void> _flushReceivePending(String transferId) async {
+    while ((_receiveWriting[transferId] ?? false) ||
+        (_receivePending[transferId]?.isNotEmpty ?? false)) {
+      await Future.delayed(const Duration(milliseconds: 5));
+    }
+  }
+
+  /// 文件接收完成：小文件从内存缓冲直接落盘；大文件关闭写句柄、转正 .part。
+  /// [expectedMd5] 为发送方随 file_done 携带的校验值,非空时校验,不匹配标记失败。
+  Future<void> _finalizeFileReceive(String transferId, String? expectedMd5) async {
+    // 先排空写入链,避免丢失尚未落盘的 pending 数据
+    await _flushReceivePending(transferId);
+    final session = _fileTransfers[transferId];
+    if (session == null) return;
+
+    // ---- 小文件快速通道:内存缓冲直接落盘(不建 .part、不存断点索引)----
+    final small = _receiveSmallBuffers.remove(transferId);
+    if (small != null) {
+      final md5 = _receiveMd5.remove(transferId);
+      final peerId = _transferPeers.remove(transferId) ?? '';
+      final viaServer = _receiveViaServer.remove(transferId) ?? false;
+      _receiveLastProgressAt.remove(transferId);
+      try {
+        final bytes = small.takeBytes();
+        // 校验 MD5(发送方未携带时跳过)
+        if (expectedMd5 != null && expectedMd5.isNotEmpty) {
+          final actual = md5?.close() ?? md5Sum(bytes);
+          if (actual != expectedMd5) {
+            throw Exception('文件校验失败(MD5 不匹配)');
+          }
+        }
+        final location = await ReceiveDirectory.saveReceivedFile(bytes, session.fileName);
+        if (location.isEmpty) {
+          throw Exception('save received file failed');
+        }
+        debugPrint('[ChatProvider] small file received: $location');
+        _buildReceivedMessage(session, peerId, location);
+        session.update(status: TransferStatus.done, progress: 1.0);
+      } catch (e, st) {
+        debugPrint('[ChatProvider] small file receive error: $e\n$st');
+        session.update(status: TransferStatus.failed, errorMessage: e.toString());
+        // 校验失败回发,让发送方消息也标记为失败
+        _sendFileErrorToPeer(transferId, peerId, e.toString(), viaServer: viaServer);
+      }
+      notifyListeners();
+      return;
+    }
+
+    // ---- 大文件:.part 流式落盘后转正 ----
+    final writer = _receiveWriters.remove(transferId);
+    final partPath = _receivePartPaths.remove(transferId);
+    final md5 = _receiveMd5.remove(transferId);
     final peerId = _transferPeers.remove(transferId) ?? '';
-    if (info == null || bytes == null || bytes.isEmpty) {
+    final viaServer = _receiveViaServer.remove(transferId) ?? false;
+    _receiveOffsets.remove(transferId);
+    _receivePending.remove(transferId);
+    _receiveWriting.remove(transferId);
+    _receiveLastProgressAt.remove(transferId);
+    if (writer == null || partPath == null) {
       debugPrint('[ChatProvider] finalize receive FAILED: transfer=$transferId data missing');
       return;
     }
 
     try {
-      // 按平台策略保存到免权限、用户可访问的目录(Android 为系统"下载"目录)
-      final location = await ReceiveDirectory.saveReceivedFile(bytes, info.fileName);
+      await writer.close();
+      // MD5 校验:发送方携带且已完整接收时校验,不匹配则删除 .part 并失败
+      if (expectedMd5 != null && expectedMd5.isNotEmpty) {
+        final actual = md5?.close() ?? '';
+        if (actual != expectedMd5) {
+          await ReceiveDirectory.deletePartFile(partPath);
+          await ReceiveDirectory.removeResumeIndex(transferId);
+          session.update(
+            status: TransferStatus.failed,
+            errorMessage: '文件校验失败(MD5 不匹配)',
+          );
+          // 校验失败回发,让发送方消息也标记为失败
+          _sendFileErrorToPeer(transferId, peerId, '文件校验失败(MD5 不匹配)',
+              viaServer: viaServer);
+          notifyListeners();
+          return;
+        }
+      }
+      // 按平台策略转正 .part(Android 走 MediaStore,其余平台改名)
+      final location = await ReceiveDirectory.finalizePartFile(partPath, session.fileName);
+      if (location.isEmpty) {
+        throw Exception('finalize part failed');
+      }
+      await ReceiveDirectory.removeResumeIndex(transferId);
       debugPrint('[ChatProvider] file received: $location');
 
-      final msg = ChatMessage(
-        id: const Uuid().v4(),
-        senderId: peerId,
-        senderName: '',
-        type: MessageType.file,
-        content: _encodeFileContent(info.fileName, info.fileSize, transferId,
-            path: location),
-        timestamp: DateTime.now(),
-      );
-      _saveMessage(msg, peerId);
-      _messageController.add(msg);
-
-      _fileTransfers[transferId] = info.copyWith(
-        status: TransferStatus.done,
-        progress: 1.0,
-      );
+      _buildReceivedMessage(session, peerId, location);
+      session.update(status: TransferStatus.done, progress: 1.0);
     } catch (e, st) {
       debugPrint('[ChatProvider] finalize receive error: $e\n$st');
-      _fileTransfers[transferId] = info.copyWith(
+      await ReceiveDirectory.deletePartFile(partPath);
+      await ReceiveDirectory.removeResumeIndex(transferId);
+      session.update(
         status: TransferStatus.failed,
         errorMessage: e.toString(),
       );
     }
     notifyListeners();
   }
+
+  /// 为接收完成的文件生成消息记录
+  void _buildReceivedMessage(FileTransferSession session, String peerId, String location) {
+    final msg = ChatMessage(
+      id: const Uuid().v4(),
+      senderId: peerId,
+      senderName: '',
+      type: MessageType.file,
+      content: _encodeFileContent(session.fileName, session.fileSize,
+          session.transferId, path: location),
+      timestamp: DateTime.now(),
+    );
+    _saveMessage(msg, peerId);
+    _messageController.add(msg);
+  }
+
+  /// 计算字节序列的 MD5(小文件缓冲落盘校验兜底)
+  static String md5Sum(List<int> bytes) => md5.convert(bytes).toString();
 
   /// 保存消息到内存和数据库
   void _saveMessage(ChatMessage msg, String peerId) {
@@ -478,11 +1379,29 @@ class ChatProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _sendWatchdogTimer?.cancel();
     stopServer();
     for (final client in _clients.values) {
       client.dispose();
     }
     _clients.clear();
+    // 关闭所有未完成的接收写句柄
+    for (final writer in _receiveWriters.values) {
+      try {
+        writer.close();
+      } catch (_) {}
+    }
+    _receiveWriters.clear();
+    _receivePartPaths.clear();
+    _receiveOffsets.clear();
+    _receivePending.clear();
+    _receiveWriting.clear();
+    _receiveSmallBuffers.clear();
+    _receiveMd5.clear();
+    _receiveViaServer.clear();
+    _receiveLastProgressAt.clear();
+    _sendLastProgressAt.clear();
+    _sendStreams.clear();
     _messageController.close();
     super.dispose();
   }
