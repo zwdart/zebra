@@ -37,10 +37,6 @@ class ChatProvider extends ChangeNotifier {
   // (TCP 窗口填满 → 发送方 flush 阻塞自然减速,替代堆积到 64MB 再 abort;
   // 排空后恢复读取,数据继续流动)
   static const int _receivePendingHighWater = 24 * 1024 * 1024; // 24MB
-  // ---- S4 流式压缩:压缩传输的解压器(transferId -> StreamDecompressor)----
-  // 仅大文件 filePath 源且 offset==0 时发送方压缩;压缩流不支持按字节续传,
-  // 故压缩传输不建断点索引、不参与断点续传
-  final Map<String, StreamDecompressor> _receiveDecompressors = {};
   // ---- 接收侧通道来源(决定 file_ready 回复走 server 还是 client 通道)----
   final Map<String, bool> _receiveViaServer = {}; // transferId -> 是否经 server 通道接收
   final Map<String, DateTime> _prepareStartedAt = {}; // transferId -> 开始准备 .part 的时间(诊断超时)
@@ -64,7 +60,7 @@ class ChatProvider extends ChangeNotifier {
   Timer? _sendWatchdogTimer;
   final Map<String, LanDevice> _sendTargets = {}; // transferId -> 目标设备(排队后使用)
   final Map<String, Stream<List<int>>> _sendStreams = {}; // transferId -> 一次性流式源(替代文件路径)
-  final Map<String, Stream<List<int>> Function(int offset)> _sendStreamFactories = {}; // transferId -> 可重开流工厂(原生直读流,按 offset 重开定位)
+  final Map<String, Stream<List<int>> Function(int offset)> _sendStreamFactories = {}; // transferId -> 可重开流工厂(原生直读流,从头重开读取)
   final String _selfId;
   String _selfName;
   bool _isServerRunning = false;
@@ -83,22 +79,6 @@ class ChatProvider extends ChangeNotifier {
     if (_lastTransferNotifyAt == null ||
         now.difference(_lastTransferNotifyAt!) >= _transferNotifyInterval) {
       _lastTransferNotifyAt = now;
-      return true;
-    }
-    return false;
-  }
-
-  /// 断点索引持久化节流:避免大文件传输期间每 150ms 全量 JSON 读写
-  /// SharedPreferences,改为每秒最多一次(与进度通知节流解耦)
-  DateTime? _lastResumeIndexSaveAt;
-  static const Duration _resumeIndexSaveInterval = Duration(seconds: 1);
-
-  /// 距上次断点索引保存超过间隔时返回 true,并刷新时间戳
-  bool _shouldSaveResumeIndex() {
-    final now = DateTime.now();
-    if (_lastResumeIndexSaveAt == null ||
-        now.difference(_lastResumeIndexSaveAt!) >= _resumeIndexSaveInterval) {
-      _lastResumeIndexSaveAt = now;
       return true;
     }
     return false;
@@ -138,9 +118,9 @@ class ChatProvider extends ChangeNotifier {
       _handleIncomingMessage(msg, msg.senderId);
     };
 
-    _server.onFileMeta = (transferId, fileName, fileSize, peerId, offset, compressed) {
-      _handleIncomingFileMeta(transferId, fileName, fileSize, peerId, offset,
-          viaServer: true, compressed: compressed);
+    _server.onFileMeta = (transferId, fileName, fileSize, peerId) {
+      _handleIncomingFileMeta(transferId, fileName, fileSize, peerId,
+          viaServer: true);
     };
 
     _server.onFileChunk = (transferId, chunk) {
@@ -211,9 +191,9 @@ class ChatProvider extends ChangeNotifier {
     client.onMessage = (msg) {
       _handleIncomingMessage(msg, msg.senderId);
     };
-    client.onFileMeta = (transferId, fileName, fileSize, _, offset, compressed) {
-      _handleIncomingFileMeta(transferId, fileName, fileSize, device.id, offset,
-          viaServer: false, compressed: compressed);
+    client.onFileMeta = (transferId, fileName, fileSize, _) {
+      _handleIncomingFileMeta(transferId, fileName, fileSize, device.id,
+          viaServer: false);
     };
     client.onFileChunk = (transferId, chunk) {
       _receiveFileChunk(transferId, chunk);
@@ -280,8 +260,7 @@ class ChatProvider extends ChangeNotifier {
   /// [filePath] 可为空(流式源场景);[readStream] 提供按块读取的流,
   /// 有流时发送侧直接消费流,避免依赖真实文件路径。
   /// [readStreamFactory] 提供"可重开"的流式源(Android/iOS 原生直读流):
-  /// 每次发送/重试时按已传 offset 重新打开流,支持断点续传;
-  /// 与 [readStream](一次性流)二选一,优先使用工厂。
+  /// 每次发送/重试时从头重新打开流;与 [readStream](一次性流)二选一,优先使用工厂。
   void sendFile({
     required LanDevice target,
     String? filePath,
@@ -372,30 +351,6 @@ class ChatProvider extends ChangeNotifier {
     }).toList();
   }
 
-  /// 暂停传输:发送方向本地暂停发送循环;接收方向通知对方暂停
-  void pauseTransfer(String transferId) {
-    final session = _fileTransfers[transferId];
-    if (session == null || session.status != TransferStatus.transferring) return;
-    session.pause();
-    if (session.direction == TransferDirection.receive) {
-      final peerId = _transferPeers[transferId];
-      if (peerId != null) _sendFileControlToPeer(peerId, transferId, 'pause');
-    }
-    notifyListeners();
-  }
-
-  /// 恢复传输:发送方向唤醒发送循环;接收方向通知对方恢复
-  void resumeTransfer(String transferId) {
-    final session = _fileTransfers[transferId];
-    if (session == null || !session.isPaused) return;
-    session.resume();
-    if (session.direction == TransferDirection.receive) {
-      final peerId = _transferPeers[transferId];
-      if (peerId != null) _sendFileControlToPeer(peerId, transferId, 'resume');
-    }
-    notifyListeners();
-  }
-
   /// 取消传输:发送方向中止发送循环;接收方向清理 .part 并通知对方
   void cancelTransfer(String transferId) {
     final session = _fileTransfers[transferId];
@@ -419,9 +374,7 @@ class ChatProvider extends ChangeNotifier {
         _updateSendStatus(peerId ?? '', msgId, SendStatus.failed);
       }
       // 保留 target 供重试按钮使用;offset 归 0 让重试从头发送
-      // (接收端取消后 .part 已清理,续传会拼接空洞)
       session.offset = 0;
-      session.resumeFrom = 0;
     }
     notifyListeners();
   }
@@ -432,8 +385,8 @@ class ChatProvider extends ChangeNotifier {
     final target = _sendTargets[transferId];
     if (session == null || target == null) return;
     if (session.direction != TransferDirection.send) return;
-    // 重试续传依赖可重开的源:真实文件路径,或可重开流工厂(原生直读流)。
-    // 一次性流(file_picker withReadStream)已被消费,无法续传。
+    // 重试依赖可重开的源:真实文件路径,或可重开流工厂(原生直读流)。
+    // 一次性流(file_picker withReadStream)已被消费,无法重试。
     final hasFactory = _sendStreamFactories.containsKey(transferId);
     final hasPath =
         session.info.filePath != null && session.info.filePath!.isNotEmpty;
@@ -446,17 +399,12 @@ class ChatProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    // 小文件快速通道接收侧无断点索引,重试必须从头全量发送;
-    // 大文件保留 offset 实现断点续传
-    if (session.fileSize <= kSmallFileThresholdBytes) {
-      session.offset = 0;
-    }
-    // 重置为待发送并重新入队(保留 offset 实现续传)
+    // 无断点续传,重试一律从头发送
+    session.offset = 0;
+    // 重置为待发送并重新入队(从头发送)
     session.update(
       status: TransferStatus.pending,
-      progress: session.fileSize > 0
-          ? (session.offset / session.fileSize).clamp(0.0, 1.0)
-          : 0.0,
+      progress: 0.0,
     );
     final msgId = _transferMessageIds[transferId];
     if (msgId != null) {
@@ -594,16 +542,11 @@ class ChatProvider extends ChangeNotifier {
     int fileSize,
   ) async {
     final session = _fileTransfers[transferId];
-    final offset = session?.offset ?? 0;
-    // 可重开流工厂优先(Android/iOS 原生直读流):按已传 offset 重开并定位,
-    // 支持断点续传;否则使用一次性流(仅首次发送 offset=0 场景)
+    // 可重开流工厂优先(Android/iOS 原生直读流):从头重开读取;
+    // 否则使用一次性流
     final factory = _sendStreamFactories[transferId];
     final readStream =
-        factory != null ? factory(offset) : _sendStreams[transferId];
-    // 暂停等待 + 取消检查(由发送循环每块调用)
-    Future<void> beforeChunk() async {
-      await session?.waitIfPaused();
-    }
+        factory != null ? factory(0) : _sendStreams[transferId];
 
     // 取消或已失败(对方报错/校验失败)都停止推流:
     // 否则接收端 abort 清理后,发送端还会继续空推到文件读完
@@ -620,9 +563,7 @@ class ChatProvider extends ChangeNotifier {
         filePath: filePath,
         fileName: fileName,
         fileSize: fileSize,
-        offset: offset,
         readStream: readStream,
-        beforeChunk: beforeChunk,
         isCancelled: isCancelled,
       );
       await _finishFileSend(stream, target.id, transferId);
@@ -667,9 +608,7 @@ class ChatProvider extends ChangeNotifier {
       filePath: filePath,
       fileName: fileName,
       fileSize: fileSize,
-      offset: offset,
       readStream: readStream,
-      beforeChunk: beforeChunk,
       isCancelled: isCancelled,
     );
     await _finishFileSend(stream, target.id, transferId);
@@ -765,8 +704,6 @@ class ChatProvider extends ChangeNotifier {
         _sendLastProgressAt.remove(tid);
         if (_activeSends > 0) _activeSends--;
         _pumpSendQueue();
-      } else if (session.status == TransferStatus.paused) {
-        // 用户主动暂停:不参与看门狗,恢复后由正常收尾负责
       } else {
         // done 等正常状态:正常收尾应已移除,保险清理
         _sendStartedAt.remove(tid);
@@ -859,7 +796,7 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 处理对方发来的文件控制消息(pause/resume/cancel)
+  /// 处理对方发来的文件控制消息(仅剩 cancel)
   void _handleFileControl(String transferId, String action) {
     final session = _fileTransfers[transferId];
     if (session == null) {
@@ -868,22 +805,16 @@ class ChatProvider extends ChangeNotifier {
     }
     debugPrint('[ChatProvider] file control: $action transfer=$transferId');
     switch (action) {
-      case 'file_pause':
-        session.pause();
-        break;
-      case 'file_resume':
-        session.resume();
-        break;
       case 'file_cancel':
         session.cancel();
-        // 接收侧同步清理 .part 与断点索引
+        // 接收侧同步清理 .part
         _cleanupReceivePart(transferId);
         break;
     }
     notifyListeners();
   }
 
-  /// 取消/失败时清理接收侧的 .part 文件、小文件缓冲与断点索引
+  /// 取消/失败时清理接收侧的 .part 文件与小文件缓冲
   Future<void> _cleanupReceivePart(String transferId) async {
     // 先解除背压再清理状态映射(读 _transferPeers/_receiveViaServer),
     // 否则中止/取消后对端 socket 会一直暂停,后续数据无法流动
@@ -895,7 +826,6 @@ class ChatProvider extends ChangeNotifier {
     _receiveWriting.remove(transferId);
     _receiveSmallBuffers.remove(transferId);
     _receiveViaServer.remove(transferId);
-    _receiveDecompressors.remove(transferId);
     _prepareStartedAt.remove(transferId);
     _receiveLastProgressAt.remove(transferId);
     if (writer != null) {
@@ -906,20 +836,17 @@ class ChatProvider extends ChangeNotifier {
     if (partPath != null) {
       await ReceiveDirectory.deletePartFile(partPath);
     }
-    await ReceiveDirectory.removeResumeIndex(transferId);
   }
 
-  /// 处理收到的文件元信息(offset 为对方断点续传起始字节)。
+  /// 处理收到的文件元信息。
   /// 小文件(<= [kSmallFileThresholdBytes])走快速通道:内存缓冲直接落盘,
-  /// 不建 .part、不存断点索引;大文件异步创建 .part 文件并从断点索引恢复。
+  /// 不建 .part;大文件异步创建 .part 文件后流式落盘。
   void _handleIncomingFileMeta(
     String transferId,
     String fileName,
     int fileSize,
-    String peerId,
-    int offset, {
+    String peerId, {
     required bool viaServer,
-    bool compressed = false,
   }) {
     final session = FileTransferSession(
       transferId: transferId,
@@ -930,34 +857,24 @@ class ChatProvider extends ChangeNotifier {
         status: TransferStatus.pending,
       ),
     );
-    session.resumeFrom = offset;
     _fileTransfers[transferId] = session;
     _transferPeers[transferId] = peerId;
     _receiveViaServer[transferId] = viaServer;
-    if (compressed) {
-      // S4: 创建流式解压器,后续 chunk 先解压再落盘
-      _receiveDecompressors[transferId] = StreamDecompressor();
-    }
     debugPrint(
-        '[ChatProvider] file_meta: transfer=$transferId name=$fileName size=$fileSize peer=$peerId offset=$offset viaServer=$viaServer compressed=$compressed');
+        '[ChatProvider] file_meta: transfer=$transferId name=$fileName size=$fileSize peer=$peerId viaServer=$viaServer');
     notifyListeners();
 
-    if (fileSize <= kSmallFileThresholdBytes && !compressed) {
+    if (fileSize <= kSmallFileThresholdBytes) {
       // 小文件快速通道:内存缓冲即刻就绪,直接回复 file_ready
-      // (压缩传输一律走大文件 .part 流式通道:解压输出需流式落盘)
       _receiveSmallBuffers[transferId] = BytesBuilder(copy: false);
       _sendFileReadyToPeer(transferId);
     } else {
       // 大文件:不立即回复 file_ready,等 .part writer 真正就绪后再回
       // (见 _prepareReceiveFile 末尾)。若立即回复,发送端会在 writer 就绪前
-      // 就以网速强推 1MB 大块;多文件并发时(单连接混合推送)接收端事件循环
-      // 被磁盘写入/断点索引 IO 占住,chunk 只能暂存内存等待,一旦超过
-      // _receivePendingLimit 就被 abort——这正是"多文件只收到 1 个"的根因。
-      // 断点续传(offset>0)同样等断点匹配结果,防止无断点数据时误收。
+      // 就以网速强推 512KB 大块;chunk 只能暂存内存等待,一旦超过
+      // _receivePendingLimit 就被 abort。
       _prepareStartedAt[transferId] = DateTime.now();
-      // 压缩传输不参与断点续传(offset 必为 0,由发送方保证)
-      _prepareReceiveFile(transferId, fileName, fileSize,
-          compressed ? 0 : offset);
+      _prepareReceiveFile(transferId, fileName, fileSize);
     }
   }
 
@@ -1020,73 +937,37 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 创建/复用 .part 文件并恢复断点偏移(异步,完成后开始落盘)
+  /// 创建 .part 文件并打开写句柄(异步,完成后开始落盘)
   Future<void> _prepareReceiveFile(
-      String transferId, String fileName, int fileSize, int offset) async {
+      String transferId, String fileName, int fileSize) async {
     try {
-      // 1) 尝试从断点索引恢复:仅当索引字节数与对方续传起点一致时才复用 .part,
-      //    否则重建,避免 savedBytes 与 offset 不一致导致拼接空洞(且 MD5 无法发现)
-      final resume = await ReceiveDirectory.getResumeIndex(transferId);
-      String partPath;
-      int baseBytes = offset;
-      final savedBytes = resume?['receivedBytes'] as int? ?? 0;
-      if (resume != null &&
-          (resume['fileSize'] as int? ?? -1) == fileSize &&
-          savedBytes == offset) {
-        partPath = resume['partPath'] as String? ?? '';
-      } else if (offset > 0) {
-        // 发送方要求从 offset 续传,但接收端没有匹配的断点数据(.part 已清理
-        // 或索引不一致):若创建空文件再按 offset 记账,最终文件会缺头损坏
-        // (MD5 两侧都只算续传段,无法发现)。标记失败并回发 file_error,
-        // 让发送方把 offset 归 0 后从头发送。
-        await ReceiveDirectory.removeResumeIndex(transferId);
-        final peerId = _transferPeers[transferId] ?? '';
-        final viaServer = _receiveViaServer[transferId] ?? false;
-        _sendFileErrorToPeer(transferId, peerId, '接收端无断点数据,请从头发送',
-            viaServer: viaServer);
-        final session = _fileTransfers[transferId];
-        if (session != null) {
-          session.update(
-            status: TransferStatus.failed,
-            errorMessage: '接收端无断点数据,请从头发送',
-          );
-          notifyListeners();
-        }
-        return;
-      } else {
-        partPath = await ReceiveDirectory.createPartFile(transferId, fileName);
-        if (resume != null) {
-          // 索引与本次续传起点不一致,旧索引作废,避免后续复用错误字节数
-          await ReceiveDirectory.removeResumeIndex(transferId);
-        }
-      }
+      final partPath =
+          await ReceiveDirectory.createPartFile(transferId, fileName);
 
-      // 2) 打开追加写句柄
+      // 打开追加写句柄
       final writer = await File(partPath).open(mode: FileMode.append);
       _receiveWriters[transferId] = writer;
       _receivePartPaths[transferId] = partPath;
-      _receiveOffsets[transferId] = baseBytes;
+      _receiveOffsets[transferId] = 0;
       // writer 就绪即开始计时(接收侧停滞看门狗:就绪后长时间无 chunk 视为发送方卡死)
       _receiveLastProgressAt[transferId] = DateTime.now();
 
       final session = _fileTransfers[transferId];
-      if (session != null && baseBytes > 0) {
-        session.offset = baseBytes;
+      if (session != null) {
+        session.offset = 0;
         session.update(
           status: TransferStatus.transferring,
-          progress: fileSize > 0
-              ? (baseBytes / fileSize).clamp(0.0, 1.0)
-              : 0.0,
+          progress: 0.0,
         );
         notifyListeners();
       }
 
-      // 3) 落盘等待期间到达的缓冲数据
+      // 落盘等待期间到达的缓冲数据
       final pending = _receivePending.remove(transferId);
       if (pending != null && pending.isNotEmpty) {
         _writeReceiveChunk(transferId, pending.takeBytes());
       }
-      debugPrint('[ChatProvider] part ready: $partPath base=$baseBytes');
+      debugPrint('[ChatProvider] part ready: $partPath');
       // 准备完成,不再需要超时诊断标记
       _prepareStartedAt.remove(transferId);
       // 接收就绪,通知发送方开始推数据
@@ -1110,19 +991,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// 接收文件数据块:小文件直接进内存缓冲;大文件 writer 就绪则写,否则暂存等待。
-  /// S4 压缩传输:chunk 为压缩字节,先经流式解压器还原为原始字节再走写入链。
   void _receiveFileChunk(String transferId, List<int> chunk) {
-    final decompressor = _receiveDecompressors[transferId];
-    if (decompressor != null) {
-      // S4: 解压本次压缩块,还原的原始字节继续走大文件落盘流程
-      final raw = decompressor.add(chunk);
-      if (raw.isEmpty) {
-        // 解压器内部缓冲,尚无完整输出(进度停滞看门狗由解压侧推进)
-        _receiveLastProgressAt[transferId] = DateTime.now();
-        return;
-      }
-      chunk = raw;
-    }
     final small = _receiveSmallBuffers[transferId];
     if (small != null) {
       // 小文件快速通道:累积到内存,file_done 时一次性落盘
@@ -1260,18 +1129,6 @@ class ChatProvider extends ChangeNotifier {
         if (_shouldNotifyTransferProgress()) {
           notifyListeners();
         }
-        // 断点索引持久化独立节流(1s),避免大文件传输期间高频 JSON 读写
-        // S4: 压缩流不支持按字节续传,压缩传输不建断点索引
-        if (!_receiveDecompressors.containsKey(transferId) &&
-            _shouldSaveResumeIndex()) {
-          ReceiveDirectory.saveResumeIndex(
-            transferId: transferId,
-            fileName: session.fileName,
-            partPath: _receivePartPaths[transferId] ?? '',
-            fileSize: session.fileSize,
-            receivedBytes: total,
-          );
-        }
       }
     } catch (e) {
       debugPrint('[ChatProvider] write part FAILED: $e');
@@ -1306,15 +1163,6 @@ class ChatProvider extends ChangeNotifier {
   /// 文件接收完成：小文件从内存缓冲直接落盘；大文件关闭写句柄、转正 .part。
   /// [expectedMd5] 为发送方随 file_done 携带的校验值,非空时校验,不匹配标记失败。
   Future<void> _finalizeFileReceive(String transferId, String? expectedMd5) async {
-    // S4: 压缩传输——先关闭解压器并写入尾部解压数据(zlib close 输出剩余块),
-    // 再排空写入链,确保所有解压字节都已落盘
-    final decompressor = _receiveDecompressors.remove(transferId);
-    if (decompressor != null) {
-      final tail = decompressor.close();
-      if (tail.isNotEmpty) {
-        _writeReceiveChunk(transferId, tail);
-      }
-    }
     // 先排空写入链,避免丢失尚未落盘的 pending 数据
     await _flushReceivePending(transferId);
     // 写入链已排空:解除背压,恢复对端 socket 读取
@@ -1378,7 +1226,6 @@ class ChatProvider extends ChangeNotifier {
       if (location.isEmpty) {
         throw Exception('finalize part failed');
       }
-      await ReceiveDirectory.removeResumeIndex(transferId);
       debugPrint('[ChatProvider] file received: $location');
 
       _buildReceivedMessage(session, peerId, location);
@@ -1392,7 +1239,6 @@ class ChatProvider extends ChangeNotifier {
     } catch (e, st) {
       debugPrint('[ChatProvider] finalize receive error: $e\n$st');
       await ReceiveDirectory.deletePartFile(partPath);
-      await ReceiveDirectory.removeResumeIndex(transferId);
       session.update(
         status: TransferStatus.failed,
         errorMessage: e.toString(),
@@ -1418,7 +1264,7 @@ class ChatProvider extends ChangeNotifier {
         debugPrint('[ChatProvider] MD5 verify skipped (path not readable): $location');
         return;
       }
-      final actual = await md5SumFileSegment(location, session.resumeFrom);
+      final actual = await md5SumFileSegment(location);
       if (actual == expectedMd5) return;
       debugPrint('[ChatProvider] MD5 mismatch after finalize: $location');
       // 尽量删除已转正文件(桌面真实路径可删;不可删时仅标记失败)
@@ -1456,16 +1302,15 @@ class ChatProvider extends ChangeNotifier {
   /// 计算字节序列的 MD5(小文件缓冲落盘校验兜底)
   static String md5Sum(List<int> bytes) => md5.convert(bytes).toString();
 
-  /// 在后台 isolate 中流式计算文件 MD5(从 [offset] 起,与发送方增量计算对称)。
+  /// 在后台 isolate 中流式计算文件 MD5。
   /// 纯 Dart MD5 在主 isolate 上逐块计算会占满事件循环,大文件接收时
   /// 导致 UI 卡死(Windows 发大文件到 Linux 卡死根因),故改为落盘完成后
   /// 一次性在后台 isolate 计算,期间主 isolate 只负责 IO 与 UI。
-  static Future<String> md5SumFileSegment(String path, int offset) {
+  static Future<String> md5SumFileSegment(String path) {
     return Isolate.run(() async {
       final file = File(path);
       final raf = await file.open();
       try {
-        await raf.setPosition(offset);
         final acc = Md5Accumulator();
         final chunkSize = 1024 * 1024;
         while (true) {
@@ -1519,7 +1364,6 @@ class ChatProvider extends ChangeNotifier {
     _receiveWriting.clear();
     _receiveSmallBuffers.clear();
     _receiveViaServer.clear();
-    _receiveDecompressors.clear();
     _receiveLastProgressAt.clear();
     _sendLastProgressAt.clear();
     _sendStreams.clear();

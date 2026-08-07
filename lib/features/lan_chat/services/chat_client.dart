@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import '../models/chat_message.dart';
-import '../models/file_transfer_session.dart' show kSmallFileThresholdBytes;
 import 'chat_server.dart';
 
 /// TCP 客户端
@@ -17,8 +16,7 @@ class ChatClient {
   // 块持有,不逐字节装箱),解析时 takeBytes 合并后零拷贝切帧
   final BytesBuilder _buffer = BytesBuilder(copy: false);
   int _msgLen = -1;
-  int? _frameType; // 当前帧类型（kJsonMarker/kFileMarker）
-  String? _currentTransferId; // 当前文件传输 ID（file_meta 之后有效）
+  int? _frameType; // 当前帧类型(kJsonMarker/kFileChunkV2Marker)
 
   OnMessageReceived? onMessage;
   OnFileMetaReceived? onFileMeta;
@@ -28,8 +26,8 @@ class ChatClient {
   OnFileControlReceived? onFileControl;
   OnLog? onLog;
 
-  /// 等待对方 file_ready 的 completer(按 transferId;值表示对端是否支持 v2 帧)
-  final Map<String, Completer<bool>> _fileReadyCompleters = {};
+  /// 等待对方 file_ready 的 completer(按 transferId)
+  final Map<String, Completer<void>> _fileReadyCompleters = {};
 
   bool get isConnected => _isConnected;
 
@@ -103,26 +101,19 @@ class ChatClient {
   }
 
   /// 发送文件
-  /// 先发元信息，再发文件内容（'F' 标记数据块），最后发完成标记
+  /// 先发元信息，再发文件内容，最后发完成标记。
+  /// 统一使用自带 transferId 的 'G' 帧(同连接并发多文件不串线),
+  /// 原始字节直传(无压缩、无断点续传);发送过程增量计算 MD5,随 file_done 一并发出。
   /// [filePath] 可为空(流式源场景);[readStream] 提供按块读取的流,
-  /// 调用方需保证流已定位到 [offset](原生直读流重开时 seek/skip),
   /// 有流时直接消费流,否则从文件路径读取。
-  /// [offset] 为断点续传起始字节,>0 时从该位置继续发送;
-  /// [beforeChunk] 每块发送前调用(用于暂停等待),返回后继续;
   /// [isCancelled] 每块发送前检查,返回 true 时中止发送(不发完成标记)。
-  /// 发送前统一等待对方 file_ready(旧版本对端不回,5s 超时兜底继续);
-  /// 对方支持 v2 帧时使用自带 transferId 的 'G' 帧,否则回退旧 'F' 帧。
-  /// 发送过程增量计算 MD5,随 file_done 一并发出,供接收方校验。
   Stream<double> sendFile({
     required String transferId,
     String? filePath,
     required String fileName,
     required int fileSize,
-    int offset = 0,
     Stream<List<int>>? readStream,
-    Future<void> Function()? beforeChunk,
     bool Function()? isCancelled,
-    void Function(String)? onLog,
   }) async* {
     if (_socket == null) return;
 
@@ -132,46 +123,31 @@ class ChatClient {
       return;
     }
 
-    // 发送文件元信息
-    // S4: 压缩传输条件——仅大文件(filePath 源)且从头发送(offset==0),
-    // 压缩流不支持按字节断点续传,故续传场景禁用压缩;
-    // fileSize 仍为原始大小(接收端进度/校验按原始字节),压缩与否由该标志告知
-    final compressed = offset == 0 &&
-        readStream == null &&
-        filePath != null &&
-        fileSize > kSmallFileThresholdBytes;
-    final meta = {
+    // 发送文件元信息(原始字节直传,无压缩、无断点续传)
+    _sendJson({
       'type': 'file_meta',
       'id': transferId,
       'fileName': fileName,
       'fileSize': fileSize,
-      'offset': offset,
-      'compressed': compressed,
-    };
-    _sendJson(meta);
+    });
 
-    // 等待对方接收就绪;旧版本对端不会回复,超时兜底后继续(并回退旧帧)
-    final supportsV2 = await _waitForReady(transferId, isCancelled: isCancelled);
+    // 等待对方接收就绪;对端不回时超时兜底后继续
+    await _waitForReady(transferId, isCancelled: isCancelled);
 
     // 发送文件内容
     try {
       final totalBytes =
           readStream != null ? fileSize : await File(filePath ?? '').length();
-      var sentBytes = offset;
-      // C方案: 发送侧统一逐块增量累加 MD5(文件源在压缩前对原始字节累加),
-      // 不再在发送完成后重读整个文件计算,消除完成瞬间的全文件二次读取
+      var sentBytes = 0;
+      // 发送侧统一逐块增量累加 MD5,不再在发送完成后重读整个文件计算
       final md5Acc = Md5Accumulator();
 
       // 发送一块数据:帧封装 + MD5 + 进度;返回 null 表示已取消
-      // S2: 每 kChunksPerFlush 块 flush 一次(替代逐块 flush),减少系统调用;
+      // 每 kChunksPerFlush 块 flush 一次,减少系统调用;
       // 接收端已有 pause/resume 背压与 TCP 窗口节流,无需逐块 flush 施加背压
-      // [progressBytes] 压缩传输时传入"原始字节数"作为进度口径
-      // (发送的是压缩字节,但进度/剩余时间应按原始文件计算)
       var chunksSinceFlush = 0;
-      Future<double?> sendChunk(List<int> chunk, {int? progressBytes}) async {
-        // 暂停等待(恢复后继续;取消会唤醒等待)
-        await beforeChunk?.call();
-        // 取消检查:中止且不发完成标记(放在暂停之后,避免暂停期间取消多发一块)
+      Future<double?> sendChunk(List<int> chunk) async {
+        // 取消检查:中止且不发完成标记
         if (isCancelled?.call() ?? false) {
           debugPrint('[ChatClient] File send cancelled: $fileName');
           return null;
@@ -180,33 +156,21 @@ class ChatClient {
           return totalBytes > 0 ? sentBytes / totalBytes : 0.0;
         }
 
-        if (supportsV2) {
-          // 新版帧:'G' + 4字节内容长度 + [tidLen(4) + transferId + 数据]
-          final tidBytes = utf8.encode(transferId);
-          final contentLen = 4 + tidBytes.length + chunk.length;
-          _socket!.add(<int>[
-            kFileChunkV2Marker,
-            (contentLen >> 24) & 0xFF,
-            (contentLen >> 16) & 0xFF,
-            (contentLen >> 8) & 0xFF,
-            contentLen & 0xFF,
-            (tidBytes.length >> 24) & 0xFF,
-            (tidBytes.length >> 16) & 0xFF,
-            (tidBytes.length >> 8) & 0xFF,
-            tidBytes.length & 0xFF,
-          ]);
-          _socket!.add(tidBytes);
-        } else {
-          // 旧版帧:'F' + 4字节数据长度 + 数据
-          final size = chunk.length;
-          _socket!.add(<int>[
-            kFileMarker,
-            (size >> 24) & 0xFF,
-            (size >> 16) & 0xFF,
-            (size >> 8) & 0xFF,
-            size & 0xFF,
-          ]);
-        }
+        // 'G' 帧:4字节内容长度 + [tidLen(4) + transferId + 数据]
+        final tidBytes = utf8.encode(transferId);
+        final contentLen = 4 + tidBytes.length + chunk.length;
+        _socket!.add(<int>[
+          kFileChunkV2Marker,
+          (contentLen >> 24) & 0xFF,
+          (contentLen >> 16) & 0xFF,
+          (contentLen >> 8) & 0xFF,
+          contentLen & 0xFF,
+          (tidBytes.length >> 24) & 0xFF,
+          (tidBytes.length >> 16) & 0xFF,
+          (tidBytes.length >> 8) & 0xFF,
+          tidBytes.length & 0xFF,
+        ]);
+        _socket!.add(tidBytes);
         _socket!.add(chunk);
         chunksSinceFlush++;
         if (chunksSinceFlush >= kChunksPerFlush) {
@@ -214,13 +178,12 @@ class ChatClient {
           chunksSinceFlush = 0;
         }
 
-        sentBytes += progressBytes ?? chunk.length;
+        sentBytes += chunk.length;
         return totalBytes > 0 ? sentBytes / totalBytes : 0.0;
       }
 
       if (readStream != null) {
-        // 流式源:调用方保证流已定位到 offset(原生直读流重开时 seek/skip),
-        // 直接逐块消费,不再在此处跳过字节
+        // 流式源:直接逐块消费
         await for (final chunk in readStream) {
           md5Acc.add(chunk);
           final p = await sendChunk(chunk);
@@ -231,45 +194,19 @@ class ChatClient {
         // 文件路径:RandomAccessFile 按 512KB 大块读取
         final raf = await File(filePath ?? '').open();
         try {
-          await raf.setPosition(offset);
-          var remaining = totalBytes - offset;
-          // E方案: 1MB → 512KB,单帧更小,接收端解析/落盘交错更细,
-          // 主 isolate 单次占用更短,UI 更流畅;配合 kMaxFramesPerBatch=16
-          // 每批约 8MB,吞吐损失可忽略(局域网仍可跑满)
+          var remaining = totalBytes;
+          // 512KB 单帧 + kMaxFramesPerBatch=16 每批约 8MB,
+          // 接收端主 isolate 单次占用更短,UI 更流畅
           const chunkSize = 512 * 1024;
-          // S4: 压缩传输——原始块经流式 zlib 压缩后发送;
-          // 压缩器内部可能缓冲,add 可能返回空,进度按原始字节计
-          final compressor = compressed ? StreamCompressor() : null;
           while (remaining > 0) {
             final readLen = remaining < chunkSize ? remaining : chunkSize;
             final chunk = await raf.read(readLen);
             if (chunk.isEmpty) break;
-            // C方案: 压缩前对原始字节累加 MD5(与接收端解压后校验的字节一致)
             md5Acc.add(chunk);
-            if (compressor != null) {
-              final wire = compressor.add(chunk);
-              if (wire.isNotEmpty) {
-                final p = await sendChunk(wire, progressBytes: chunk.length);
-                if (p == null) return;
-              } else {
-                // 压缩器内部缓冲,无输出:进度仍需推进(按原始字节)
-                sentBytes += chunk.length;
-                yield totalBytes > 0 ? sentBytes / totalBytes : 0.0;
-              }
-            } else {
-              final p = await sendChunk(chunk);
-              if (p == null) return;
-            }
+            final p = await sendChunk(chunk);
+            if (p == null) return;
             remaining -= chunk.length;
             yield totalBytes > 0 ? sentBytes / totalBytes : 0.0;
-          }
-          // S4: 压缩收尾块(含 checksum)
-          if (compressor != null) {
-            final tail = compressor.close();
-            if (tail.isNotEmpty) {
-              final p = await sendChunk(tail);
-              if (p == null) return;
-            }
           }
         } finally {
           await raf.close();
@@ -278,8 +215,7 @@ class ChatClient {
 
       // 确保文件内容全部写入内核,再发完成标记(保持帧序)
       await _socket!.flush();
-      // C方案: 发送完成标记(携带 MD5 供接收方校验)——发送期间增量累加结果,
-      // 覆盖本次发送的 [offset..end] 段,与接收端语义对称。
+      // 发送完成标记(携带 MD5 供接收方校验)——发送期间增量累加结果
       final md5 = md5Acc.close();
       _sendJson({
         'type': 'file_done',
@@ -295,50 +231,45 @@ class ChatClient {
     }
   }
 
-  /// 等待对方回复 file_ready;返回对端是否支持 v2 帧
-  /// (旧版本对端不回,超时兜底仍按 v2 帧发送——本端两端同版本,
-  /// v2 'G' 帧自带 transferId,多文件并发不会串线/丢帧;
-  /// 回退无 transferId 的旧 'F' 帧在并发下依赖单一 currentTransferId,
-  /// 会被其他文件的 file_meta 覆盖导致 chunk 被丢弃)
+  /// 等待对方回复 file_ready;对端不回时超时兜底继续
+  /// (超时较长(30s):接收端在 .part writer 就绪后才回 file_ready,
+  /// 多文件并发时准备 IO 排队,超时过短会触发"强推",反而导致接收端
+  /// 等待缓冲溢出 abort。)
   /// 等待期间以 100ms 粒度轮询 [isCancelled],用户取消后立即返回,
   /// 由上层 sendChunk 的取消检查中止发送,避免"点叉号后仍重连重发"。
-  /// 超时较长(30s):接收端在 .part writer 就绪后才回 file_ready,
-  /// 多文件并发时准备 IO 排队,超时过短会触发"强推",反而导致接收端
-  /// 等待缓冲溢出 abort。
-  Future<bool> _waitForReady(String transferId,
+  Future<void> _waitForReady(String transferId,
       {bool Function()? isCancelled}) async {
-    final completer = Completer<bool>();
+    final completer = Completer<void>();
     _fileReadyCompleters[transferId] = completer;
     final deadline = DateTime.now().add(const Duration(seconds: 30));
     try {
       while (!(isCancelled?.call() ?? false)) {
         final remain = deadline.difference(DateTime.now());
         if (remain <= Duration.zero) {
-          debugPrint('[ChatClient] file_ready timeout for $transferId, use v2 frames');
-          return true;
+          debugPrint('[ChatClient] file_ready timeout for $transferId, force push');
+          return;
         }
         try {
-          return await completer.future.timeout(
+          await completer.future.timeout(
             remain < const Duration(milliseconds: 100)
                 ? remain
                 : const Duration(milliseconds: 100),
           );
+          return;
         } catch (_) {
           // 等待超时片段,继续轮询取消状态
         }
       }
       debugPrint('[ChatClient] file_ready cancelled for $transferId');
-      return true;
     } finally {
       _fileReadyCompleters.remove(transferId);
     }
   }
 
   /// 发送 file_ready(接收方回复,发送方据此开始推数据)
-  /// 携带 chunkV2 标记,表明本端支持自带 transferId 的新版数据帧
   bool sendFileReady(String transferId) {
     if (_socket == null) return false;
-    _sendJson({'type': 'file_ready', 'id': transferId, 'chunkV2': true});
+    _sendJson({'type': 'file_ready', 'id': transferId});
     return true;
   }
 
@@ -347,7 +278,7 @@ class ChatClient {
     _sendJson({'type': 'file_error', 'id': transferId, 'error': error});
   }
 
-  /// 发送文件控制消息(pause/resume/cancel)
+  /// 发送文件取消控制消息
   void sendFileControl(String transferId, String action) {
     _sendJson({'type': 'file_$action', 'id': transferId});
   }
@@ -434,17 +365,6 @@ class ChatClient {
         continue;
       }
 
-      // 旧版文件数据块：不解析 JSON，直接回调(无 transferId,依赖 currentTransferId)
-      if (frameType == kFileMarker) {
-        final tid = _currentTransferId;
-        if (tid != null) {
-          onFileChunk?.call(tid, chunk);
-        } else {
-          debugPrint('[ChatClient] file chunk dropped: no active transfer');
-        }
-        continue;
-      }
-
       try {
         final json = jsonDecode(utf8.decode(chunk)) as Map<String, dynamic>;
         final type = json['type'] as String? ?? '';
@@ -460,26 +380,20 @@ class ChatClient {
             onMessage?.call(ChatMessage.fromJson(json));
             break;
           case 'file_meta':
-            _currentTransferId = json['id'] as String? ?? '';
             onFileMeta?.call(
               json['id'] as String? ?? '',
               json['fileName'] as String? ?? '',
               json['fileSize'] as int? ?? 0,
               '',
-              json['offset'] as int? ?? 0,
-              json['compressed'] == true,
             );
             break;
           case 'file_ready':
             debugPrint('[ChatClient] file_ready: transfer=${json['id']}');
-            _fileReadyCompleters.remove(json['id'] as String? ?? '')
-                ?.complete(json['chunkV2'] == true);
+            _fileReadyCompleters.remove(json['id'] as String? ?? '')?.complete();
             break;
-          case 'file_pause':
-          case 'file_resume':
           case 'file_cancel':
-            debugPrint('[ChatClient] file control: ${json['type']} ${json['id']}');
-            onFileControl?.call(json['id'] as String? ?? '', json['type'] as String? ?? '');
+            debugPrint('[ChatClient] file_cancel: ${json['id']}');
+            onFileControl?.call(json['id'] as String? ?? '', 'file_cancel');
             break;
           case 'file_done':
             debugPrint('[ChatClient] file_done: transfer=${json['id']}');
@@ -513,7 +427,6 @@ class ChatClient {
     _buffer.clear();
     _msgLen = -1;
     _frameType = null;
-    _currentTransferId = null;
     _socket?.destroy();
     _socket = null;
   }

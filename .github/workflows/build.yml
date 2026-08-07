@@ -1,18 +1,31 @@
-# Zebra SSH — 桌面免安装应用自动构建
+# Zebra — 桌面免安装应用自动构建
 #
 # 触发方式:
-#   - push 到 master:构建 Linux/Windows 并上传 Actions Artifact
-#   - 打 tag (v*):构建三平台并自动发布 GitHub Release(可直接下载)
+#   - push 到 master:构建 Linux/Windows/Android 并上传 Actions Artifact
+#   - 打 tag (v*):构建全平台并自动发布 GitHub Release(可直接下载)
 #   - 手动触发:Actions 页面 Run workflow
 #
-# 产物(均"免安装、点击即用"):
-#   - Linux   : zebra-linux.zip(内含 zebra 单文件 + linux_install.sh 安装脚本:
-#               解压后 ./zebra 直接运行,或 ./linux_install.sh 安装到系统)
-#   - Windows : packer/target/release/zebra.exe(自解压单文件)
-#   - macOS   : Zebra.app 打包为 zebra-macos.zip(解压后拖出即用)
+# 产物:
+#   - Linux   :
+#       * zebra-linux.zip(免安装单文件 + linux_install.sh 安装脚本)
+#       * zebra_<ver>_amd64.deb(Debian/Ubuntu 原生安装包)
+#       * zebra-<ver>-x86_64.rpm(Fedora/RHEL/openSUSE 原生安装包)
+#       * Zebra-<ver>-x86_64.AppImage(跨发行版便携格式)
+#       * zebra-<ver>-x86_64.tar.gz(通用二进制压缩包)
+#   - Windows :
+#       * packer/target/release/zebra.exe(自解压单文件)
+#       * installer/zebra-setup-<ver>.exe(Inno Setup 原生安装器)
+#   - macOS   : zebra-macos-<ver>.{zip,dmg,pkg}(arm64,Apple Silicon)
+#               + zebra-macos-<ver>-x64.{zip,dmg,pkg}(x86_64,Intel)
+#   - Android : app-release.apk(universal) + app-{abi}-release.apk(按 ABI 拆分)
+#               + app-release.aab(上架应用商店)
+#   - iOS     : zebra-ios.zip(Runner.app 压缩包) + *.ipa(均未签名,
+#               需本地签名后安装/上架)
 #
-# 打包方式与本地 build_*.sh 完全一致:Flutter release 构建 →
-# packer/zebra-pack 压缩进 data.bin → packer/zebra 自解压单文件。
+# 打包方式:Flutter release 构建 →
+# packer/zebra-pack 压缩进 data.bin → packer/zebra 自解压单文件(免安装版);
+# 原生安装包(.deb/.rpm/.AppImage/.tar.gz/.dmg/.pkg/setup.exe/.ipa)
+# 直接基于 Flutter 构建产物打包。
 #
 # ==================== 操作流程(完整命令) ====================
 #
@@ -55,6 +68,14 @@
 #      否则工作流尚未生效(文件只在本地/暂存区)。
 name: Build Desktop Apps
 
+# ==================== 版本锁定 ====================
+# CI 工具链版本固定,避免上游升级导致构建行为漂移
+# (曾因 Flutter 参数变动导致构建失败,锁定后结果可复现)。
+# 升级版本时同步更新此处,并确认三平台构建通过。
+env:
+  FLUTTER_VERSION: "3.41.6" # 与 runner 实际缓存的 stable 版本一致(stable-3.44.8-arm64)
+  RUST_VERSION: "1.91.1"    # packer 为纯 Rust 项目,无特殊 MSRV 要求
+
 on:
   push:
     branches: [master]
@@ -75,13 +96,22 @@ jobs:
           sudo apt-get install -y \
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libsecret-1-dev
+          # linuxdeploy-plugin-gtk 生成 immodules/pixbuf 缓存所需工具
+          # (libgdk-pixbuf-2.0-bin 是 24.04 的包名,22.04 是 libgdk-pixbuf2.0-bin,失败则回退)
+          sudo apt-get install -y libgtk-3-bin libgdk-pixbuf-2.0-bin || \
+            sudo apt-get install -y libgtk-3-bin libgdk-pixbuf2.0-bin
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Generate build info
         run: |
@@ -111,11 +141,137 @@ jobs:
           chmod +x ./linux_install.sh
           zip -j zebra-linux.zip linux_install.sh zebra
 
+      - name: Prepare packaging version
+        id: pkgver
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          fi
+          echo "version=${VERSION:-1.0.0}" >> "$GITHUB_OUTPUT"
+
+      - name: Build .deb package
+        run: |
+          VERSION="${{ steps.pkgver.outputs.version }}"
+          BUNDLE="build/linux/x64/release/bundle"
+          ROOT="pkg/zebra-deb"
+          rm -rf "$ROOT"
+          mkdir -p "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/usr/share/applications" \
+                   "$ROOT/usr/share/icons/hicolor/256x256/apps" "$ROOT/opt/zebra"
+          cp -r "$BUNDLE/." "$ROOT/opt/zebra/"
+          ln -s /opt/zebra/zebra "$ROOT/usr/bin/zebra"
+          cp assets/icons/icon.png "$ROOT/usr/share/icons/hicolor/256x256/apps/zebra.png"
+          cat > "$ROOT/usr/share/applications/zebra.desktop" << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Zebra
+          Comment=Zebra Desktop App
+          Exec=/opt/zebra/zebra
+          Icon=zebra
+          Terminal=false
+          Categories=Network;Utility;
+          EOF
+          cat > "$ROOT/DEBIAN/control" << EOF
+          Package: zebra
+          Version: $VERSION
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Zebra <zebra@dart.xin>
+          Installed-Size: $(du -sk "$ROOT/opt" | awk '{print $1}')
+          Description: Zebra desktop application
+          EOF
+          dpkg-deb --build --root-owner-group "$ROOT" "zebra_${VERSION}_amd64.deb"
+
+      - name: Build .rpm package
+        run: |
+          VERSION="${{ steps.pkgver.outputs.version }}"
+          sudo apt-get install -y rpm > /dev/null
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          echo '%_topdir %(echo $HOME)/rpmbuild' > ~/.rpmmacros
+          cat > ~/rpmbuild/SPECS/zebra.spec << EOF
+          Name: zebra
+          Version: $VERSION
+          Release: 1
+          Summary: Zebra desktop application
+          License: MIT
+          BuildArch: x86_64
+          %description
+          Zebra desktop application.
+          %install
+          mkdir -p %{buildroot}/opt/zebra
+          cp -r $GITHUB_WORKSPACE/build/linux/x64/release/bundle/. %{buildroot}/opt/zebra/
+          %files
+          /opt/zebra/*
+          EOF
+          rpmbuild -bb ~/rpmbuild/SPECS/zebra.spec
+          cp ~/rpmbuild/RPMS/x86_64/zebra-*.rpm .
+
+      - name: Build .AppImage package
+        run: |
+          set -e
+          VERSION="${{ steps.pkgver.outputs.version }}"
+          BUNDLE="build/linux/x64/release/bundle"
+
+          # 下载 linuxdeploy + GTK 插件 + appimagetool(CI 无 FUSE,统一用 --appimage-extract-and-run)
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk.sh appimagetool-x86_64.AppImage
+          # linuxdeploy 从 PATH 中查找 linuxdeploy-plugin-gtk.sh
+          export PATH="$PWD:$PATH"
+
+          # 组装 AppDir:可执行文件进 usr/bin,Flutter 插件库进 usr/bin/lib
+          # (linuxdeploy 生成的 AppRun 默认把 usr/lib 加入 LD_LIBRARY_PATH,GTK 库也部署于此)
+          APPDIR="AppDir"
+          rm -rf "$APPDIR"
+          mkdir -p "$APPDIR/usr/bin/lib" "$APPDIR/usr/lib" "$APPDIR/usr/share/applications" \
+                   "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+          # Flutter 产物布局:bundle/zebra(可执行文件)+ bundle/data(资源)+ bundle/lib(运行时库),
+          # 没有 bin/ 子目录;data 必须与可执行文件同级,引擎按 /proc/self/exe 所在目录查找。
+          # 插件库必须放 usr/bin/lib:zebra 的 RUNPATH 是 $ORIGIN/lib(即可执行文件旁的 lib/),
+          # linuxdeploy 按此解析依赖,若放 usr/lib 会报 "Could not find dependency: libxxx_plugin.so"
+          cp "$BUNDLE"/zebra "$APPDIR/usr/bin/"
+          cp -r "$BUNDLE"/data "$APPDIR/usr/bin/data"
+          cp -r "$BUNDLE"/lib/* "$APPDIR/usr/bin/lib/"
+          cp assets/icons/icon.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/zebra.png"
+
+          cat > "$APPDIR/usr/share/applications/zebra.desktop" << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Zebra
+          Comment=Zebra Desktop App
+          Exec=zebra
+          Icon=zebra
+          Terminal=false
+          Categories=Network;Utility;
+          EOF
+
+          # 部署依赖 + 把 GTK3 及资源(schemas/pixbuf/immodules/主题)打进 AppDir,
+          # 同时生成标准 AppRun 和 apprun-hooks(由 AppRun 在运行时 source)
+          DEPLOY_GTK_VERSION=3 ./linuxdeploy-x86_64.AppImage --appimage-extract-and-run \
+            --appdir "$APPDIR" \
+            --plugin gtk \
+            --desktop-file "$APPDIR/usr/share/applications/zebra.desktop"
+
+          ./appimagetool-x86_64.AppImage --appimage-extract-and-run \
+            "$APPDIR" "Zebra-${VERSION}-x86_64.AppImage"
+
+      - name: Build .tar.gz package
+        run: |
+          VERSION="${{ steps.pkgver.outputs.version }}"
+          tar czf "zebra-${VERSION}-x86_64.tar.gz" -C build/linux/x64/release/bundle .
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zebra-linux
-          path: packer/target/release/zebra-linux.zip
+          path: |
+            packer/target/release/zebra-linux.zip
+            zebra_*.deb
+            zebra-*.rpm
+            Zebra-*.AppImage
+            zebra-*.tar.gz
 
   # ==================== Windows ====================
   windows:
@@ -127,9 +283,14 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Generate build info
         shell: bash
@@ -156,11 +317,132 @@ jobs:
           target/release/zebra-pack.exe -f ../build/windows/x64/runner/Release -e zebra.exe -n zebra-ssh
           cargo build --release --bin zebra
 
+      - name: Prepare packaging version
+        id: pkgver
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          fi
+          echo "version=${VERSION:-1.0.0}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Inno Setup installer
+        shell: bash
+        run: |
+          VERSION="${{ steps.pkgver.outputs.version }}"
+          # 静默安装 Inno Setup(Windows 上最常见的安装器工具)
+          choco install innosetup -y --no-progress > /dev/null 2>&1 || true
+          ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          if [ ! -f "$ISCC" ]; then
+            echo "::error::ISCC.exe not found after choco install innosetup"
+            exit 1
+          fi
+          cat > zebra.iss << EOF
+          [Setup]
+          AppName=Zebra
+          AppVersion=$VERSION
+          AppPublisher=Zebra
+          DefaultDirName={autopf}\Zebra
+          DefaultGroupName=Zebra
+          OutputDir=installer
+          OutputBaseFilename=zebra-setup-$VERSION
+          Compression=lzma2
+          SolidCompression=yes
+          ArchitecturesInstallIn64BitMode=x64compatible
+          UninstallDisplayIcon={app}\zebra.exe
+
+          [Tasks]
+          Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+
+          [Files]
+          Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs
+
+          [Icons]
+          Name: "{autoprograms}\Zebra"; Filename: "{app}\zebra.exe"
+          Name: "{autodesktop}\Zebra"; Filename: "{app}\zebra.exe"; Tasks: desktopicon
+
+          [Run]
+          Filename: "{app}\zebra.exe"; Description: "{cm:LaunchProgram,Zebra}"; Flags: nowait postinstall skipifsilent
+          EOF
+          "$ISCC" zebra.iss
+          ls -la installer/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zebra-windows
-          path: packer/target/release/zebra.exe
+          path: |
+            packer/target/release/zebra.exe
+            installer/zebra-setup-*.exe
+
+  # ==================== Android ====================
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install Android NDK (sqlite3 native assets)
+        run: |
+          if [ ! -d "${ANDROID_SDK_ROOT}/ndk/27.0.12077973" ]; then
+            echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager \
+              --install "ndk;27.0.12077973" > /dev/null 2>&1 || true
+          fi
+          if [ -d "${ANDROID_SDK_ROOT}/ndk/27.0.12077973" ]; then
+            echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/27.0.12077973" >> "$GITHUB_ENV"
+          fi
+
+      - name: Generate build info
+        shell: bash
+        run: |
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > lib/build_info.dart << EOF
+          // Auto-generated build info - overwritten by build scripts
+          const String buildTime = '$BUILD_TIME';
+          EOF
+
+      - name: Flutter pub get
+        shell: bash
+        run: flutter pub get
+
+      - name: Build Flutter Android APK
+        shell: bash
+        run: flutter build apk --release
+
+      - name: Build Flutter Android APKs (split per ABI)
+        shell: bash
+        run: flutter build apk --release --split-per-abi
+
+      - name: Build Flutter Android App Bundle
+        shell: bash
+        run: flutter build appbundle --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zebra-android-apk
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-*-release.apk
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zebra-android-aab
+          path: build/app/outputs/bundle/release/app-release.aab
 
   # ==================== macOS ====================
   # macOS runner 分钟数按 10 倍加权消耗私有仓库额度,平时 push 不构建;
@@ -175,9 +457,14 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Generate build info
         run: |
@@ -190,6 +477,15 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Prepare packaging version
+        id: pkgver
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          fi
+          echo "version=${VERSION:-1.0.0}" >> "$GITHUB_OUTPUT"
+
       - name: Build Flutter macOS release
         run: flutter build macos --release
 
@@ -197,9 +493,44 @@ jobs:
         run: |
           cd packer
           cargo build --release --bin zebra-pack
+          # macOS 产物路径在不同 Flutter/Xcode 版本下可能有差异(CI 曾报 Runner.app 找不到),
+          # 先按标准路径取,取不到则在 build/macos 下动态查找 .app,并打印实际路径便于排查
+          APP_BUNDLE="../build/macos/Build/Products/Release/Runner.app"
+          if [ ! -d "$APP_BUNDLE" ]; then
+            APP_BUNDLE="$(find ../build/macos -maxdepth 6 -name '*.app' -type d 2>/dev/null | head -1)"
+          fi
+          if [ -z "$APP_BUNDLE" ] || [ ! -d "$APP_BUNDLE" ]; then
+            echo "ERROR: macOS app bundle not found under build/macos" >&2
+            find ../build/macos -maxdepth 6 2>/dev/null || echo "(build/macos does not exist)"
+            exit 1
+          fi
+          echo "Using app bundle: $APP_BUNDLE"
           target/release/zebra-pack \
-            -f ../build/macos/Build/Products/Release/Runner.app \
-            -e Contents/MacOS/Runner -n zebra-ssh
+            -f "$APP_BUNDLE" \
+            -e "Contents/MacOS/$(basename "$APP_BUNDLE" .app)" \
+            -n zebra-ssh
+
+      - name: Verify data.bin integrity
+        run: |
+          DATA_BIN="$PWD/packer/target/data.bin"
+          if [ ! -f "$DATA_BIN" ]; then
+            echo "ERROR: data.bin not generated" >&2
+            exit 1
+          fi
+          if ! strings "$DATA_BIN" | grep -q "flutter_assets"; then
+            echo "ERROR: data.bin is missing flutter_assets — pack source folder was wrong!" >&2
+            find "$PWD/build/macos" -maxdepth 6 -name '*.app' -type d 2>/dev/null
+            exit 1
+          fi
+          if ! strings "$DATA_BIN" | grep -q "icudtl.dat"; then
+            echo "ERROR: data.bin is missing icudtl.dat" >&2
+            exit 1
+          fi
+          echo "data.bin OK: $(wc -c < "$DATA_BIN") bytes, key resources present"
+
+      - name: Build self-extracting binary
+        run: |
+          cd packer
           cargo build --release --bin zebra
 
       - name: Assemble Zebra.app bundle
@@ -244,9 +575,9 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.zebra.ssh</string>
               <key>CFBundleVersion</key>
-              <string>1.0.0</string>
+              <string>${{ steps.pkgver.outputs.version }}</string>
               <key>CFBundleShortVersionString</key>
-              <string>1.0.0</string>
+              <string>${{ steps.pkgver.outputs.version }}</string>
               <key>CFBundleExecutable</key>
               <string>zebra</string>
               <key>CFBundlePackageType</key>
@@ -262,20 +593,168 @@ jobs:
       - name: Zip Zebra.app
         run: |
           cd packer/target/release
-          zip -r zebra-macos.zip Zebra.app
+          zip -r zebra-macos-${{ steps.pkgver.outputs.version }}.zip Zebra.app
+
+      - name: Create DMG
+        run: |
+          cd packer/target/release
+          hdiutil create \
+            -volname "Zebra" \
+            -srcfolder Zebra.app \
+            -ov -format UDZO \
+            zebra-macos-${{ steps.pkgver.outputs.version }}.dmg
+
+      - name: Create PKG
+        run: |
+          cd packer/target/release
+          # 生成原生 .pkg 安装器包(安装到 /Applications)
+          pkgbuild \
+            --component Zebra.app \
+            --install-location /Applications \
+            --identifier com.zebra.ssh \
+            --version ${{ steps.pkgver.outputs.version }} \
+            zebra-macos-${{ steps.pkgver.outputs.version }}.pkg
+
+      # ==================== macOS x86_64(Intel) ====================
+      # 说明:Flutter 3+ 的 `flutter build macos --release` 默认就产出 universal 二进制
+      # (同时含 x86_64 + arm64,flutter_tools 对 release 用 generic/platform=macOS 目标),
+      # 所以上面 arm64 流程打包的 data.bin 里的 Runner.app 本身就支持 Intel。
+      # 真正限制架构的是 Rust 自解压壳 zebra(cargo 默认按宿主架构编译,即 arm64)。
+      # 因此 x64 版只需用同一份 data.bin 重新编译 x86_64 的 zebra 壳即可,无需再构建 Flutter。
+      - name: Install x86_64 Rust target
+        run: rustup target add x86_64-apple-darwin
+
+      - name: Build x86_64 self-extracting binary
+        run: |
+          cd packer
+          # data.bin 由上方 arm64 流程的 zebra-pack 生成,内含 universal 的 Runner.app,直接复用
+          if [ ! -f target/data.bin ]; then
+            echo "ERROR: target/data.bin not found; run the arm64 pack step first" >&2
+            exit 1
+          fi
+          cargo build --release --target x86_64-apple-darwin --bin zebra
+
+      - name: Assemble Zebra-x64.app bundle
+        run: |
+          # arm64 版 Zebra.app 的图标与 Info.plist 与 x64 完全一致,
+          # 直接复制整个 bundle 后替换其中的 zebra 可执行文件即可
+          APP_BUNDLE="$PWD/packer/target/release/Zebra-x64.app"
+          rm -rf "$APP_BUNDLE"
+          cp -R packer/target/release/Zebra.app "$APP_BUNDLE"
+          cp packer/target/x86_64-apple-darwin/release/zebra "$APP_BUNDLE/Contents/MacOS/zebra"
+          chmod +x "$APP_BUNDLE/Contents/MacOS/zebra"
+
+      - name: Zip Zebra-x64.app
+        run: |
+          cd packer/target/release
+          zip -r zebra-macos-${{ steps.pkgver.outputs.version }}-x64.zip Zebra-x64.app
+
+      - name: Create x64 DMG
+        run: |
+          cd packer/target/release
+          hdiutil create \
+            -volname "Zebra" \
+            -srcfolder Zebra-x64.app \
+            -ov -format UDZO \
+            zebra-macos-${{ steps.pkgver.outputs.version }}-x64.dmg
+
+      - name: Create x64 PKG
+        run: |
+          cd packer/target/release
+          pkgbuild \
+            --component Zebra-x64.app \
+            --install-location /Applications \
+            --identifier com.zebra.ssh \
+            --version ${{ steps.pkgver.outputs.version }} \
+            zebra-macos-${{ steps.pkgver.outputs.version }}-x64.pkg
+
+      - name: Verify macOS architectures
+        run: |
+          # 自解压壳:arm64 版应为 arm64,x64 版应为 x86_64
+          lipo -info packer/target/release/Zebra.app/Contents/MacOS/zebra
+          lipo -info packer/target/release/Zebra-x64.app/Contents/MacOS/zebra
+          # Runner.app(被打进 data.bin)必须是 universal(同时含 x86_64 + arm64),
+          # 否则 x64 包在 Intel Mac 上无法运行,这里显式校验并报错
+          RUNNER_BIN="build/macos/Build/Products/Release/Runner.app/Contents/MacOS/Runner"
+          if [ -f "$RUNNER_BIN" ]; then
+            lipo -info "$RUNNER_BIN"
+            if ! lipo -info "$RUNNER_BIN" | grep -q "x86_64"; then
+              echo "ERROR: Runner.app 不含 x86_64,Intel 包将无法运行,请检查 Flutter 构建配置" >&2
+              exit 1
+            fi
+          else
+            echo "WARNING: Runner binary not found at $RUNNER_BIN,跳过校验" >&2
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zebra-macos
-          path: packer/target/release/zebra-macos.zip
+          path: |
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}.zip
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}.dmg
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}.pkg
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x64.zip
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x64.dmg
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x64.pkg
+
+  # ==================== iOS ====================
+  # iOS 构建同样消耗 macOS runner 分钟数,与 macOS 一样只在打 tag 或手动触发时跑。
+  # CI 无签名证书,产物为未签名 App,需本地签名后安装/上架。
+  ios:
+    name: iOS
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Generate build info
+        run: |
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > lib/build_info.dart << EOF
+          // Auto-generated build info - overwritten by build scripts
+          const String buildTime = '$BUILD_TIME';
+          EOF
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build Flutter iOS release (unsigned)
+        run: flutter build ios --release --no-codesign
+
+      - name: Build Flutter iOS IPA (unsigned)
+        run: flutter build ipa --release --no-codesign
+
+      - name: Zip Runner.app
+        run: |
+          cd build/ios/iphoneos
+          zip -r zebra-ios.zip Runner.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zebra-ios
+          path: |
+            build/ios/iphoneos/zebra-ios.zip
+            build/ios/ipa/*.ipa
 
   # ==================== 发布 Release(仅打 tag 时) ====================
   release:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, windows, macos]
+    needs: [linux, windows, macos, android, ios]
     runs-on: ubuntu-latest
+    # GITHUB_TOKEN 默认只读,创建 Release/生成 release notes 需要 contents: write;
+    # 声明 permissions 后默认权限被覆盖,需一并给 actions: read 供 download-artifact 使用
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/download-artifact@v4
         with:

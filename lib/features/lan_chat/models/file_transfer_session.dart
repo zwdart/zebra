@@ -1,23 +1,19 @@
-import 'dart:async';
 import 'chat_message.dart';
 
 /// 小文件阈值:小于等于该大小的文件走快速通道
-/// (接收侧内存缓冲直接落盘,不建 .part、不存断点索引;UI 不显示速度/剩余时间)
+/// (接收侧内存缓冲直接落盘,不建 .part;UI 不显示速度/剩余时间)
 const int kSmallFileThresholdBytes = 2 * 1024 * 1024; // 2MB
 
 /// 文件传输采样点(时间, 累计已传字节)
 typedef _TransferSample = ({DateTime time, int bytes});
 
 /// 一次文件传输的会话:内聚传输元信息、开始时间、采样点,
-/// 并提供速度/剩余时间/已用时间/暂停/断点等运行时能力。
+/// 并提供速度/剩余时间/已用时间等运行时能力。
 ///
 /// 与 [FileTransferInfo] 的区别:Info 是消息内容(可序列化/入库)的映射,
 /// Session 是运行时的传输状态载体,不参与序列化,UI 直接读取其计算属性。
 ///
-/// 断点语义:
-/// - [offset] 表示本次传输应从文件哪个字节开始(发送侧续传起点,
-///   也等于接收侧已落盘的字节数);完成传输后为文件总大小。
-/// - [pause] / [resume] 控制发送循环的暂停等待,不丢已传字节。
+/// 方案 A 简化:无暂停/恢复、无断点续传,传输要么进行、要么取消/失败。
 class FileTransferSession {
   FileTransferSession({required this.transferId, required FileTransferInfo info})
       : _info = info,
@@ -27,11 +23,8 @@ class FileTransferSession {
   final DateTime _startedAt;
   FileTransferInfo _info;
 
-  /// 当前已传字节数(发送=已发出,接收=已落盘);从该位置续传
+  /// 当前已传字节数(发送=已发出,接收=已落盘);仅用于进度展示,不参与续传
   int offset = 0;
-
-  /// 断点续传时对方告知的已有偏移(接收侧落盘时使用)
-  int resumeFrom = 0;
 
   /// 采样点队列,用于滑动窗口计算瞬时速度(只保留最近 [sampleWindow] 的点)
   final List<_TransferSample> _samples = [];
@@ -41,42 +34,9 @@ class FileTransferSession {
   static const Duration _sampleInterval = Duration(milliseconds: 300);
   DateTime? _lastSampleAt;
 
-  // ---- 暂停/恢复控制 ----
-  bool _paused = false;
-  Completer<void>? _resumeCompleter;
-
-  bool get isPaused => _paused;
-
-  /// 暂停传输:发送循环在下一次 chunk 前阻塞
-  void pause() {
-    if (_paused) return;
-    _paused = true;
-    _info = _info.copyWith(status: TransferStatus.paused);
-  }
-
-  /// 恢复传输:唤醒等待中的发送循环
-  void resume() {
-    if (!_paused) return;
-    _paused = false;
-    _info = _info.copyWith(status: TransferStatus.transferring);
-    _resumeCompleter?.complete();
-    _resumeCompleter = null;
-  }
-
-  /// 取消传输:唤醒暂停等待并标记取消(发送循环据此中止)
+  /// 取消传输:标记取消(发送循环据此中止)
   void cancel() {
-    _paused = false;
-    _resumeCompleter?.complete();
-    _resumeCompleter = null;
     _info = _info.copyWith(status: TransferStatus.cancelled);
-  }
-
-  /// 发送循环中等待:已暂停时挂起,直到 [resume] 被调用
-  Future<void> waitIfPaused() async {
-    if (!_paused) return;
-    final completer = Completer<void>();
-    _resumeCompleter = completer;
-    await completer.future;
   }
 
   // ---- 只读透传 ----

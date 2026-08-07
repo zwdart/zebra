@@ -1,11 +1,9 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import '../../../utils/zebra_paths.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/file_transfer_session.dart' show kSmallFileThresholdBytes;
 
@@ -19,14 +17,11 @@ import '../models/file_transfer_session.dart' show kSmallFileThresholdBytes;
 /// - iOS:应用文档目录(配合 Info.plist 的 UIFileSharingEnabled,
 ///   可在"文件"App 中直接访问)。
 ///
-/// 断点续传:接收过程写入 `<name>.<transferId>.part` 临时文件(低内存落盘),
-/// 完成时转正为最终文件;断点索引持久化到 SharedPreferences,
-/// 应用重启后收到同 transferId 的 file_meta 可继续追加。
+/// 接收过程写入 `<name>.<transferId>.part` 临时文件(低内存落盘),
+/// 完成时转正为最终文件(无断点续传,方案 A 简化)。
 class ReceiveDirectory {
   static const MethodChannel _channel =
       MethodChannel('xin.dart.zebra/receive_file');
-
-  static const String _resumeIndexKey = 'lan_chat_resume_index';
 
   /// 保存接收到的文件字节,返回用于展示/定位的路径。
   ///
@@ -187,66 +182,6 @@ class ReceiveDirectory {
       if (await file.exists()) await file.delete();
     } catch (e) {
       debugPrint('[ReceiveDirectory] delete part failed: $e');
-    }
-  }
-
-  /// 保存断点索引(transferId -> 元信息),供重启后续传
-  static Future<void> saveResumeIndex({
-    required String transferId,
-    required String fileName,
-    required String partPath,
-    required int fileSize,
-    required int receivedBytes,
-  }) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_resumeIndexKey);
-      final map = raw == null
-          ? <String, dynamic>{}
-          : jsonDecode(raw) as Map<String, dynamic>;
-      map[transferId] = {
-        'fileName': fileName,
-        'partPath': partPath,
-        'fileSize': fileSize,
-        'receivedBytes': receivedBytes,
-      };
-      await prefs.setString(_resumeIndexKey, jsonEncode(map));
-    } catch (e) {
-      debugPrint('[ReceiveDirectory] save resume index failed: $e');
-    }
-  }
-
-  /// 读取断点索引,不存在返回 null
-  static Future<Map<String, dynamic>?> getResumeIndex(
-      String transferId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_resumeIndexKey);
-      if (raw == null) return null;
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      final entry = map[transferId] as Map<String, dynamic>?;
-      if (entry == null) return null;
-      // 校验 .part 文件仍存在
-      final part = File(entry['partPath'] as String? ?? '');
-      if (!await part.exists()) return null;
-      return entry;
-    } catch (e) {
-      debugPrint('[ReceiveDirectory] get resume index failed: $e');
-      return null;
-    }
-  }
-
-  /// 删除断点索引
-  static Future<void> removeResumeIndex(String transferId) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_resumeIndexKey);
-      if (raw == null) return;
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      map.remove(transferId);
-      await prefs.setString(_resumeIndexKey, jsonEncode(map));
-    } catch (e) {
-      debugPrint('[ReceiveDirectory] remove resume index failed: $e');
     }
   }
 

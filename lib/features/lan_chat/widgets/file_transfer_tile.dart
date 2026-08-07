@@ -4,18 +4,14 @@ import '../models/file_transfer_session.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// 文件传输进度条组件:展示文件名、进度、速度、剩余时间与已用时间,
-/// 传输中提供暂停/恢复/取消控制。
+/// 传输中提供取消控制。
 class FileTransferTile extends StatelessWidget {
   final FileTransferSession session;
-  final VoidCallback? onPause;
-  final VoidCallback? onResume;
   final VoidCallback? onCancel;
 
   const FileTransferTile({
     super.key,
     required this.session,
-    this.onPause,
-    this.onResume,
     this.onCancel,
   });
 
@@ -52,7 +48,6 @@ class FileTransferTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   if (transfer.status == TransferStatus.transferring ||
-                      transfer.status == TransferStatus.paused ||
                       transfer.status == TransferStatus.pending) ...[
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
@@ -104,32 +99,14 @@ class FileTransferTile extends StatelessWidget {
                 ],
               ),
             ),
-            // 控制按钮:暂停/恢复/取消(pending 排队/卡住时也提供取消,防止无法中止)
+            // 控制按钮:取消(pending 排队/卡住时也提供取消,防止无法中止)
             if (transfer.status == TransferStatus.transferring ||
-                transfer.status == TransferStatus.paused ||
-                transfer.status == TransferStatus.pending) ...[
-              if (transfer.status == TransferStatus.transferring ||
-                  transfer.status == TransferStatus.paused)
-                IconButton(
-                  icon: Icon(
-                    transfer.status == TransferStatus.paused
-                        ? Icons.play_arrow
-                        : Icons.pause,
-                    size: 20,
-                  ),
-                  tooltip: transfer.status == TransferStatus.paused
-                      ? AppLocalizations.of(context).transferResume
-                      : AppLocalizations.of(context).transferPause,
-                  onPressed: transfer.status == TransferStatus.paused
-                      ? onResume
-                      : onPause,
-                ),
+                transfer.status == TransferStatus.pending)
               IconButton(
                 icon: const Icon(Icons.close, size: 20),
                 tooltip: AppLocalizations.of(context).cancel,
                 onPressed: onCancel,
               ),
-            ],
           ],
         ),
       ),
@@ -143,8 +120,6 @@ class FileTransferTile extends StatelessWidget {
         return loc.transferPending;
       case TransferStatus.transferring:
         return loc.transferTransferring;
-      case TransferStatus.paused:
-        return loc.transferPaused;
       case TransferStatus.done:
         return loc.transferDone;
       case TransferStatus.failed:
@@ -161,7 +136,6 @@ class FileTransferTile extends StatelessWidget {
       case TransferStatus.failed:
         return colorScheme.error;
       case TransferStatus.cancelled:
-      case TransferStatus.paused:
         return colorScheme.onSurfaceVariant;
       default:
         return colorScheme.primary;

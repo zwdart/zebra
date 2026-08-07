@@ -851,7 +851,7 @@ class _ChatScreenState extends State<ChatScreen> {
               );
             },
           ),
-          // 当前文件传输列表(批量/暂停/恢复/取消,仅当前会话的传输)
+          // 当前文件传输列表(批量/取消,仅当前会话的传输)
           Consumer<ChatProvider>(
             builder: (ctx, provider, _) {
               final active = provider
@@ -859,8 +859,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   .where((t) {
                     final s = t.status;
                     return s == TransferStatus.pending ||
-                        s == TransferStatus.transferring ||
-                        s == TransferStatus.paused;
+                        s == TransferStatus.transferring;
                   })
                   .toList();
               if (active.isEmpty) return const SizedBox.shrink();
@@ -874,8 +873,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     final s = active[i];
                     return FileTransferTile(
                       session: s,
-                      onPause: () => provider.pauseTransfer(s.transferId),
-                      onResume: () => provider.resumeTransfer(s.transferId),
                       onCancel: () => provider.cancelTransfer(s.transferId),
                     );
                   },

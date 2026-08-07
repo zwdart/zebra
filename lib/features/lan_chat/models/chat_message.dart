@@ -8,7 +8,7 @@ enum SendStatus { sending, sent, failed }
 enum TransferDirection { send, receive }
 
 /// 文件传输状态
-enum TransferStatus { pending, transferring, paused, done, failed, cancelled }
+enum TransferStatus { pending, transferring, done, failed, cancelled }
 
 /// 聊天消息
 class ChatMessage {
