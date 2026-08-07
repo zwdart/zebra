@@ -13,6 +13,7 @@ import '../widgets/message_bubble.dart';
 import '../widgets/file_transfer_tile.dart';
 import '../services/receive_directory.dart';
 import '../services/native_file_stream.dart';
+import '../../../widgets/custom_title_bar.dart';
 import '../../../widgets/window_drag_region.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -621,167 +622,189 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// 构建标题栏标题(多选模式显示已选数量,普通模式显示头像+用户名+IP+连接状态)
+  Widget _buildTitleWidget(ColorScheme colorScheme) {
+    if (_selectionMode) {
+      return Text(
+        AppLocalizations.of(context).selectedCountValue(_selectedIds.length),
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      );
+    }
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: colorScheme.primaryContainer,
+          child: Text(
+            widget.peerName.isNotEmpty
+                ? widget.peerName[0].toUpperCase()
+                : '?',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: colorScheme.onPrimaryContainer,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 用户名过长时省略号截断,避免挤占右上角按钮区域
+              Text(
+                widget.peerName,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      widget.peerIp,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  _buildConnectionStatus(colorScheme),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 构建标题栏操作按钮(多选模式:合并分享/删除;普通模式:更多菜单)
+  List<Widget> _buildAppBarActions(ColorScheme colorScheme) {
+    if (_selectionMode) {
+      return [
+        // 合并分享:文字合并为一段文本,文件附带真实路径
+        TextButton.icon(
+          onPressed: _selectedIds.isEmpty ? null : () => _mergeShareSelected(),
+          icon: const Icon(Icons.ios_share, size: 18),
+          label: Text(AppLocalizations.of(context).mergeShare),
+        ),
+        TextButton.icon(
+          onPressed: _selectedIds.isEmpty
+              ? null
+              : () => _confirmDeleteSelected(),
+          icon: Icon(Icons.delete_outline, size: 18, color: colorScheme.error),
+          label: Text(
+            AppLocalizations.of(context).delete,
+            style: TextStyle(color: colorScheme.error),
+          ),
+        ),
+      ];
+    }
+    return [
+      PopupMenuButton<String>(
+        tooltip: AppLocalizations.of(context).more,
+        onSelected: (value) {
+          switch (value) {
+            case 'details':
+              _showDetailsDialog();
+            case 'folder':
+              _openReceivedFolder();
+            case 'reconnect':
+              _ensureConnected();
+          }
+        },
+        itemBuilder: (ctx) => [
+          PopupMenuItem(
+            value: 'details',
+            child: ListTile(
+              leading: const Icon(Icons.info_outline, size: 18),
+              title: Text(
+                AppLocalizations.of(ctx).viewDetail,
+                style: const TextStyle(fontSize: 14),
+              ),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+          PopupMenuItem(
+            value: 'folder',
+            child: ListTile(
+              leading: const Icon(Icons.folder_open, size: 18),
+              title: Text(
+                AppLocalizations.of(ctx).openFolder,
+                style: const TextStyle(fontSize: 14),
+              ),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+          if (!_isConnected)
+            PopupMenuItem(
+              value: 'reconnect',
+              enabled: !_isConnecting,
+              child: ListTile(
+                leading: Icon(Icons.wifi_off, size: 18),
+                title: Text(
+                  _isConnecting
+                      ? AppLocalizations.of(ctx).connecting
+                      : AppLocalizations.of(ctx).reconnect,
+                  style: const TextStyle(fontSize: 14),
+                ),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+        ],
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: WindowDragRegion(
-        child: AppBar(
-          // 压缩标题与返回按钮的默认间距,给长用户名留更多空间
-          titleSpacing: _selectionMode ? 4 : 8,
-          // 多选模式下:leading 变为关闭按钮,标题变为已选数量
-          leading: _selectionMode
-              ? IconButton(
-                  icon: const Icon(Icons.close),
-                  tooltip: AppLocalizations.of(context).cancel,
-                  onPressed: _exitSelectionMode,
-                )
-              : null,
-          title: _selectionMode
-              ? Text(
-                  AppLocalizations.of(context)
-                      .selectedCountValue(_selectedIds.length),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                )
-              : Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundColor: colorScheme.primaryContainer,
-                      child: Text(
-                        widget.peerName.isNotEmpty
-                            ? widget.peerName[0].toUpperCase()
-                            : '?',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 用户名过长时省略号截断,避免挤占右上角按钮区域
-                          Text(
-                            widget.peerName,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  widget.peerIp,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              _buildConnectionStatus(colorScheme),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-          actions: _selectionMode
-              ? [
-                  // 合并分享:文字合并为一段文本,文件附带真实路径
-                  TextButton.icon(
-                    onPressed: _selectedIds.isEmpty
-                        ? null
-                        : () => _mergeShareSelected(),
-                    icon: const Icon(Icons.ios_share, size: 18),
-                    label: Text(AppLocalizations.of(context).mergeShare),
-                  ),
-                  TextButton.icon(
-                    onPressed: _selectedIds.isEmpty
-                        ? null
-                        : () => _confirmDeleteSelected(),
-                    icon: Icon(Icons.delete_outline, size: 18, color: colorScheme.error),
-                    label: Text(
-                      AppLocalizations.of(context).delete,
-                      style: TextStyle(color: colorScheme.error),
-                    ),
-                  ),
-                ]
-              : [
-                  PopupMenuButton<String>(
-                    tooltip: AppLocalizations.of(context).more,
-                    onSelected: (value) {
-                      switch (value) {
-                        case 'details':
-                          _showDetailsDialog();
-                        case 'folder':
-                          _openReceivedFolder();
-                        case 'reconnect':
-                          _ensureConnected();
-                      }
-                    },
-                    itemBuilder: (ctx) => [
-                      PopupMenuItem(
-                        value: 'details',
-                        child: ListTile(
-                          leading: const Icon(Icons.info_outline, size: 18),
-                          title: Text(
-                            AppLocalizations.of(ctx).viewDetail,
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'folder',
-                        child: ListTile(
-                          leading: const Icon(Icons.folder_open, size: 18),
-                          title: Text(
-                            AppLocalizations.of(ctx).openFolder,
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      if (!_isConnected)
-                        PopupMenuItem(
-                          value: 'reconnect',
-                          enabled: !_isConnecting,
-                          child: ListTile(
-                            leading: Icon(Icons.wifi_off, size: 18),
-                            title: Text(
-                              _isConnecting
-                                  ? AppLocalizations.of(ctx).connecting
-                                  : AppLocalizations.of(ctx).reconnect,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-        ),
-      ),
-      body: DropTarget(
+      appBar: CustomTitleBar.isDesktop
+          ? null
+          : WindowDragRegion(
+              child: AppBar(
+                // 压缩标题与返回按钮的默认间距,给长用户名留更多空间
+                titleSpacing: _selectionMode ? 4 : 8,
+                // 多选模式下:leading 变为关闭按钮,标题变为已选数量
+                leading: _selectionMode
+                    ? IconButton(
+                        icon: const Icon(Icons.close),
+                        tooltip: AppLocalizations.of(context).cancel,
+                        onPressed: _exitSelectionMode,
+                      )
+                    : null,
+                title: _buildTitleWidget(colorScheme),
+                actions: _buildAppBarActions(colorScheme),
+              ),
+            ),
+      body: Column(
+        children: [
+          // 桌面端:自定义标题栏(含最小化/最大化/关闭按钮),支持返回
+          if (CustomTitleBar.isDesktop)
+            CustomTitleBar(
+              titleWidget: _buildTitleWidget(colorScheme),
+              showBackButton: true,
+              onBack: () => Navigator.of(context).maybePop(),
+              actions: _buildAppBarActions(colorScheme),
+            ),
+          Expanded(
+            child: DropTarget(
         onDragEntered: (_) {
           if (mounted) setState(() => _isDragOver = true);
         },
@@ -993,6 +1016,9 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
           ],
         ),
+        ),
+      ),
+      ],
       ),
     );
   }

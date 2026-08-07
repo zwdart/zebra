@@ -7,6 +7,7 @@ import '../providers/chat_provider.dart';
 import '../repositories/chat_repository.dart';
 import '../services/lan_chat_settings.dart';
 import '../widgets/device_tile.dart';
+import '../../../widgets/custom_title_bar.dart';
 import '../../../widgets/window_drag_region.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../utils/relative_time.dart';
@@ -281,82 +282,113 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final isDesktop = CustomTitleBar.isDesktop;
     return Scaffold(
-      appBar: WindowDragRegion(
-        child: AppBar(
-          title: Text(AppLocalizations.of(context).lanChat),
-          bottom: TabBar(
-            controller: _tabController,
-            tabs: [
-              // 图标放在文字前面,避免竖排堆叠占用过多高度
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.computer, size: 18),
-                    const SizedBox(width: 4),
-                    Text(AppLocalizations.of(context).deviceList),
-                  ],
-                ),
+      appBar: isDesktop
+          ? null
+          : WindowDragRegion(
+              child: AppBar(
+                title: Text(loc.lanChat),
+                bottom: _buildTabBar(loc),
+                actions: _buildAppBarActions(),
               ),
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.chat, size: 18),
-                    const SizedBox(width: 4),
-                    Text(AppLocalizations.of(context).chatHistory),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.info_outline),
-              tooltip: AppLocalizations.of(context).localInfo,
-              onPressed: () => _showLocalInfo(context),
             ),
-            Consumer<LanDiscoveryProvider>(
-              builder: (ctx, provider, _) {
-                return IconButton(
-                  icon: Icon(provider.isRunning ? Icons.wifi : Icons.wifi_off),
-                  tooltip: provider.isRunning
-                      ? AppLocalizations.of(ctx).disableDiscovery
-                      : AppLocalizations.of(ctx).enableDiscovery,
-                  onPressed: () async {
-                    if (provider.isRunning) {
-                      provider.stop();
-                      return;
-                    }
-                    await provider.start();
-                    if (!ctx.mounted) return;
-                    if (provider.error != null) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            AppLocalizations.of(
-                              ctx,
-                            ).discoveryStartFailedValue(provider.error!),
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                );
-              },
+      body: Column(
+        children: [
+          // 桌面端:自定义标题栏(含最小化/最大化/关闭按钮)+ TabBar
+          if (isDesktop) ...[
+            CustomTitleBar(
+              title: loc.lanChat,
+              actions: _buildAppBarActions(),
+            ),
+            Material(
+              color: Theme.of(context).colorScheme.surface,
+              child: _buildTabBar(loc),
             ),
           ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildDeviceList(),
-          Consumer<ChatProvider>(builder: (ctx, _, __) => _buildChatHistory()),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildDeviceList(),
+                Consumer<ChatProvider>(
+                  builder: (ctx, _, __) => _buildChatHistory(),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  PreferredSizeWidget _buildTabBar(AppLocalizations loc) {
+    return TabBar(
+      controller: _tabController,
+      tabs: [
+        // 图标放在文字前面,避免竖排堆叠占用过多高度
+        Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.computer, size: 18),
+              const SizedBox(width: 4),
+              Text(loc.deviceList),
+            ],
+          ),
+        ),
+        Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.chat, size: 18),
+              const SizedBox(width: 4),
+              Text(loc.chatHistory),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildAppBarActions() {
+    return [
+      IconButton(
+        icon: const Icon(Icons.info_outline),
+        tooltip: AppLocalizations.of(context).localInfo,
+        onPressed: () => _showLocalInfo(context),
+      ),
+      Consumer<LanDiscoveryProvider>(
+        builder: (ctx, provider, _) {
+          return IconButton(
+            icon: Icon(provider.isRunning ? Icons.wifi : Icons.wifi_off),
+            tooltip: provider.isRunning
+                ? AppLocalizations.of(ctx).disableDiscovery
+                : AppLocalizations.of(ctx).enableDiscovery,
+            onPressed: () async {
+              if (provider.isRunning) {
+                provider.stop();
+                return;
+              }
+              await provider.start();
+              if (!ctx.mounted) return;
+              if (provider.error != null) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      AppLocalizations.of(
+                        ctx,
+                      ).discoveryStartFailedValue(provider.error!),
+                    ),
+                  ),
+                );
+              }
+            },
+          );
+        },
+      ),
+    ];
   }
 
   Widget _buildDeviceList() {

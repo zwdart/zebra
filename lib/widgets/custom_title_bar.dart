@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 
 class CustomTitleBar extends StatelessWidget {
   final String? title;
+  final Widget? titleWidget;
   final List<Widget>? actions;
   final bool showBackButton;
   final VoidCallback? onBack;
@@ -16,6 +17,7 @@ class CustomTitleBar extends StatelessWidget {
   const CustomTitleBar({
     super.key,
     this.title,
+    this.titleWidget,
     this.actions,
     this.showBackButton = false,
     this.onBack,
@@ -72,15 +74,16 @@ class CustomTitleBar extends StatelessWidget {
               ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                title ?? 'Zebra SSH',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: theme.colorScheme.onSurface,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: titleWidget ??
+                  Text(
+                    title ?? 'Zebra SSH',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
             ),
             if (actions != null) ...actions!,
             const SizedBox(width: 8),
