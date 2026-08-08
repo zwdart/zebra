@@ -13,6 +13,7 @@ import '../repositories/chat_repository.dart';
 import '../services/chat_server.dart';
 import '../services/chat_client.dart';
 import '../services/receive_directory.dart';
+import '../services/screen_keep_on.dart';
 
 /// 聊天状态管理
 class ChatProvider extends ChangeNotifier {
@@ -54,6 +55,8 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, DateTime> _sendStartedAt = {}; // transferId -> 开始发送时间
   final Map<String, DateTime> _sendLastProgressAt = {}; // transferId -> 最近产出进度时间
   final Map<String, DateTime> _receiveLastProgressAt = {}; // transferId -> 最近落盘/缓冲时间
+  // 屏幕常亮持有标志:发送队列有任务时点亮,全部结束后熄灭
+  bool _screenOnHeld = false;
   static const Duration _sendWatchdogInterval = Duration(seconds: 5);
   static const Duration _sendWatchdogTimeout = Duration(seconds: 45); // 从未产出进度
   static const Duration _transferStallTimeout = Duration(seconds: 45); // 传输中零进展
@@ -333,6 +336,26 @@ class ChatProvider extends ChangeNotifier {
         info.fileSize,
       );
     }
+    // 队列状态可能变化(新任务/任务结束),同步屏幕常亮状态
+    _syncScreenOn();
+  }
+
+  /// 按发送活跃数/队列长度/接收会话同步屏幕常亮(幂等):
+  /// 有排队/正在发送/正在接收 → 点亮;全部结束后 → 熄灭,恢复系统熄屏策略。
+  void _syncScreenOn() {
+    // 接收中:存在 pending/transferring 状态的接收会话
+    final receiving = _fileTransfers.values.any((t) =>
+        t.direction == TransferDirection.receive &&
+        (t.status == TransferStatus.pending ||
+            t.status == TransferStatus.transferring));
+    final need = _activeSends > 0 || _sendQueue.isNotEmpty || receiving;
+    if (need == _screenOnHeld) return;
+    _screenOnHeld = need;
+    if (need) {
+      ScreenKeepOn.acquire();
+    } else {
+      ScreenKeepOn.release();
+    }
   }
 
   /// 所有传输会话(供传输列表 UI 使用)
@@ -376,6 +399,7 @@ class ChatProvider extends ChangeNotifier {
       // 保留 target 供重试按钮使用;offset 归 0 让重试从头发送
       session.offset = 0;
     }
+    _syncScreenOn();
     notifyListeners();
   }
 
@@ -811,6 +835,7 @@ class ChatProvider extends ChangeNotifier {
         _cleanupReceivePart(transferId);
         break;
     }
+    _syncScreenOn();
     notifyListeners();
   }
 
@@ -876,6 +901,8 @@ class ChatProvider extends ChangeNotifier {
       _prepareStartedAt[transferId] = DateTime.now();
       _prepareReceiveFile(transferId, fileName, fileSize);
     }
+    // 接收开始,同步屏幕常亮(接收期间防止熄屏挂起)
+    _syncScreenOn();
   }
 
   /// 向发送方回复 file_ready(按接收通道选择 server/client)。
@@ -934,6 +961,7 @@ class ChatProvider extends ChangeNotifier {
         _updateSendStatus(_sendTargets[transferId]?.id ?? '', msgId, SendStatus.failed);
       }
     }
+    _syncScreenOn();
     notifyListeners();
   }
 
@@ -987,6 +1015,7 @@ class ChatProvider extends ChangeNotifier {
         _sendFileErrorToPeer(transferId, peerId, '接收端准备失败: $e',
             viaServer: viaServer);
       }
+      _syncScreenOn();
     }
   }
 
@@ -1087,6 +1116,7 @@ class ChatProvider extends ChangeNotifier {
       _sendFileErrorToPeer(transferId, peerId, '接收缓冲溢出,已中止',
           viaServer: viaServer);
     }
+    _syncScreenOn();
   }
 
   /// 顺序写入 .part(同一 transfer 串行,防止乱序)
@@ -1199,6 +1229,7 @@ class ChatProvider extends ChangeNotifier {
         _sendFileErrorToPeer(transferId, peerId, e.toString(), viaServer: viaServer);
       }
       notifyListeners();
+      _syncScreenOn();
       return;
     }
 
@@ -1244,6 +1275,7 @@ class ChatProvider extends ChangeNotifier {
         errorMessage: e.toString(),
       );
     }
+    _syncScreenOn();
     notifyListeners();
   }
 
@@ -1346,6 +1378,11 @@ class ChatProvider extends ChangeNotifier {
   @override
   void dispose() {
     _sendWatchdogTimer?.cancel();
+    // 兜底熄灭屏幕常亮(传输未正常结束时防止屏幕一直亮着)
+    if (_screenOnHeld) {
+      _screenOnHeld = false;
+      ScreenKeepOn.release();
+    }
     stopServer();
     for (final client in _clients.values) {
       client.dispose();

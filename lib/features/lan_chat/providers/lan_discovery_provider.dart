@@ -86,7 +86,7 @@ class LanDiscoveryProvider extends ChangeNotifier {
         _devices.remove(key);
         _devices[key] = device;
       }
-      // 每次心跳都重建排序,保证"最近活跃的设备靠前"
+      // 每次心跳都重建排序(在线/离线分组固定、组内按 IP 序,结果幂等不跳变)
       _rebuildList();
     } else {
       // 同 ID 但 IP/端口变化(如 DHCP 换 IP):更新原条目,避免新旧两条并存
@@ -141,10 +141,36 @@ class LanDiscoveryProvider extends ChangeNotifier {
       ..clear()
       ..addAll(_devices.values);
     _deviceList.sort((a, b) {
-      // 在线设备优先
+      // 在线/离线两段固定:在线设备优先
       if (a.isOnline != b.isOnline) return a.isOnline ? -1 : 1;
-      return b.lastSeen.compareTo(a.lastSeen);
+      // 组内按 IP 数字序(逐段比较,避免 1.10 < 1.9 的字符串坑)
+      final ipCmp = _compareIp(a.ip, b.ip);
+      if (ipCmp != 0) return ipCmp;
+      return a.port.compareTo(b.port);
     });
+  }
+
+  /// 按 IPv4 四段数字序比较 IP;解析失败时退化为字符串比较。
+  static int _compareIp(String a, String b) {
+    final pa = _parseIp(a);
+    final pb = _parseIp(b);
+    if (pa == null || pb == null) return a.compareTo(b);
+    for (var i = 0; i < 4; i++) {
+      if (pa[i] != pb[i]) return pa[i] - pb[i];
+    }
+    return 0;
+  }
+
+  static List<int>? _parseIp(String ip) {
+    final parts = ip.split('.');
+    if (parts.length != 4) return null;
+    final nums = <int>[];
+    for (final p in parts) {
+      final n = int.tryParse(p);
+      if (n == null || n < 0 || n > 255) return null;
+      nums.add(n);
+    }
+    return nums;
   }
 
   @override

@@ -30,6 +30,24 @@ import UIKit
     channel.setMethodCallHandler { [weak self] call, result in
       self?.handle(call, result: result)
     }
+
+    // 屏幕常亮通道:传输期间禁止自动锁屏(isIdleTimerEnabled = false),
+    // 防止锁屏后网络挂起导致文件传输停滞(与 Android FLAG_KEEP_SCREEN_ON 对应)。
+    let screenChannel = FlutterMethodChannel(
+      name: "xin.dart.zebra/screen",
+      binaryMessenger: registrar.messenger()
+    )
+    screenChannel.setMethodCallHandler { call, result in
+      guard call.method == "setKeepScreenOn",
+            let args = call.arguments as? [String: Any],
+            let on = args["on"] as? Bool else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      // on=true → 禁止自动锁屏(保持清醒);on=false → 恢复系统策略
+      UIApplication.shared.isIdleTimerEnabled = !on
+      result(true)
+    }
   }
 
   private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {

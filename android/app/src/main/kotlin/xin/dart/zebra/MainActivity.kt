@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -26,6 +27,8 @@ class MainActivity : FlutterActivity() {
 
     // ---- 发送侧 SAF 直读流(不复制到缓存,直接读 content:// 源文件)----
     private val fileChannelName = "xin.dart.zebra/native_file"
+    // 屏幕常亮通道(传输期间保持屏幕常亮,防熄屏挂起)
+    private val screenChannelName = "xin.dart.zebra/screen"
     private val ioExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var nextHandle = 1
@@ -82,6 +85,26 @@ class MainActivity : FlutterActivity() {
                     "readChunk" -> readChunk(call, result)
                     "closeRead" -> closeRead(call, result)
                     "releaseAll" -> releaseAll(result)
+                    else -> result.notImplemented()
+                }
+            }
+
+        // 屏幕常亮通道:传输期间设置/清除 FLAG_KEEP_SCREEN_ON(无权限要求),
+        // 防止熄屏后进程挂起导致文件传输停滞(见 ChatProvider 传输看门狗)。
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, screenChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "setKeepScreenOn" -> {
+                        val on = call.argument<Boolean>("on") ?: false
+                        runOnUiThread {
+                            if (on) {
+                                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            } else {
+                                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            }
+                        }
+                        result.success(true)
+                    }
                     else -> result.notImplemented()
                 }
             }
