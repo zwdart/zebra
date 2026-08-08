@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import '../models/chat_message.dart';
+import 'lan_chat_settings.dart';
 
 /// 帧类型标记
 const int kJsonMarker = 0x4A; // 'J'
@@ -125,7 +126,7 @@ class ChatServer {
   ///
   /// 优先尝试 [port] 起的连续候选端口,全部被占用时才回退到系统随机空闲端口,
   /// 避免端口冲突时聊天端口完全不可预期(真实端口会随心跳广播给对方)。
-  Future<int> start({int port = 19423}) async {
+  Future<int> start({int port = LanChatSettings.defaultChatPort}) async {
     if (_isRunning) return port;
 
     for (var candidate = port; candidate < port + _portCandidateCount; candidate++) {

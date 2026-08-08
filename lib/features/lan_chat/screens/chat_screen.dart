@@ -12,6 +12,7 @@ import '../models/chat_message.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/file_transfer_tile.dart';
 import '../services/receive_directory.dart';
+import '../services/lan_chat_settings.dart';
 import '../services/native_file_stream.dart';
 import '../../../widgets/custom_title_bar.dart';
 import '../../../widgets/window_drag_region.dart';
@@ -29,7 +30,7 @@ class ChatScreen extends StatefulWidget {
     required this.peerId,
     required this.peerName,
     required this.peerIp,
-    this.peerPort = 19423,
+    this.peerPort = LanChatSettings.defaultChatPort,
   });
 
   @override

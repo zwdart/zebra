@@ -8,7 +8,7 @@ import 'lan_chat_settings.dart';
 /// UDP 广播/组播发现服务
 /// 每 3 秒发送心跳广播，同时监听其他设备的心跳
 class LanDiscoveryService {
-  int _tcpPort = 19423;
+  int _tcpPort = LanChatSettings.defaultChatPort;
   // 当前生效的发现端口(绑定/广播用,默认或用户手动配置)
   int _discoveryPort = LanChatSettings.defaultDiscoveryPort;
   static const Duration _heartbeatInterval = Duration(seconds: 3);

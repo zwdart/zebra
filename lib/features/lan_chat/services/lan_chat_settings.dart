@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// 说明:
 /// - 发现端口(UDP 广播)是"双方约定一致"的端口,默认 19422;
 ///   允许手动配置用于绕开端口占用,但非默认值会提示用户可能搜不到其他客户端。
-/// - 聊天端口(TCP)真实端口会随心跳广播给对方,默认 19423,无需两端一致。
+/// - 聊天端口(TCP)真实端口会随心跳广播给对方,默认 22066,无需两端一致。
 class LanChatSettings {
   LanChatSettings._();
 
@@ -13,7 +13,7 @@ class LanChatSettings {
   static const int defaultDiscoveryPort = 19422;
 
   /// 默认聊天端口(TCP,真实端口随心跳广播给对方)
-  static const int defaultChatPort = 19423;
+  static const int defaultChatPort = 22066;
 
   static const _discoveryPortKey = 'lan_chat_discovery_port';
   static const _warningDateKey = 'lan_chat_discovery_warning_date';

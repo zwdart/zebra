@@ -1,3 +1,5 @@
+import '../services/lan_chat_settings.dart';
+
 /// 局域网中发现的设备信息
 class LanDevice {
   final String id;
@@ -11,7 +13,7 @@ class LanDevice {
     required this.id,
     required this.name,
     required this.ip,
-    this.port = 19423,
+    this.port = LanChatSettings.defaultChatPort,
     DateTime? lastSeen,
     this.isOnline = true,
   }) : lastSeen = lastSeen ?? DateTime.now();
@@ -28,7 +30,7 @@ class LanDevice {
       id: json['deviceId'] as String? ?? '',
       name: json['name'] as String? ?? 'Unknown',
       ip: ip,
-      port: json['port'] as int? ?? 19423,
+      port: json['port'] as int? ?? LanChatSettings.defaultChatPort,
     );
   }
 

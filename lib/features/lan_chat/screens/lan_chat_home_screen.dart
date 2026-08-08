@@ -526,7 +526,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
             .where((d) => d.id == peerId)
             .toList();
         final ip = device.isNotEmpty ? device.first.ip : '';
-        final port = device.isNotEmpty ? device.first.port : 19423;
+        final port = device.isNotEmpty ? device.first.port : LanChatSettings.defaultChatPort;
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),

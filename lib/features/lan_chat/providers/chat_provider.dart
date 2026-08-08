@@ -12,6 +12,7 @@ import '../models/lan_device.dart';
 import '../repositories/chat_repository.dart';
 import '../services/chat_server.dart';
 import '../services/chat_client.dart';
+import '../services/lan_chat_settings.dart';
 import '../services/receive_directory.dart';
 import '../services/screen_keep_on.dart';
 
@@ -114,7 +115,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   /// 启动 TCP 服务器
-  Future<int> startServer({int port = 19423}) async {
+  Future<int> startServer({int port = LanChatSettings.defaultChatPort}) async {
     if (_isServerRunning) return _server.port;
 
     _server.onMessage = (msg) {
