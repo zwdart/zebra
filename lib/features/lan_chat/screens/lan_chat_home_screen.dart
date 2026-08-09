@@ -15,7 +15,10 @@ import 'chat_screen.dart';
 
 /// 本地聊天首页：设备列表 + 会话列表
 class LanChatHomeScreen extends StatefulWidget {
-  const LanChatHomeScreen({super.key});
+  /// 作为主 Tab 嵌入 shell 时无需返回(默认);从设置页 push 进入时才需要
+  final bool showBackButton;
+
+  const LanChatHomeScreen({super.key, this.showBackButton = false});
 
   @override
   State<LanChatHomeScreen> createState() => _LanChatHomeScreenState();
@@ -300,6 +303,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
           if (isDesktop) ...[
             CustomTitleBar(
               title: loc.lanChat,
+              showBackButton: widget.showBackButton,
               actions: _buildAppBarActions(),
             ),
             Material(

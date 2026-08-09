@@ -8,7 +8,10 @@ import '../l10n/app_localizations.dart';
 import 'rss/rss_explore_screen.dart';
 
 class DiaryScreen extends StatefulWidget {
-  const DiaryScreen({super.key});
+  /// 作为主 Tab 嵌入 shell 时无需返回(默认);从设置页 push 进入时才需要
+  final bool showBackButton;
+
+  const DiaryScreen({super.key, this.showBackButton = false});
 
   @override
   State<DiaryScreen> createState() => _DiaryScreenState();
@@ -203,7 +206,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
           if (CustomTitleBar.isDesktop)
             CustomTitleBar(
               title: loc.diary,
-              showBackButton: false,
+              showBackButton: widget.showBackButton,
               actions: [
                 IconButton(
                   icon: const Icon(Icons.add, size: 18),

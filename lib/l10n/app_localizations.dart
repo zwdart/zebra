@@ -609,6 +609,13 @@ class AppLocalizations {
   // LAN Chat
   String get chat => translate('chat');
   String get lanChat => translate('lanChat');
+  String get lanChatSubtitle => translate('lanChatSubtitle');
+  String get discoveryPort => translate('discoveryPort');
+  String get discoveryPortSubtitle => translate('discoveryPortSubtitle');
+  String get discoveryPortHint => translate('discoveryPortHint');
+  String discoveryPortDescriptionValue(int defaultValue) =>
+      translate('discoveryPortDescription').replaceAll('{default}', '$defaultValue');
+  String get discoveryPortInvalid => translate('discoveryPortInvalid');
   String get chatHistory => translate('chatHistory');
   String get deviceList => translate('deviceList');
   String get viewDetail => translate('viewDetail');
@@ -1271,6 +1278,12 @@ class AppLocalizations {
     // LAN Chat
     'chat': 'Chat',
     'lanChat': 'LAN Chat',
+    'lanChatSubtitle': 'Discover devices, P2P chat and file transfer',
+    'discoveryPort': 'Discovery Port',
+    'discoveryPortSubtitle': 'Port for device discovery; must be the same on all devices',
+    'discoveryPortHint': 'Leave blank to restore default port',
+    'discoveryPortDescription': 'Default port {default}, used to search for LAN devices. All devices must use the same port.',
+    'discoveryPortInvalid': 'Please enter a port number between 1 and 65535',
     'chatHistory': 'Chat History',
     'deviceList': 'Device List',
     'viewDetail': 'View Details',
@@ -1916,6 +1929,12 @@ class AppLocalizations {
     // LAN Chat
     'chat': '聊天',
     'lanChat': '本地聊天',
+    'lanChatSubtitle': '发现设备、P2P 聊天与文件传输',
+    'discoveryPort': '发现端口',
+    'discoveryPortSubtitle': '搜索设备用端口,需所有设备一致',
+    'discoveryPortHint': '留空恢复默认端口',
+    'discoveryPortDescription': '默认端口 {default},用于搜索局域网设备,所有设备需保持一致。',
+    'discoveryPortInvalid': '请输入 1~65535 之间的端口号',
     'chatHistory': '聊天记录',
     'deviceList': '设备列表',
     'viewDetail': '查看详情',
