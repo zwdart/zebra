@@ -15,14 +15,15 @@ const int kFileChunkV2Marker = 0x47; // 'G' 文件数据块(自带 transferId,�
 /// 大文件接收时数据连续到达,若一次性解析完缓冲里所有帧,
 /// 主 isolate 会被持续占满,接收端 UI 事件永远得不到执行 → 卡死;
 /// 超过该帧数后让出事件循环(Timer.run),分批继续解析。
-/// E方案: 32 → 16,单批处理量减半,让出事件循环更频繁,
-/// 配合 512KB 发送块,每批约 8MB,主 isolate 单次占用时间更短。
-const int kMaxFramesPerBatch = 16;
+/// E方案: 32 → 16;块 512KB→1MB 后 16 → 8,
+/// 单批处理量保持约 8MB,主 isolate 单次占用时间更短。
+const int kMaxFramesPerBatch = 8;
 
 /// 发送端每积累多少块才 flush 一次(替代逐块 flush):
 /// 减少系统调用次数,吞吐提升;接收端已有背压(pause/resume),
 /// 发送速率仍由 TCP 窗口与接收端消费自然节流。
-const int kChunksPerFlush = 16;
+/// 块 512KB→1MB 后 16 → 8,保持每次 flush 约 8MB。
+const int kChunksPerFlush = 8;
 
 /// 增量 MD5 计算器(crypto 3.x 移除 Md5 类,改用 startChunkedConversion)
 /// 发送/接收侧共用:逐块 add,结束时 close 返回十六进制 MD5。
@@ -319,21 +320,26 @@ class ChatServer {
       }
 
       if (readStream != null) {
-        // 流式源:直接逐块消费
-        await for (final chunk in readStream) {
+        // 流式源:双缓冲流水线——预取下一块的同时发送当前块,
+        // 掩盖 MethodChannel IPC 往返延迟(串行模式每块都要等 IPC 返回)
+        final it = StreamIterator<List<int>>(readStream);
+        var pending = it.moveNext(); // 预取第一块
+        while (await pending) {
+          final chunk = it.current;
+          pending = it.moveNext(); // 立即发起下一块预取(与当前块发送并行)
           md5Acc.add(chunk);
           final p = await sendChunk(chunk);
           if (p == null) return;
           yield p;
         }
       } else {
-        // 文件路径:RandomAccessFile 按 512KB 大块读取
+        // 文件路径:RandomAccessFile 按 1MB 大块读取
         final raf = await File(filePath ?? '').open();
         try {
           var remaining = totalBytes;
-          // 512KB 单帧 + kMaxFramesPerBatch=16 每批约 8MB,
+          // 1MB 单帧 + kMaxFramesPerBatch=8 每批约 8MB,
           // 接收端主 isolate 单次占用更短,UI 更流畅
-          const chunkSize = 512 * 1024;
+          const chunkSize = 1024 * 1024;
           while (remaining > 0) {
             final readLen = remaining < chunkSize ? remaining : chunkSize;
             final chunk = await raf.read(readLen);

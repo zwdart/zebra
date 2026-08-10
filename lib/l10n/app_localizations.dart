@@ -719,6 +719,9 @@ class AppLocalizations {
   String get reconnecting => translate('reconnecting');
   String get memberDetails => translate('memberDetails');
   String get sendMessage => translate('sendMessage');
+  String get createRoomLeaveConfirm => translate('createRoomLeaveConfirm');
+  String get joinRoomLeaveConfirm => translate('joinRoomLeaveConfirm');
+  String get hostJoinOthersHint => translate('hostJoinOthersHint');
   String get roomFull => translate('roomFull');
   String get roomNotExist => translate('roomNotExist');
   String get cannotConnectHost => translate('cannotConnectHost');
@@ -1394,6 +1397,9 @@ class AppLocalizations {
     'reconnecting': 'Connection lost, reconnecting...',
     'memberDetails': 'Member Details',
     'sendMessage': 'Send Message',
+    'createRoomLeaveConfirm': 'Creating a new room will leave the current chat room. Continue?',
+    'joinRoomLeaveConfirm': 'Joining another room will leave the current chat room. Continue?',
+    'hostJoinOthersHint': 'You are the host. Disband the current room before joining another.',
     'roomFull': 'Room is full',
     'roomNotExist': 'Room not found or already dissolved',
     'cannotConnectHost': 'Cannot connect to host. Make sure the host is online.',
@@ -2067,6 +2073,9 @@ class AppLocalizations {
     'reconnecting': '连接已断开,正在重连...',
     'memberDetails': '成员详情',
     'sendMessage': '发消息',
+    'createRoomLeaveConfirm': '创建新房间将离开当前聊天室,确定继续吗?',
+    'joinRoomLeaveConfirm': '加入其他房间将离开当前聊天室,确定继续吗?',
+    'hostJoinOthersHint': '你是房主,请先解散当前房间再加入其他房间',
     'roomFull': '房间人数已满',
     'roomNotExist': '房间不存在或已解散',
     'cannotConnectHost': '无法连接房主,请确认房主在线',

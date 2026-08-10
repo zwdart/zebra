@@ -183,21 +183,26 @@ class ChatClient {
       }
 
       if (readStream != null) {
-        // 流式源:直接逐块消费
-        await for (final chunk in readStream) {
+        // 流式源:双缓冲流水线——预取下一块的同时发送当前块,
+        // 掩盖 MethodChannel IPC 往返延迟(串行模式每块都要等 IPC 返回)
+        final it = StreamIterator<List<int>>(readStream);
+        var pending = it.moveNext(); // 预取第一块
+        while (await pending) {
+          final chunk = it.current;
+          pending = it.moveNext(); // 立即发起下一块预取(与当前块发送并行)
           md5Acc.add(chunk);
           final p = await sendChunk(chunk);
           if (p == null) return;
           yield p;
         }
       } else {
-        // 文件路径:RandomAccessFile 按 512KB 大块读取
+        // 文件路径:RandomAccessFile 按 1MB 大块读取
         final raf = await File(filePath ?? '').open();
         try {
           var remaining = totalBytes;
-          // 512KB 单帧 + kMaxFramesPerBatch=16 每批约 8MB,
+          // 1MB 单帧 + kMaxFramesPerBatch=8 每批约 8MB,
           // 接收端主 isolate 单次占用更短,UI 更流畅
-          const chunkSize = 512 * 1024;
+          const chunkSize = 1024 * 1024;
           while (remaining > 0) {
             final readLen = remaining < chunkSize ? remaining : chunkSize;
             final chunk = await raf.read(readLen);

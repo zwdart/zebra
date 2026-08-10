@@ -31,9 +31,10 @@ class NativePickedFile {
 class NativeFileStream {
   static const MethodChannel _channel = MethodChannel('xin.dart.zebra/native_file');
 
-  /// 每块读取大小,与发送侧路径方案对齐(256KB):
-  /// 更细粒度的 TCP 背压与接收端事件循环交错,避免接收端 pending 突发堆积
-  static const int defaultChunkSize = 256 * 1024;
+  /// 每块读取大小,与发送侧路径方案对齐(1MB):
+  /// MethodChannel 往返开销是固定成本,块越大单位字节的 IPC 开销越小;
+  /// 配合发送侧双缓冲流水线,安卓→PC 吞吐从 ~10M/s 提升到接近链路上限。
+  static const int defaultChunkSize = 1024 * 1024;
 
   static bool get isSupported => Platform.isAndroid || Platform.isIOS;
 

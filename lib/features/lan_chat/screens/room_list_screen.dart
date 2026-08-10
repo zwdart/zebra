@@ -122,14 +122,20 @@ class _RoomListScreenState extends State<RoomListScreen> {
           backgroundColor: colorScheme.primaryContainer,
           child: Icon(Icons.groups, color: colorScheme.onPrimaryContainer),
         ),
+        // 长房名省略号,避免换行撑高卡片/挤压右侧按钮
         title: Text(
           provider.roomName ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w500),
         ),
         subtitle: Text(
           loc.roomMemberCountValue(provider.memberCount),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
         ),
+        // trailing 紧凑化:手机上让出更多空间给房名
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -137,10 +143,25 @@ class _RoomListScreenState extends State<RoomListScreen> {
               IconButton(
                 icon: Icon(Icons.delete_outline, color: colorScheme.error),
                 tooltip: loc.disbandRoom,
+                visualDensity: VisualDensity.compact,
                 onPressed: () => _confirmDisband(context, provider),
               ),
-            const SizedBox(width: 4),
+            // 成员状态下允许创建自己的房间:确认离开当前聊天室后进入创建流程
+            if (!provider.isHost) ...[
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline),
+                tooltip: loc.createRoom,
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _confirmCreateOwnRoom(context, provider),
+              ),
+              const SizedBox(width: 4),
+            ],
             FilledButton.tonal(
+              style: FilledButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                minimumSize: const Size(0, 36),
+              ),
               onPressed: () {
                 Navigator.push(
                   context,
@@ -268,9 +289,82 @@ class _RoomListScreenState extends State<RoomListScreen> {
     if (confirmed == true && mounted) provider.disbandRoom();
   }
 
-  /// 加入房间:调 RoomProvider.joinRoom,结果通过 joinError/状态反馈
-  void _joinRoom(BuildContext context, LanDevice device) {
+  /// 成员状态下创建自己的房间:先确认离开当前聊天室,再进入创建流程。
+  /// (单角色模型:同一时间只能在一个房间,创建前必须先 leaveRoom)
+  Future<void> _confirmCreateOwnRoom(
+      BuildContext context, RoomProvider provider) async {
+    final loc = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.createRoom),
+        content: Text(loc.createRoomLeaveConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(loc.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(loc.createRoom),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    provider.leaveRoom(); // 离开当前聊天室(role → none)
+    _showCreateRoomDialog(context, provider);
+  }
+
+  /// 加入房间:已在该房间时直接进入;已在其他房间时先确认离开再切换
+  Future<void> _joinRoom(BuildContext context, LanDevice device) async {
     final provider = context.read<RoomProvider>();
+    final loc = AppLocalizations.of(context);
+    final targetRoomId = device.roomInfo?.roomId;
+
+    // 已是房主:不能直接加入其他房间(房主解散会波及所有成员),提示先解散
+    if (provider.isHost) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.hostJoinOthersHint)),
+      );
+      return;
+    }
+
+    // 已加入该房间:直接进入聊天室,不再重复加入
+    if (provider.isMember &&
+        provider.roomId != null &&
+        targetRoomId != null &&
+        provider.roomId == targetRoomId) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const RoomScreen()),
+      );
+      return;
+    }
+
+    // 已是其他房间的成员:确认离开当前聊天室后再加入
+    if (provider.isMember) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(loc.joinRoom),
+          content: Text(loc.joinRoomLeaveConfirm),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(loc.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(loc.joinRoom),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !context.mounted) return;
+      provider.leaveRoom(); // 离开当前聊天室(role → none)
+    }
+
     provider.joinRoom(device);
   }
 
