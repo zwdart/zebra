@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/lan_device.dart';
+import '../models/room.dart';
 import 'lan_chat_settings.dart';
 
 /// UDP 广播/组播发现服务
@@ -11,6 +12,8 @@ class LanDiscoveryService {
   int _tcpPort = LanChatSettings.defaultChatPort;
   // 当前生效的发现端口(绑定/广播用,默认或用户手动配置)
   int _discoveryPort = LanChatSettings.defaultDiscoveryPort;
+  // 本机作为房主时的房间摘要(心跳广播给其他设备);非房主为 null
+  RoomInfo? _roomInfo;
   static const Duration _heartbeatInterval = Duration(seconds: 3);
 
   /// 组播发现组地址:与受限广播(255.255.255.255)配合使用。
@@ -49,6 +52,27 @@ class LanDiscoveryService {
     _tcpPort = port;
     debugPrint('[LAN] TCP port updated to $port');
     // 立即广播一次，让对方尽快拿到真实端口
+    if (_isRunning) _sendHeartbeat();
+  }
+
+  /// 设置本机主持的房间摘要(建房成功后调用,心跳随即带上 room 字段)
+  void setRoomInfo(RoomInfo info) {
+    if (info.roomId == _roomInfo?.roomId) {
+      _roomInfo = info;
+      if (_isRunning) _sendHeartbeat();
+      return;
+    }
+    _roomInfo = info;
+    debugPrint('[LAN] Room info set: ${info.name}(${info.roomId}) port=${info.port}');
+    // 立即广播一次,让对方尽快看到房间
+    if (_isRunning) _sendHeartbeat();
+  }
+
+  /// 清除房间摘要(解散房间时调用,心跳不再携带 room 字段)
+  void clearRoomInfo() {
+    if (_roomInfo == null) return;
+    _roomInfo = null;
+    debugPrint('[LAN] Room info cleared');
     if (_isRunning) _sendHeartbeat();
   }
 
@@ -157,6 +181,7 @@ class LanDiscoveryService {
         'deviceId': _deviceId,
         'name': _deviceName,
         'port': _tcpPort,
+        if (_roomInfo != null) 'room': _roomInfo!.toJson(),
       }));
       // 受限广播:兼容旧版本/Android 等不支持组播的环境
       _socket!.send(

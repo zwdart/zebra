@@ -34,6 +34,7 @@ import 'services/update_service.dart';
 import 'services/window_service.dart';
 import 'features/lan_chat/providers/lan_discovery_provider.dart';
 import 'features/lan_chat/providers/chat_provider.dart';
+import 'features/lan_chat/providers/room_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -144,6 +145,13 @@ class ZebraApp extends StatelessWidget {
           });
           return provider;
         }),
+        ChangeNotifierProvider(create: (_) => RoomProvider(
+              selfId: lanDeviceId,
+              selfName: defaultUserName,
+              // 建房成功后同步心跳 room 摘要,其他设备才能在「附近房间」看到
+              onRoomInfoChanged: (info) => lanDiscovery.setRoomInfo(info),
+              onRoomInfoCleared: () => lanDiscovery.clearRoomInfo(),
+            )),
       ],
       child: Consumer2<ThemeProvider, LocaleProvider>(
         builder: (ctx, themeProvider, localeProvider, _) {

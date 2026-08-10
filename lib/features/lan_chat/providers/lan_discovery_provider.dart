@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/lan_device.dart';
+import '../models/room.dart';
 import '../services/lan_discovery_service.dart';
 
 /// 局域网设备发现状态管理
@@ -29,6 +30,16 @@ class LanDiscoveryProvider extends ChangeNotifier {
   /// 同步实际的 TCP 监听端口到心跳广播
   void setTcpPort(int port) {
     _discoveryService.setTcpPort(port);
+  }
+
+  /// 设置本机主持的房间摘要(建房成功后由 RoomProvider 调用)
+  void setRoomInfo(RoomInfo info) {
+    _discoveryService.setRoomInfo(info);
+  }
+
+  /// 清除房间摘要(解散房间时由 RoomProvider 调用)
+  void clearRoomInfo() {
+    _discoveryService.clearRoomInfo();
   }
 
   /// 启动发现
@@ -77,10 +88,13 @@ class LanDiscoveryProvider extends ChangeNotifier {
     final key = '${device.ip}:${device.port}';
     final existing = _devices[key];
     if (existing != null) {
-      // 同 IP+端口:合并,刷新在线状态、最近心跳时间与名称
+      // 同 IP+端口:合并,刷新在线状态、最近心跳时间、名称与房间摘要。
+      // roomInfo 必须跟随最新心跳同步:建房后其他设备才能看到附近房间,
+      // 解散后(心跳不带 room)才能移除残留条目,否则会出现"时有时无/残留"。
       existing.isOnline = true;
       existing.lastSeen = DateTime.now();
       if (existing.name != device.name) existing.name = device.name;
+      existing.roomInfo = device.roomInfo;
       // 设备 ID 变化(旧版本未持久化 ID):以最新心跳的 ID 为准
       if (existing.id != device.id) {
         _devices.remove(key);

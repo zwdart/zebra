@@ -10,7 +10,8 @@ class ChatRepository {
   }
 
   /// 保存一条消息
-  void saveMessage(ChatMessage msg, String peerId) {
+  /// [peerName] 可选:覆盖会话列表显示名(聊天室场景传房间名,否则默认用发送者名)
+  void saveMessage(ChatMessage msg, String peerId, {String? peerName}) {
     DatabaseService.insertChatMessage({
       'message_id': msg.id,
       'peer_id': peerId,
@@ -31,7 +32,7 @@ class ChatRepository {
             : '[系统消息]';
     DatabaseService.updateChatPeerLastMessage(
       peerId,
-      msg.senderName,
+      peerName ?? msg.senderName,
       preview,
       msg.timestamp.toIso8601String(),
     );

@@ -12,6 +12,7 @@ import '../../../widgets/window_drag_region.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../utils/relative_time.dart';
 import 'chat_screen.dart';
+import 'room_list_screen.dart';
 
 /// 本地聊天首页：设备列表 + 会话列表
 class LanChatHomeScreen extends StatefulWidget {
@@ -32,7 +33,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     // 发现端口非默认时,进入首页弹一次提醒(每天最多一次)
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkDiscoveryPortWarning());
   }
@@ -319,6 +320,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
                 Consumer<ChatProvider>(
                   builder: (ctx, _, __) => _buildChatHistory(),
                 ),
+                const RoomListScreen(),
               ],
             ),
           ),
@@ -349,6 +351,16 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
               const Icon(Icons.chat, size: 18),
               const SizedBox(width: 4),
               Text(loc.chatHistory),
+            ],
+          ),
+        ),
+        Tab(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.groups, size: 18),
+              const SizedBox(width: 4),
+              Text(loc.roomChat),
             ],
           ),
         ),
@@ -519,6 +531,7 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
       itemBuilder: (ctx, i) {
         final peer = peers[i];
         final peerId = peer['peer_id'] as String? ?? '';
+        final isRoom = peerId.startsWith('room:');
         final peerName = peer['peer_name'] as String? ?? 'Unknown';
         final lastMessage = peer['last_message'] as String? ?? '';
         final unreadCount = peer['unread_count'] as int? ?? 0;
@@ -537,6 +550,11 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
             onTap: () {
+              if (isRoom) {
+                // 聊天室历史记录:房间已解散/离线后无法直接重进,切到「聊天室」页
+                _tabController.animateTo(2);
+                return;
+              }
               _repository.markRead(peerId);
               Navigator.push(
                 context,
@@ -556,16 +574,27 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
                 children: [
                   CircleAvatar(
                     radius: 18,
-                    backgroundColor:
-                        Theme.of(context).colorScheme.primaryContainer,
-                    child: Text(
-                      peerName.isNotEmpty ? peerName[0].toUpperCase() : '?',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    ),
+                    backgroundColor: isRoom
+                        ? Theme.of(context).colorScheme.tertiaryContainer
+                        : Theme.of(context).colorScheme.primaryContainer,
+                    child: isRoom
+                        ? Icon(
+                            Icons.groups,
+                            size: 20,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onTertiaryContainer,
+                          )
+                        : Text(
+                            peerName.isNotEmpty ? peerName[0].toUpperCase() : '?',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onPrimaryContainer,
+                            ),
+                          ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -576,14 +605,44 @@ class _LanChatHomeScreenState extends State<LanChatHomeScreen>
                         Row(
                           children: [
                             Expanded(
-                              child: Text(
-                                peerName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                              child: Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      peerName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isRoom) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 1,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .tertiaryContainer,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        AppLocalizations.of(context).roomChat,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onTertiaryContainer,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                             if (lastTimeStr.isNotEmpty) ...[

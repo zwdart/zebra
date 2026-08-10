@@ -458,12 +458,14 @@ class ChatProvider extends ChangeNotifier {
       (_clients[peerId]?.isConnected ?? false);
 
   /// 获取与某个设备的聊天记录
+  /// DB 查询为 timestamp DESC(最新在前),而 UI 渲染(reverse:true + 末尾索引)
+  /// 期望旧→新顺序,故查询后反转,保证最新消息显示在底部。
   List<ChatMessage> getMessages(String peerId) {
     if (_messages.containsKey(peerId)) {
       return List.unmodifiable(_messages[peerId]!);
     }
-    // 从数据库加载
-    final history = _repository.getMessages(peerId);
+    // 从数据库加载(最新在前 → 反转成旧→新)
+    final history = _repository.getMessages(peerId).reversed.toList();
     _messages[peerId] = history;
     return List.unmodifiable(history);
   }

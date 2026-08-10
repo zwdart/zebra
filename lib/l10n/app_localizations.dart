@@ -701,6 +701,30 @@ class AppLocalizations {
       translate('lastStartFailed').replaceAll('{error}', error);
   String get searchingDevices => translate('searchingDevices');
   String get noChatHistory => translate('noChatHistory');
+  // ---- LAN Chat Room ----
+  String get roomChat => translate('roomChat');
+  String get createRoom => translate('createRoom');
+  String get roomNameHint => translate('roomNameHint');
+  String get myRoom => translate('myRoom');
+  String get nearbyRooms => translate('nearbyRooms');
+  String get noRoomsFound => translate('noRoomsFound');
+  String get roomMembers => translate('roomMembers');
+  String get enterRoom => translate('enterRoom');
+  String get joinRoom => translate('joinRoom');
+  String get disbandRoom => translate('disbandRoom');
+  String get leaveRoom => translate('leaveRoom');
+  String get confirmDisbandRoom => translate('confirmDisbandRoom');
+  String get roomDissolved => translate('roomDissolved');
+  String get hostOffline => translate('hostOffline');
+  String get reconnecting => translate('reconnecting');
+  String get memberDetails => translate('memberDetails');
+  String get sendMessage => translate('sendMessage');
+  String get roomFull => translate('roomFull');
+  String get roomNotExist => translate('roomNotExist');
+  String get cannotConnectHost => translate('cannotConnectHost');
+  String get roomNameDefault => translate('roomNameDefault');
+  String roomMemberCountValue(int count) =>
+      translate('roomMemberCount').replaceAll('{count}', '$count');
   String get waitingForPeer => translate('waitingForPeer');
   String get timeJustNow => translate('timeJustNow');
   String timeMinutesAgoValue(int minutes) =>
@@ -1353,6 +1377,28 @@ class AppLocalizations {
     'lastStartFailed': 'Last start failed: {error}',
     'searchingDevices': 'Searching for LAN devices...',
     'noChatHistory': 'No chat history',
+    'roomChat': 'Chat Room',
+    'createRoom': 'Create Room',
+    'roomNameHint': 'Room name',
+    'myRoom': 'My Room',
+    'nearbyRooms': 'Nearby Rooms',
+    'noRoomsFound': 'No rooms nearby. Ask someone to create one.',
+    'roomMembers': 'Members',
+    'enterRoom': 'Enter',
+    'joinRoom': 'Join',
+    'disbandRoom': 'Disband',
+    'leaveRoom': 'Leave',
+    'confirmDisbandRoom': 'Disband this room? All members will be removed.',
+    'roomDissolved': 'Room dissolved',
+    'hostOffline': 'Host is offline, room dissolved',
+    'reconnecting': 'Connection lost, reconnecting...',
+    'memberDetails': 'Member Details',
+    'sendMessage': 'Send Message',
+    'roomFull': 'Room is full',
+    'roomNotExist': 'Room not found or already dissolved',
+    'cannotConnectHost': 'Cannot connect to host. Make sure the host is online.',
+    'roomNameDefault': 'My Room',
+    'roomMemberCount': '{count} members',
     'waitingForPeer': 'Waiting for the peer to connect...',
     'timeJustNow': 'Just now',
     'timeMinutesAgo': '{minutes} min ago',
@@ -2004,6 +2050,28 @@ class AppLocalizations {
     'lastStartFailed': '上次启动失败:{error}',
     'searchingDevices': '正在搜索局域网设备...',
     'noChatHistory': '暂无聊天记录',
+    'roomChat': '聊天室',
+    'createRoom': '创建房间',
+    'roomNameHint': '房间名',
+    'myRoom': '我的房间',
+    'nearbyRooms': '附近房间',
+    'noRoomsFound': '附近暂无房间,可让其他人创建后加入',
+    'roomMembers': '成员',
+    'enterRoom': '进入',
+    'joinRoom': '加入',
+    'disbandRoom': '解散',
+    'leaveRoom': '离开',
+    'confirmDisbandRoom': '确定解散该房间吗?所有成员将被移出。',
+    'roomDissolved': '房间已解散',
+    'hostOffline': '房主已离线,房间已解散',
+    'reconnecting': '连接已断开,正在重连...',
+    'memberDetails': '成员详情',
+    'sendMessage': '发消息',
+    'roomFull': '房间人数已满',
+    'roomNotExist': '房间不存在或已解散',
+    'cannotConnectHost': '无法连接房主,请确认房主在线',
+    'roomNameDefault': '我的房间',
+    'roomMemberCount': '{count} 名成员',
     'waitingForPeer': '等待对方连接中...',
     'timeJustNow': '刚刚',
     'timeMinutesAgo': '{minutes}分钟前',
