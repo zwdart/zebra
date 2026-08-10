@@ -45,7 +45,7 @@ import UIKit
         return
       }
       // on=true → 禁止自动锁屏(保持清醒);on=false → 恢复系统策略
-      UIApplication.shared.isIdleTimerEnabled = !on
+      UIApplication.shared.isIdleTimerDisabled = on
       result(true)
     }
   }
@@ -139,7 +139,7 @@ import UIKit
         }
         return
       }
-      handle.seek(toOffset: UInt64(max(0, offset)))
+      try? handle.seek(toOffset: UInt64(max(0, offset)))
       let h = self.nextHandle
       self.nextHandle += 1
       self.openHandles[h] = handle
@@ -192,7 +192,7 @@ import UIKit
 
   private func topViewController() -> UIViewController? {
     var vc = UIApplication.shared.connectedScenes
-      .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+      .compactMap { ($0 as? UIWindowScene)?.windows.first(where: { $0.isKeyWindow }) }
       .first?.rootViewController
     while let presented = vc?.presentedViewController {
       vc = presented
