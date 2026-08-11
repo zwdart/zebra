@@ -58,6 +58,8 @@ EOF
     fi
 
     APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
+    mv "$APK_PATH" "build/app/outputs/flutter-apk/zebra-release.apk"
+    APK_PATH="build/app/outputs/flutter-apk/zebra-release.apk"
     echo
     echo "Done!"
     echo "APK: $SCRIPT_DIR/$APK_PATH"
@@ -94,7 +96,10 @@ EOF
     echo
     echo "Done!"
     echo "APKs:"
-    ls -lh "$SCRIPT_DIR/build/app/outputs/flutter-apk/"app-*.apk 2>/dev/null
+    cd "$SCRIPT_DIR/build/app/outputs/flutter-apk"
+    for f in app-*.apk; do mv "$f" "zebra-${f#app-}"; done
+    ls -lh zebra-*.apk 2>/dev/null
+    cd "$SCRIPT_DIR"
 }
 
 do_build_aab() {
@@ -127,7 +132,11 @@ EOF
     echo
     echo "Done!"
     echo "AAB:"
-    ls -lh "$SCRIPT_DIR/build/app/outputs/bundle/release/"app-release.aab 2>/dev/null
+    AAB_PATH="$SCRIPT_DIR/build/app/outputs/bundle/release/app-release.aab"
+    if [ -f "$AAB_PATH" ]; then
+        mv "$AAB_PATH" "$SCRIPT_DIR/build/app/outputs/bundle/release/zebra-release.aab"
+    fi
+    ls -lh "$SCRIPT_DIR/build/app/outputs/bundle/release/"zebra-release.aab 2>/dev/null
 }
 
 do_build_install() {
