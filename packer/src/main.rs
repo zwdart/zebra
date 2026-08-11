@@ -55,7 +55,25 @@ fn extract(reader: &bin_reader::BinaryReader, dir: &Path, force: bool) -> Option
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).ok();
             }
-            fs::write(&path, &file.data).ok();
+            if file.kind == 1 {
+                // 符号链接:重建链接(Flutter macOS .framework 依赖 Versions/Current 等链接,
+                // 不重建则解包后的 bundle 损坏,应用启动即崩溃)
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::symlink;
+                    let _ = fs::remove_file(&path);
+                    let target = String::from_utf8_lossy(&file.data);
+                    if let Err(e) = symlink(Path::new(target.as_ref()), &path) {
+                        eprintln!("Failed to create symlink {}: {}", path.display(), e);
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    eprintln!("WARN: skipping symlink {} (unsupported on this platform)", path.display());
+                }
+            } else {
+                fs::write(&path, &file.data).ok();
+            }
         }
 
         write_version(dir, reader);

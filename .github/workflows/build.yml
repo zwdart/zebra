@@ -73,7 +73,7 @@ name: Build Desktop Apps
 # (曾因 Flutter 参数变动导致构建失败,锁定后结果可复现)。
 # 升级版本时同步更新此处,并确认三平台构建通过。
 env:
-  FLUTTER_VERSION: "3.41.6" # 与 runner 实际缓存的 stable 版本一致(stable-3.44.8-arm64)
+  FLUTTER_VERSION: "3.41.6" # 与 runner 实际缓存的 stable 版本一致(stable-3.41.6-arm64)
   RUST_VERSION: "1.91.1"    # packer 为纯 Rust 项目,无特殊 MSRV 要求
 
 on:

@@ -29,6 +29,7 @@ struct Args {
 
 struct PackedEntry {
     path: Vec<u8>,
+    kind: u8, // 0 = 普通文件, 1 = 符号链接
     compressed: Vec<u8>,
     md5: [u8; 16],
 }
@@ -38,14 +39,22 @@ fn compress_folder(folder: &Path, level: u32) -> Vec<PackedEntry> {
     let folder = fs::canonicalize(folder).unwrap();
 
     for entry in WalkDir::new(&folder).into_iter().filter_map(|e| e.ok()) {
-        if !entry.file_type().is_file() {
-            continue;
-        }
         let full = entry.path();
         let rel = full.strip_prefix(&folder).unwrap();
         let rel_str = rel.to_string_lossy().replace('\\', "/");
 
-        let data = fs::read(full).unwrap();
+        // 符号链接必须保留:Flutter macOS 的 .framework 靠
+        // Versions/Current、App -> Versions/Current/App 等链接定位可执行文件,
+        // 若打包时丢弃,解包后的 bundle 结构损坏,应用启动即崩溃。
+        let (kind, data) = if entry.file_type().is_file() {
+            (0u8, fs::read(full).unwrap())
+        } else if entry.path_is_symlink() {
+            let target = fs::read_link(full).unwrap();
+            (1u8, target.to_string_lossy().into_owned().into_bytes())
+        } else {
+            continue; // 目录在解包时自动创建
+        };
+
         let digest = Md5::digest(&data);
         let mut compressed = Vec::new();
         {
@@ -57,6 +66,7 @@ fn compress_folder(folder: &Path, level: u32) -> Vec<PackedEntry> {
 
         entries.push(PackedEntry {
             path: rel_str.into_bytes(),
+            kind,
             compressed,
             md5: digest.into(),
         });
@@ -69,6 +79,7 @@ fn write_data_bin(entries: &[PackedEntry], exe: &str, output: &Path) {
     f.write_all(MAGIC).unwrap();
 
     for entry in entries {
+        f.write_all(&[entry.kind]).unwrap();
         let path_len = (entry.path.len() as u32).to_be_bytes();
         f.write_all(&path_len).unwrap();
         f.write_all(&entry.path).unwrap();
