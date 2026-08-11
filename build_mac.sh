@@ -140,6 +140,8 @@ EOF
     <string>AppIcon</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Zebra 需要访问本地网络,用于局域网设备发现和聊天。</string>
 </dict>
 </plist>
 PLIST
