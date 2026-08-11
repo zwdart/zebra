@@ -5,22 +5,23 @@
 #   - 打 tag (v*):构建全平台并自动发布 GitHub Release(可直接下载)
 #   - 手动触发:Actions 页面 Run workflow
 #
-# 产物:
+# 产物(统一命名 zebra-<平台>-<版本>-<架构>.<ext>,版本号取自 tag 或 pubspec.yaml):
 #   - Linux   :
-#       * zebra-linux.zip(免安装单文件 + linux_install.sh 安装脚本)
-#       * zebra_<ver>_amd64.deb(Debian/Ubuntu 原生安装包)
-#       * zebra-<ver>-x86_64.rpm(Fedora/RHEL/openSUSE 原生安装包)
-#       * Zebra-<ver>-x86_64.AppImage(跨发行版便携格式)
-#       * zebra-<ver>-x86_64.tar.gz(通用二进制压缩包)
+#       * zebra-linux-<ver>-x86_64.zip(免安装单文件 + linux_install.sh 安装脚本)
+#       * zebra-linux-<ver>-x86_64.deb(Debian/Ubuntu 原生安装包)
+#       * zebra-linux-<ver>-x86_64.rpm(Fedora/RHEL/openSUSE 原生安装包)
+#       * zebra-linux-<ver>-x86_64.AppImage(跨发行版便携格式)
+#       * zebra-linux-<ver>-x86_64.tar.gz(通用二进制压缩包)
 #   - Windows :
-#       * packer/target/release/zebra.exe(自解压单文件)
-#       * installer/zebra-setup-<ver>.exe(Inno Setup 原生安装器)
-#   - macOS   : zebra-macos-<ver>.{zip,dmg,pkg}(arm64,Apple Silicon)
-#               + zebra-macos-<ver>-x64.{zip,dmg,pkg}(x86_64,Intel)
-#   - Android : zebra-release.apk(universal) + zebra-{abi}-release.apk(按 ABI 拆分)
-#               + zebra-release.aab(上架应用商店)
-#   - iOS     : zebra-ios.zip(Runner.app 压缩包) + *.ipa(均未签名,
-#               需本地签名后安装/上架)
+#       * zebra-windows-<ver>-x86_64.exe(自解压单文件)
+#       * installer/zebra-windows-<ver>-x86_64-setup.exe(Inno Setup 原生安装器)
+#   - macOS   : zebra-macos-<ver>-arm64.{zip,dmg,pkg}(Apple Silicon)
+#               + zebra-macos-<ver>-x86_64.{zip,dmg,pkg}(Intel)
+#   - Android : zebra-android-<ver>-universal.apk(全 ABI 合一)
+#               + zebra-android-<ver>-{abi}.apk(按 ABI 拆分)
+#               + zebra-android-<ver>-universal.aab(上架应用商店)
+#   - iOS     : zebra-ios-<ver>-arm64.zip(Runner.app 压缩包)
+#               + zebra-ios-<ver>-arm64.ipa(均未签名,需本地签名后安装/上架)
 #
 # 打包方式:Flutter release 构建 →
 # packer/zebra-pack 压缩进 data.bin → packer/zebra 自解压单文件(免安装版);
@@ -134,13 +135,6 @@ jobs:
           target/release/zebra-pack -f ../build/linux/x64/release/bundle -e zebra -n zebra-ssh
           cargo build --release --bin zebra
 
-      - name: Create install zip (zebra + linux_install.sh)
-        run: |
-          cd packer/target/release
-          cp "$GITHUB_WORKSPACE/linux_install.sh" ./linux_install.sh
-          chmod +x ./linux_install.sh
-          zip -j zebra-linux.zip linux_install.sh zebra
-
       - name: Prepare packaging version
         id: pkgver
         run: |
@@ -149,6 +143,13 @@ jobs:
             VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
           fi
           echo "version=${VERSION:-1.0.0}" >> "$GITHUB_OUTPUT"
+
+      - name: Create install zip (zebra + linux_install.sh)
+        run: |
+          cd packer/target/release
+          cp "$GITHUB_WORKSPACE/linux_install.sh" ./linux_install.sh
+          chmod +x ./linux_install.sh
+          zip -j zebra-linux-${{ steps.pkgver.outputs.version }}-x86_64.zip linux_install.sh zebra
 
       - name: Build .deb package
         run: |
@@ -176,6 +177,9 @@ jobs:
           Comment=Zebra Desktop App
           Exec=/opt/zebra/zebra
           Icon=zebra
+          # WM_CLASS 是 xin.dart.zebra(linux/runner/my_application.cc 里 g_set_prgname(APPLICATION_ID)),
+          # 不加 StartupWMClass 则 GNOME 常驻台无法把窗口匹配到本 .desktop,显示默认齿轮图标
+          StartupWMClass=xin.dart.zebra
           Terminal=false
           Categories=Network;Utility;
           EOF
@@ -202,7 +206,7 @@ jobs:
           exit 0
           EOF
           chmod +x "$ROOT/DEBIAN/postinst"
-          dpkg-deb --build --root-owner-group "$ROOT" "zebra_${VERSION}_amd64.deb"
+          dpkg-deb --build --root-owner-group "$ROOT" "zebra-linux-${VERSION}-x86_64.deb"
 
       - name: Build .rpm package
         run: |
@@ -231,6 +235,7 @@ jobs:
           Comment=Zebra Desktop App
           Exec=/opt/zebra/zebra
           Icon=zebra
+          StartupWMClass=xin.dart.zebra
           Terminal=false
           Categories=Network;Utility;
           DEOF
@@ -256,7 +261,7 @@ jobs:
           /usr/share/icons/hicolor/*
           EOF
           rpmbuild -bb ~/rpmbuild/SPECS/zebra.spec
-          cp ~/rpmbuild/RPMS/x86_64/zebra-*.rpm .
+          cp ~/rpmbuild/RPMS/x86_64/zebra-*.rpm "zebra-linux-${VERSION}-x86_64.rpm"
 
       - name: Build .AppImage package
         run: |
@@ -300,6 +305,7 @@ jobs:
           Comment=Zebra Desktop App
           Exec=zebra
           Icon=zebra
+          StartupWMClass=xin.dart.zebra
           Terminal=false
           Categories=Network;Utility;
           EOF
@@ -312,23 +318,23 @@ jobs:
             --desktop-file "$APPDIR/usr/share/applications/zebra.desktop"
 
           ./appimagetool-x86_64.AppImage --appimage-extract-and-run \
-            "$APPDIR" "Zebra-${VERSION}-x86_64.AppImage"
+            "$APPDIR" "zebra-linux-${VERSION}-x86_64.AppImage"
 
       - name: Build .tar.gz package
         run: |
           VERSION="${{ steps.pkgver.outputs.version }}"
-          tar czf "zebra-${VERSION}-x86_64.tar.gz" -C build/linux/x64/release/bundle .
+          tar czf "zebra-linux-${VERSION}-x86_64.tar.gz" -C build/linux/x64/release/bundle .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zebra-linux
           path: |
-            packer/target/release/zebra-linux.zip
-            zebra_*.deb
-            zebra-*.rpm
-            Zebra-*.AppImage
-            zebra-*.tar.gz
+            packer/target/release/zebra-linux-*.zip
+            zebra-linux-*.deb
+            zebra-linux-*.rpm
+            zebra-linux-*.AppImage
+            zebra-linux-*.tar.gz
 
   # ==================== Windows ====================
   windows:
@@ -384,6 +390,12 @@ jobs:
           fi
           echo "version=${VERSION:-1.0.0}" >> "$GITHUB_OUTPUT"
 
+      - name: Rename self-extracting exe with version
+        shell: bash
+        run: |
+          VERSION="${{ steps.pkgver.outputs.version }}"
+          mv packer/target/release/zebra.exe "packer/target/release/zebra-windows-${VERSION}-x86_64.exe"
+
       - name: Build Inno Setup installer
         shell: bash
         run: |
@@ -403,7 +415,7 @@ jobs:
           DefaultDirName={autopf}\Zebra
           DefaultGroupName=Zebra
           OutputDir=installer
-          OutputBaseFilename=zebra-setup-$VERSION
+          OutputBaseFilename=zebra-windows-$VERSION-x86_64-setup
           Compression=lzma2
           SolidCompression=yes
           ArchitecturesInstallIn64BitMode=x64compatible
@@ -431,8 +443,8 @@ jobs:
         with:
           name: zebra-windows
           path: |
-            packer/target/release/zebra.exe
-            installer/zebra-setup-*.exe
+            packer/target/release/zebra-windows-*.exe
+            installer/zebra-windows-*-setup.exe
 
   # ==================== Android ====================
   android:
@@ -476,6 +488,16 @@ jobs:
         shell: bash
         run: flutter pub get
 
+      - name: Prepare packaging version
+        id: pkgver
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          fi
+          echo "version=${VERSION:-1.0.0}" >> "$GITHUB_OUTPUT"
+
       - name: Build Flutter Android APK
         shell: bash
         run: flutter build apk --release
@@ -488,13 +510,22 @@ jobs:
         shell: bash
         run: flutter build appbundle --release
 
-      - name: Rename Android artifacts with zebra prefix
+      - name: Rename Android artifacts (zebra-android-<version>-<arch>)
         shell: bash
         run: |
+          VERSION="${{ steps.pkgver.outputs.version }}"
           cd build/app/outputs/flutter-apk
-          for f in app-*.apk; do mv "$f" "zebra-${f#app-}"; done
+          for f in app-*.apk; do
+            # app-release.apk → zebra-android-<ver>-universal.apk(全 ABI 合一)
+            # app-arm64-v8a-release.apk → zebra-android-<ver>-arm64-v8a.apk(按 ABI 拆分)
+            abi="${f#app-}"
+            abi="${abi%-release}"
+            abi="${abi%.apk}"
+            [ "$abi" = "release" ] && abi="universal"
+            mv "$f" "zebra-android-${VERSION}-${abi}.apk"
+          done
           if [ -f ../bundle/release/app-release.aab ]; then
-            mv ../bundle/release/app-release.aab ../bundle/release/zebra-release.aab
+            mv ../bundle/release/app-release.aab ../bundle/release/zebra-android-${VERSION}-universal.aab
           fi
 
       - name: Upload APK artifact
@@ -507,7 +538,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zebra-android-aab
-          path: build/app/outputs/bundle/release/zebra-release.aab
+          path: build/app/outputs/bundle/release/zebra-android-*.aab
 
   # ==================== macOS ====================
   # macOS runner 分钟数按 10 倍加权消耗私有仓库额度,平时 push 不构建;
@@ -660,7 +691,7 @@ jobs:
       - name: Zip Zebra.app
         run: |
           cd packer/target/release
-          zip -r zebra-macos-${{ steps.pkgver.outputs.version }}.zip Zebra.app
+          zip -r zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.zip Zebra.app
 
       - name: Create DMG
         run: |
@@ -674,7 +705,7 @@ jobs:
             -volname "Zebra" \
             -srcfolder "$STAGE" \
             -ov -format UDZO \
-            zebra-macos-${{ steps.pkgver.outputs.version }}.dmg
+            zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.dmg
           rm -rf "$STAGE"
 
       - name: Create PKG
@@ -686,7 +717,7 @@ jobs:
             --install-location /Applications \
             --identifier com.zebra.ssh \
             --version ${{ steps.pkgver.outputs.version }} \
-            zebra-macos-${{ steps.pkgver.outputs.version }}.pkg
+            zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.pkg
 
       # ==================== macOS x86_64(Intel) ====================
       # 说明:Flutter 3+ 的 `flutter build macos --release` 默认就产出 universal 二进制
@@ -720,7 +751,7 @@ jobs:
       - name: Zip Zebra-x64.app
         run: |
           cd packer/target/release
-          zip -r zebra-macos-${{ steps.pkgver.outputs.version }}-x64.zip Zebra-x64.app
+          zip -r zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.zip Zebra-x64.app
 
       - name: Create x64 DMG
         run: |
@@ -734,7 +765,7 @@ jobs:
             -volname "Zebra" \
             -srcfolder "$STAGE" \
             -ov -format UDZO \
-            zebra-macos-${{ steps.pkgver.outputs.version }}-x64.dmg
+            zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.dmg
           rm -rf "$STAGE"
 
       - name: Create x64 PKG
@@ -745,7 +776,7 @@ jobs:
             --install-location /Applications \
             --identifier com.zebra.ssh \
             --version ${{ steps.pkgver.outputs.version }} \
-            zebra-macos-${{ steps.pkgver.outputs.version }}-x64.pkg
+            zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.pkg
 
       - name: Verify macOS architectures
         run: |
@@ -770,12 +801,12 @@ jobs:
         with:
           name: zebra-macos
           path: |
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}.zip
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}.dmg
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}.pkg
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x64.zip
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x64.dmg
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x64.pkg
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.zip
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.dmg
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.pkg
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.zip
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.dmg
+            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.pkg
 
   # ==================== iOS ====================
   # iOS 构建同样消耗 macOS runner 分钟数,与 macOS 一样只在打 tag 或手动触发时跑。
@@ -804,6 +835,15 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Prepare packaging version
+        id: pkgver
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          fi
+          echo "version=${VERSION:-1.0.0}" >> "$GITHUB_OUTPUT"
+
       - name: Build Flutter iOS release (unsigned)
         run: flutter build ios --release --no-codesign
 
@@ -813,15 +853,23 @@ jobs:
       - name: Zip Runner.app
         run: |
           cd build/ios/iphoneos
-          zip -r zebra-ios.zip Runner.app
+          zip -r zebra-ios-${{ steps.pkgver.outputs.version }}-arm64.zip Runner.app
+
+      - name: Rename IPA with version
+        run: |
+          VERSION="${{ steps.pkgver.outputs.version }}"
+          cd build/ios/ipa
+          for f in *.ipa; do
+            mv "$f" "zebra-ios-${VERSION}-arm64.ipa"
+          done
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zebra-ios
           path: |
-            build/ios/iphoneos/zebra-ios.zip
-            build/ios/ipa/*.ipa
+            build/ios/iphoneos/zebra-ios-*.zip
+            build/ios/ipa/zebra-ios-*.ipa
 
   # ==================== 发布 Release(仅打 tag 时) ====================
   release:

@@ -17,8 +17,9 @@ show_menu() {
     echo "  [5] Clean + Build"
     echo "  [6] Run"
     echo "  [7] Pack release zip"
-    echo "  [8] Quick Build & Run (flutter only)"
-    echo "  [9] Exit"
+    echo "  [8] Pack .deb package"
+    echo "  [9] Quick Build & Run (flutter only)"
+    echo "  [10] Exit"
     echo ""
 }
 
@@ -248,6 +249,97 @@ do_pack() {
     echo "Done! Output: $zip_path"
 }
 
+do_pack_deb() {
+    cd "$SCRIPT_DIR"
+    echo ""
+    echo "========================================"
+    echo "  Zebra SSH - Pack .deb Package"
+    echo "========================================"
+    echo
+
+    local bundle="build/linux/x64/release/bundle"
+    if [ ! -f "$bundle/zebra" ]; then
+        echo "[ERROR] Bundle not found: $bundle"
+        echo "  Please run Build first."
+        return 1
+    fi
+
+    if ! command -v dpkg-deb >/dev/null 2>&1; then
+        echo "[ERROR] dpkg-deb not found. Install with: sudo apt install dpkg-dev"
+        return 1
+    fi
+
+    local version
+    version=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+    [ -z "$version" ] && version="1.0.0"
+
+    # 打包根目录与最终 .deb 都输出到 packer/runtimes(runtime 数据目录,已 gitignore)
+    local out_dir="packer/runtimes"
+    local root="$out_dir/zebra-deb"
+    rm -rf "$root"
+    mkdir -p "$root/DEBIAN" "$root/usr/bin" "$root/usr/share/applications" \
+             "$root/usr/share/icons/hicolor" "$root/opt/zebra"
+    cp -r "$bundle/." "$root/opt/zebra/"
+    ln -s /opt/zebra/zebra "$root/usr/bin/zebra"
+
+    # 多尺寸 hicolor 图标(尺寸与目录匹配),桌面环境按需选择
+    for size in 16 24 32 48 64 128 256 512; do
+        if [ -f "linux/icons/icon_${size}.png" ]; then
+            mkdir -p "$root/usr/share/icons/hicolor/${size}x${size}/apps"
+            cp "linux/icons/icon_${size}.png" "$root/usr/share/icons/hicolor/${size}x${size}/apps/zebra.png"
+        fi
+    done
+
+    cat > "$root/usr/share/applications/zebra.desktop" << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Zebra
+Comment=Zebra Desktop App
+Exec=/opt/zebra/zebra
+Icon=zebra
+# WM_CLASS 是 xin.dart.zebra(linux/runner/my_application.cc 里 g_set_prgname(APPLICATION_ID)),
+# 不加 StartupWMClass 则 GNOME 常驻台无法把窗口匹配到本 .desktop,显示默认齿轮图标
+StartupWMClass=xin.dart.zebra
+Terminal=false
+Categories=Network;Utility;
+EOF
+
+    cat > "$root/DEBIAN/control" << EOF
+Package: zebra
+Version: $version
+Section: net
+Priority: optional
+Architecture: amd64
+Maintainer: Zebra <zebra@dart.xin>
+Installed-Size: $(du -sk "$root/opt" | awk '{print $1}')
+Description: Zebra desktop application
+EOF
+
+    # postinst:安装/升级后刷新图标缓存与桌面数据库,否则新装的图标不显示
+    cat > "$root/DEBIAN/postinst" << 'EOF'
+#!/bin/sh
+set -e
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+fi
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
+fi
+exit 0
+EOF
+    chmod +x "$root/DEBIAN/postinst"
+
+    local deb_name="$out_dir/zebra_${version}_amd64.deb"
+    dpkg-deb --build --root-owner-group "$root" "$deb_name"
+    if [ $? -ne 0 ]; then
+        echo "[ERROR] dpkg-deb failed!"
+        return 1
+    fi
+
+    echo
+    echo "Done! Package: $SCRIPT_DIR/$deb_name"
+}
+
 # 兼容旧用法: ./build_linux.sh --clean 或 ./build_linux.sh
 if [ "$1" = "--clean" ]; then
     do_clean
@@ -270,10 +362,15 @@ if [ "$1" = "--quick" ]; then
     exit 0
 fi
 
+if [ "$1" = "--deb" ]; then
+    do_pack_deb
+    exit 0
+fi
+
 # 交互式菜单
 while true; do
     show_menu
-    read -p "  Select option [1-9]: " choice
+    read -p "  Select option [1-10]: " choice
 
     case $choice in
         1) do_build ;;
@@ -283,8 +380,9 @@ while true; do
         5) do_clean; do_build ;;
         6) do_run ;;
         7) do_pack ;;
-        8) do_quick_build_run ;;
-        9) exit 0 ;;
+        8) do_pack_deb ;;
+        9) do_quick_build_run ;;
+        10) exit 0 ;;
         *) echo "Invalid option!" ;;
     esac
 
