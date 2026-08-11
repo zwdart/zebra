@@ -855,13 +855,18 @@ jobs:
           cd build/ios/iphoneos
           zip -r zebra-ios-${{ steps.pkgver.outputs.version }}-arm64.zip Runner.app
 
-      - name: Rename IPA with version
+      - name: Rename IPA with version (if produced)
         run: |
           VERSION="${{ steps.pkgver.outputs.version }}"
-          cd build/ios/ipa
-          for f in *.ipa; do
-            mv "$f" "zebra-ios-${VERSION}-arm64.ipa"
-          done
+          # flutter build ipa --no-codesign 在无签名证书的 CI 上可能不产出 .ipa
+          # (flutter 在导出失败时仍返回成功),故找不到就跳过,不中断构建
+          IPA="$(find build -name '*.ipa' -type f 2>/dev/null | head -1)"
+          if [ -z "$IPA" ]; then
+            echo "WARNING: no .ipa produced by flutter build ipa --no-codesign, skipping rename"
+            exit 0
+          fi
+          DIR="$(dirname "$IPA")"
+          mv "$IPA" "$DIR/zebra-ios-${VERSION}-arm64.ipa"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -869,7 +874,7 @@ jobs:
           name: zebra-ios
           path: |
             build/ios/iphoneos/zebra-ios-*.zip
-            build/ios/ipa/zebra-ios-*.ipa
+            build/**/zebra-ios-*.ipa
 
   # ==================== 发布 Release(仅打 tag 时) ====================
   release:
