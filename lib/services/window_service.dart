@@ -31,6 +31,9 @@ class WindowService {
       center: x == null && y == null,
       backgroundColor: const Color(0xFF1E1E2E),
       titleBarStyle: TitleBarStyle.hidden,
+      // macOS 上隐藏原生红绿灯按钮(关闭/最小化/全屏),与 Windows/Linux
+      // 自绘标题栏保持一致;关闭/最小化由 CustomTitleBar 自绘按钮提供
+      windowButtonVisibility: false,
     );
 
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
