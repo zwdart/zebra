@@ -56,12 +56,12 @@ EOF
 
     echo
     echo "[3/4] Preparing Zebra.app (real .app bundle)..."
-    # 真实 .app 方案:直接使用 Flutter 构建产物 Runner.app,不经 zebra-pack 自解压壳,
+    # 真实 .app 方案:直接使用 Flutter 构建产物,不经 zebra-pack 自解压壳,
     # 保证 Dock 图标/代码签名/Gatekeeper/商店行为全部正常。
-    # 产物路径在不同 Flutter/Xcode 版本下可能有差异,先按标准路径取,
-    # 取不到则在 build/macos 下动态查找 .app
-    APP_BUNDLE="$SCRIPT_DIR/build/macos/Build/Products/Release/Runner.app"
-    if [ ! -d "$APP_BUNDLE" ]; then
+    # 产物 bundle 名取决于 Xcode 工程的 PRODUCT_NAME(本项目 AppInfo.xcconfig
+    # 设为 zebra,故产物为 zebra.app),不硬编码,直接动态查找第一个 .app
+    APP_BUNDLE="$(find "$SCRIPT_DIR/build/macos/Build/Products/Release" -maxdepth 1 -name '*.app' -type d 2>/dev/null | head -1)"
+    if [ -z "$APP_BUNDLE" ]; then
         APP_BUNDLE="$(find "$SCRIPT_DIR/build/macos" -maxdepth 6 -name '*.app' -type d 2>/dev/null | head -1)"
     fi
     if [ -z "$APP_BUNDLE" ] || [ ! -d "$APP_BUNDLE" ]; then
@@ -70,10 +70,12 @@ EOF
         return 1
     fi
     echo "  Using app bundle: $APP_BUNDLE"
+    EXE_NAME="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_BUNDLE/Contents/Info.plist")"
+    echo "  Bundle executable: $EXE_NAME"
     ZEBRA_APP="$SCRIPT_DIR/build/macos/Zebra.app"
     rm -rf "$ZEBRA_APP"
     cp -R "$APP_BUNDLE" "$ZEBRA_APP"
-    # 应用显示名与旧版自解压壳一致(真实产物 CFBundleName 为 Runner)
+    # 应用显示名与旧版自解压壳一致(真实产物 CFBundleName 为 zebra)
     /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Zebra SSH" "$ZEBRA_APP/Contents/Info.plist" 2>/dev/null || \
         /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Zebra SSH" "$ZEBRA_APP/Contents/Info.plist"
 
@@ -81,7 +83,7 @@ EOF
     echo "[4/4] Done!"
     echo
     echo "Output: $ZEBRA_APP"
-    ls -lh "$ZEBRA_APP/Contents/MacOS/Runner"
+    ls -lh "$ZEBRA_APP/Contents/MacOS/$EXE_NAME"
 }
 
 # 兼容旧用法: ./build_mac.sh --clean 或 ./build_mac.sh

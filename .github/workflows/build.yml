@@ -586,12 +586,12 @@ jobs:
 
       - name: Prepare Zebra.app bundle (real .app)
         run: |
-          # 真实 .app 方案:直接使用 Flutter 构建产物 Runner.app,不经 zebra-pack 自解压壳,
+          # 真实 .app 方案:直接使用 Flutter 构建产物,不经 zebra-pack 自解压壳,
           # 保证 Dock 图标/代码签名/Gatekeeper/商店行为全部正常。
-          # 产物路径在不同 Flutter/Xcode 版本下可能有差异(CI 曾报 Runner.app 找不到),
-          # 先按标准路径取,取不到则在 build/macos 下动态查找 .app,并打印实际路径便于排查
-          APP_BUNDLE="build/macos/Build/Products/Release/Runner.app"
-          if [ ! -d "$APP_BUNDLE" ]; then
+          # 产物 bundle 名取决于 Xcode 工程的 PRODUCT_NAME(本项目 AppInfo.xcconfig
+          # 设为 zebra,故产物为 zebra.app),不硬编码,直接动态查找第一个 .app
+          APP_BUNDLE="$(find build/macos/Build/Products/Release -maxdepth 1 -name '*.app' -type d 2>/dev/null | head -1)"
+          if [ -z "$APP_BUNDLE" ]; then
             APP_BUNDLE="$(find build/macos -maxdepth 6 -name '*.app' -type d 2>/dev/null | head -1)"
           fi
           if [ -z "$APP_BUNDLE" ] || [ ! -d "$APP_BUNDLE" ]; then
@@ -600,8 +600,10 @@ jobs:
             exit 1
           fi
           echo "Using app bundle: $APP_BUNDLE"
+          EXE_NAME="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_BUNDLE/Contents/Info.plist")"
+          echo "Bundle executable: $EXE_NAME"
           cp -R "$APP_BUNDLE" Zebra.app
-          # 应用显示名与旧版自解压壳一致(真实产物 CFBundleName 为 Runner)
+          # 应用显示名与旧版自解压壳一致(真实产物 CFBundleName 为 zebra)
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Zebra SSH" Zebra.app/Contents/Info.plist 2>/dev/null || \
             /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Zebra SSH" Zebra.app/Contents/Info.plist
           # 生成卷宗图标:真实产物图标编译在 Assets.car 内,无独立 AppIcon.icns,
@@ -692,8 +694,11 @@ jobs:
         run: |
           # 真实 .app 方案的 Zebra.app 直接来自 Flutter 构建产物,
           # 必须是 universal(同时含 x86_64 + arm64),否则 x64 包在 Intel Mac 上无法运行,
-          # 这里显式校验并报错
-          for BIN in Zebra.app/Contents/MacOS/Runner Zebra-x64.app/Contents/MacOS/Runner; do
+          # 这里显式校验并报错。可执行文件名不硬编码,从 Info.plist 动态读取
+          # (本项目 PRODUCT_NAME=zebra,故为 Contents/MacOS/zebra)
+          for APP in Zebra.app Zebra-x64.app; do
+            EXE_NAME="$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Contents/Info.plist")"
+            BIN="$APP/Contents/MacOS/$EXE_NAME"
             if [ -f "$BIN" ]; then
               echo "== $BIN =="
               lipo -info "$BIN"
@@ -702,7 +707,8 @@ jobs:
                 exit 1
               fi
             else
-              echo "ERROR: $BIN not found" >&2
+              echo "ERROR: $BIN not found (CFBundleExecutable=$EXE_NAME)" >&2
+              ls "$APP/Contents/MacOS/" >&2 || true
               exit 1
             fi
           done
