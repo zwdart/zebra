@@ -78,6 +78,11 @@ EOF
     # 应用显示名与旧版自解压壳一致(真实产物 CFBundleName 为 zebra)
     /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Zebra SSH" "$ZEBRA_APP/Contents/Info.plist" 2>/dev/null || \
         /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Zebra SSH" "$ZEBRA_APP/Contents/Info.plist"
+    # PlistBuddy 修改 Info.plist 会破坏 Flutter 构建时的 ad-hoc 签名;
+    # 必须重新签名,否则带沙盒 entitlement 的应用启动即崩
+    # (EXC_BAD_INSTRUCTION,dyld secinit 校验签名失败,OSStatus -67030)
+    codesign --force --deep --sign - --entitlements "$SCRIPT_DIR/macos/Runner/Release.entitlements" "$ZEBRA_APP"
+    codesign --verify --deep --strict "$ZEBRA_APP"
 
     echo
     echo "[4/4] Done!"

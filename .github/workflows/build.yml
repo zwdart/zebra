@@ -623,6 +623,11 @@ jobs:
           cp "$ICON_SRC/app_icon_1024.png" "$TMP/icon_512x512@2x.png"
           iconutil -c icns "$TMP" --output volume.icns
           rm -rf "$TMP"
+          # PlistBuddy 修改 Info.plist 会破坏 Flutter 构建时的 ad-hoc 签名;
+          # 必须重新签名,否则带沙盒 entitlement 的应用启动即崩
+          # (EXC_BAD_INSTRUCTION,dyld secinit 校验签名失败,OSStatus -67030)
+          codesign --force --deep --sign - --entitlements macos/Runner/Release.entitlements Zebra.app
+          codesign --verify --deep --strict Zebra.app
           echo "Zebra.app ready: $(du -sh Zebra.app | cut -f1)"
 
       - name: Zip Zebra.app
@@ -706,6 +711,12 @@ jobs:
                 echo "ERROR: $BIN 不含 x86_64,Intel 包将无法运行,请检查 Flutter 构建配置" >&2
                 exit 1
               fi
+              # 签名校验:带沙盒 entitlement 的应用签名无效会在启动时崩溃,
+              # 必须保证 ad-hoc 重签后签名完整有效
+              codesign --verify --deep --strict "$APP" || {
+                echo "ERROR: $APP 签名校验失败" >&2
+                exit 1
+              }
             else
               echo "ERROR: $BIN not found (CFBundleExecutable=$EXE_NAME)" >&2
               ls "$APP/Contents/MacOS/" >&2 || true
