@@ -1,9 +1,9 @@
 # Zebra — 桌面免安装应用自动构建
 #
 # 触发方式:
-#   - push 到 master:构建 Linux/Windows/Android 并上传 Actions Artifact
-#   - 打 tag (v*):构建全平台并自动发布 GitHub Release(可直接下载)
-#   - 手动触发:Actions 页面 Run workflow
+#   - 打 tag (v*):自动构建全平台并发布 GitHub Release(可直接下载)
+#   - 手动触发:Actions 页面 Run workflow(构建全平台,产物只在 Artifacts 里)
+#   - 普通 commit(push 到 master):不触发构建,节省 Actions 分钟数
 #
 # 产物(统一命名 zebra-<平台>-<版本>-<架构>.<ext>,版本号取自 tag 或 pubspec.yaml):
 #   - Linux   :
@@ -34,17 +34,15 @@
 # ==================== 操作流程(完整命令) ====================
 #
 # 一、首次发布(完整流程):
-#   1. 提交并推送代码(触发 Linux + Windows 构建)
+#   1. 提交并推送代码(不触发构建)
 #      git add -A
 #      git commit -m "feat: 你的改动说明"
 #      git push origin master
-#   2. 等待构建完成(约 15~25 分钟),在仓库 Actions 页面
-#      点最新一次 run,底部 Artifacts 可下载 Linux/Windows 包
-#   3. 打 tag 并推送(触发 macOS 构建 + 自动发 Release)
+#   2. 打 tag 并推送(触发全平台构建 + 自动发 Release)
 #      git tag -a v1.0.0 -m "release v1.0.0"
 #      git push origin v1.0.0
-#   4. 等 macOS 构建完成(约 25~35 分钟),到仓库 Releases 页面
-#      下载三平台安装包(长期可下载的正式入口)
+#   3. 等构建完成(约 25~35 分钟),到仓库 Releases 页面
+#      下载各平台安装包(长期可下载的正式入口)
 #
 # 二、日常更新版本:
 #   1. git add -A && git commit -m "..." && git push origin master
@@ -53,18 +51,18 @@
 #
 # 三、只想手动构建一次(不发布):
 #   Actions 页面 → Build Desktop Apps → Run workflow
-#   (手动触发会构建三平台,但不会发 Release,产物只在 Artifacts 里)
+#   (手动触发会构建全平台,但不会发 Release,产物只在 Artifacts 里)
 #
 # ==================== 注意事项 ====================
 #   1. git tag 只存在本地,必须 git push origin <tag> 推送后 GitHub 才认;
 #      用 git ls-remote --tags origin 可验证是否真的推送成功。
-#   2. tag 触发是"另一次独立 run",与 push master 那次互不干扰;
-#      判定依据是 github.ref:分支为 refs/heads/master,tag 为 refs/tags/v*。
+#   2. tag 触发是"另一次独立 run";判定依据是 github.ref:
+#      tag 为 refs/tags/v*。普通 commit(push master)不会触发本工作流。
 #   3. tag 必须打在要发布的 commit 上:先 push master 再打 tag,
 #      否则 tag 指向的提交里没有最新代码。
 #   4. tag 名必须以 v 开头(如 v1.0.0),否则不会触发本工作流。
-#   5. macOS 平时 push 不构建(macOS runner 分钟数按 10 倍扣私有仓库额度),
-#      只有打 tag 或手动触发时才跑。
+#   5. macOS 与 iOS 只参与 tag 或手动触发构建(macOS runner 分钟数按 10 倍
+#      扣私有仓库额度),Linux/Windows/Android 同理,避免日常 commit 烧分钟数。
 #   6. 打错 tag 的删除方法:
 #      git tag -d v1.0.0 && git push origin :v1.0.0
 #   7. 已发布的 tag 不要覆盖,改代码请递增版本号,避免 Release 混乱。
@@ -82,7 +80,6 @@ env:
 
 on:
   push:
-    branches: [master]
     tags: ['v*']
   workflow_dispatch:
 
