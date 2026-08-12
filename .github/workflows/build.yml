@@ -15,16 +15,19 @@
 #   - Windows :
 #       * zebra-windows-<ver>-x86_64.exe(自解压单文件)
 #       * installer/zebra-windows-<ver>-x86_64-setup.exe(Inno Setup 原生安装器)
-#   - macOS   : zebra-macos-<ver>-arm64.{zip,dmg,pkg}(Apple Silicon)
-#               + zebra-macos-<ver>-x86_64.{zip,dmg,pkg}(Intel)
+#   - macOS   : zebra-macos-<ver>-arm64.{zip,dmg,pkg}(Apple Silicon,universal 二进制)
+#               + zebra-macos-<ver>-x86_64.{zip,dmg,pkg}(Intel,同一份 universal 产物)
 #   - Android : zebra-android-<ver>-universal.apk(全 ABI 合一)
 #               + zebra-android-<ver>-{abi}.apk(按 ABI 拆分)
 #               + zebra-android-<ver>-universal.aab(上架应用商店)
 #   - iOS     : zebra-ios-<ver>-arm64.zip(Runner.app 压缩包)
 #               + zebra-ios-<ver>-arm64.ipa(均未签名,需本地签名后安装/上架)
 #
-# 打包方式:Flutter release 构建 →
-# packer/zebra-pack 压缩进 data.bin → packer/zebra 自解压单文件(免安装版);
+# 打包方式:
+#   - Linux/Windows:Flutter release 构建 → packer/zebra-pack 压缩进 data.bin →
+#     packer/zebra 自解压单文件(免安装版)
+#   - macOS:直接分发 Flutter 构建产物 Runner.app(真实 .app,不经自解压壳),
+#     dmg/pkg/zip 均基于该真实 bundle 打包
 # 原生安装包(.deb/.rpm/.AppImage/.tar.gz/.dmg/.pkg/setup.exe/.ipa)
 # 直接基于 Flutter 构建产物打包。
 #
@@ -450,6 +453,9 @@ jobs:
   android:
     name: Android
     runs-on: ubuntu-latest
+    # 单 job 连续跑 3 次 Gradle 构建(apk / 拆分 apk / aab),约 15~25 分钟;
+    # 显式超时,避免 runner 卡死时默认 6h 才失败、白白烧掉分钟数
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -543,6 +549,8 @@ jobs:
   # ==================== macOS ====================
   # macOS runner 分钟数按 10 倍加权消耗私有仓库额度,平时 push 不构建;
   # 仅打 tag(发布 Release)或手动触发时才跑。
+  # 采用真实 .app 方案:直接分发 Flutter 构建产物,不经 zebra-pack 自解压壳,
+  # 保证 Dock 图标/代码签名/Gatekeeper/App Store 行为全部正常。
   macos:
     name: macOS
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
@@ -555,12 +563,6 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-
-      - uses: Swatinem/rust-cache@v2
 
       - name: Generate build info
         run: |
@@ -585,122 +587,56 @@ jobs:
       - name: Build Flutter macOS release
         run: flutter build macos --release
 
-      - name: Pack self-extracting binary
+      - name: Prepare Zebra.app bundle (real .app)
         run: |
-          cd packer
-          cargo build --release --bin zebra-pack
-          # macOS 产物路径在不同 Flutter/Xcode 版本下可能有差异(CI 曾报 Runner.app 找不到),
+          # 真实 .app 方案:直接使用 Flutter 构建产物 Runner.app,不经 zebra-pack 自解压壳,
+          # 保证 Dock 图标/代码签名/Gatekeeper/商店行为全部正常。
+          # 产物路径在不同 Flutter/Xcode 版本下可能有差异(CI 曾报 Runner.app 找不到),
           # 先按标准路径取,取不到则在 build/macos 下动态查找 .app,并打印实际路径便于排查
-          APP_BUNDLE="../build/macos/Build/Products/Release/Runner.app"
+          APP_BUNDLE="build/macos/Build/Products/Release/Runner.app"
           if [ ! -d "$APP_BUNDLE" ]; then
-            APP_BUNDLE="$(find ../build/macos -maxdepth 6 -name '*.app' -type d 2>/dev/null | head -1)"
+            APP_BUNDLE="$(find build/macos -maxdepth 6 -name '*.app' -type d 2>/dev/null | head -1)"
           fi
           if [ -z "$APP_BUNDLE" ] || [ ! -d "$APP_BUNDLE" ]; then
             echo "ERROR: macOS app bundle not found under build/macos" >&2
-            find ../build/macos -maxdepth 6 2>/dev/null || echo "(build/macos does not exist)"
+            find build/macos -maxdepth 6 2>/dev/null || echo "(build/macos does not exist)"
             exit 1
           fi
           echo "Using app bundle: $APP_BUNDLE"
-          target/release/zebra-pack \
-            -f "$APP_BUNDLE" \
-            -e "Contents/MacOS/$(basename "$APP_BUNDLE" .app)" \
-            -n zebra-ssh
-
-      - name: Verify data.bin integrity
-        run: |
-          DATA_BIN="$PWD/packer/target/data.bin"
-          if [ ! -f "$DATA_BIN" ]; then
-            echo "ERROR: data.bin not generated" >&2
-            exit 1
-          fi
-          if ! strings "$DATA_BIN" | grep -q "flutter_assets"; then
-            echo "ERROR: data.bin is missing flutter_assets — pack source folder was wrong!" >&2
-            find "$PWD/build/macos" -maxdepth 6 -name '*.app' -type d 2>/dev/null
-            exit 1
-          fi
-          if ! strings "$DATA_BIN" | grep -q "icudtl.dat"; then
-            echo "ERROR: data.bin is missing icudtl.dat" >&2
-            exit 1
-          fi
-          echo "data.bin OK: $(wc -c < "$DATA_BIN") bytes, key resources present"
-
-      - name: Build self-extracting binary
-        run: |
-          cd packer
-          cargo build --release --bin zebra
-
-      - name: Assemble Zebra.app bundle
-        run: |
-          APP_BUNDLE="$PWD/packer/target/release/Zebra.app"
-          rm -rf "$APP_BUNDLE"
-          mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
-          cp packer/target/release/zebra "$APP_BUNDLE/Contents/MacOS/zebra"
-          chmod +x "$APP_BUNDLE/Contents/MacOS/zebra"
-
-          # 图标:优先用 packer/macos_iconset,否则从 AppIcon 源图生成
-          ICONSET="packer/macos_iconset"
+          cp -R "$APP_BUNDLE" Zebra.app
+          # 应用显示名与旧版自解压壳一致(真实产物 CFBundleName 为 Runner)
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Zebra SSH" Zebra.app/Contents/Info.plist 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Zebra SSH" Zebra.app/Contents/Info.plist
+          # 生成卷宗图标:真实产物图标编译在 Assets.car 内,无独立 AppIcon.icns,
+          # DMG 卷宗图标需要单独 .icns,从 AppIcon 源图生成(sips 缩放 + iconutil 合成)
           ICON_SRC="macos/Runner/Assets.xcassets/AppIcon.appiconset"
-          if [ -d "$ICONSET" ]; then
-            iconutil -c icns "$ICONSET" --output "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
-          else
-            TMP="$APP_BUNDLE/Contents/Resources/AppIcon.iconset"
-            mkdir -p "$TMP"
-            sips -z 16 16   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_16x16.png"        2>/dev/null
-            sips -z 32 32   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_16x16@2x.png"     2>/dev/null
-            sips -z 32 32   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_32x32.png"        2>/dev/null
-            sips -z 64 64   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_32x32@2x.png"     2>/dev/null
-            sips -z 128 128 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_128x128.png"      2>/dev/null
-            sips -z 256 256 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_128x128@2x.png"   2>/dev/null
-            sips -z 256 256 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_256x256.png"      2>/dev/null
-            sips -z 512 512 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_256x256@2x.png"   2>/dev/null
-            sips -z 512 512 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_512x512.png"      2>/dev/null
-            cp "$ICON_SRC/app_icon_1024.png" "$TMP/icon_512x512@2x.png"
-            iconutil -c icns "$TMP" --output "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
-            rm -rf "$TMP"
-          fi
-
-          cat > "$APP_BUNDLE/Contents/Info.plist" << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleName</key>
-              <string>Zebra</string>
-              <key>CFBundleDisplayName</key>
-              <string>Zebra SSH</string>
-              <key>CFBundleIdentifier</key>
-              <string>com.zebra.ssh</string>
-              <key>CFBundleVersion</key>
-              <string>${{ steps.pkgver.outputs.version }}</string>
-              <key>CFBundleShortVersionString</key>
-              <string>${{ steps.pkgver.outputs.version }}</string>
-              <key>CFBundleExecutable</key>
-              <string>zebra</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleIconFile</key>
-              <string>AppIcon</string>
-              <key>NSHighResolutionCapable</key>
-              <true/>
-              <key>NSLocalNetworkUsageDescription</key>
-              <string>Zebra 需要访问本地网络,用于局域网设备发现和聊天。</string>
-          </dict>
-          </plist>
-          PLIST
+          TMP=".appicon.iconset"
+          mkdir -p "$TMP"
+          sips -z 16 16   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_16x16.png"        2>/dev/null
+          sips -z 32 32   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_16x16@2x.png"     2>/dev/null
+          sips -z 32 32   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_32x32.png"        2>/dev/null
+          sips -z 64 64   "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_32x32@2x.png"     2>/dev/null
+          sips -z 128 128 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_128x128.png"      2>/dev/null
+          sips -z 256 256 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_128x128@2x.png"   2>/dev/null
+          sips -z 256 256 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_256x256.png"      2>/dev/null
+          sips -z 512 512 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_256x256@2x.png"   2>/dev/null
+          sips -z 512 512 "$ICON_SRC/app_icon_1024.png" --out "$TMP/icon_512x512.png"      2>/dev/null
+          cp "$ICON_SRC/app_icon_1024.png" "$TMP/icon_512x512@2x.png"
+          iconutil -c icns "$TMP" --output volume.icns
+          rm -rf "$TMP"
+          echo "Zebra.app ready: $(du -sh Zebra.app | cut -f1)"
 
       - name: Zip Zebra.app
         run: |
-          cd packer/target/release
           zip -r zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.zip Zebra.app
 
       - name: Create DMG
         run: |
-          cd packer/target/release
           # 内嵌 .VolumeIcon.icns 卷宗图标,否则 dmg 文件/挂载卷显示系统默认磁盘图标
           STAGE="dmg-stage"
           rm -rf "$STAGE" && mkdir -p "$STAGE"
           cp -R Zebra.app "$STAGE/"
-          cp "$STAGE/Zebra.app/Contents/Resources/AppIcon.icns" "$STAGE/.VolumeIcon.icns"
+          cp volume.icns "$STAGE/.VolumeIcon.icns"
           hdiutil create \
             -volname "Zebra" \
             -srcfolder "$STAGE" \
@@ -710,7 +646,6 @@ jobs:
 
       - name: Create PKG
         run: |
-          cd packer/target/release
           # 生成原生 .pkg 安装器包(安装到 /Applications)
           pkgbuild \
             --component Zebra.app \
@@ -722,45 +657,24 @@ jobs:
       # ==================== macOS x86_64(Intel) ====================
       # 说明:Flutter 3+ 的 `flutter build macos --release` 默认就产出 universal 二进制
       # (同时含 x86_64 + arm64,flutter_tools 对 release 用 generic/platform=macOS 目标),
-      # 所以上面 arm64 流程打包的 data.bin 里的 Runner.app 本身就支持 Intel。
-      # 真正限制架构的是 Rust 自解压壳 zebra(cargo 默认按宿主架构编译,即 arm64)。
-      # 因此 x64 版只需用同一份 data.bin 重新编译 x86_64 的 zebra 壳即可,无需再构建 Flutter。
-      - name: Install x86_64 Rust target
-        run: rustup target add x86_64-apple-darwin
-
-      - name: Build x86_64 self-extracting binary
+      # 所以上面 arm64 流程打出的 Zebra.app 本身就支持 Intel,无需再构建 Flutter 或 Rust。
+      # x64 版只是把同一份 universal 的 Zebra.app 复制一份按 x86_64 命名分发。
+      - name: Prepare Zebra-x64.app bundle
         run: |
-          cd packer
-          # data.bin 由上方 arm64 流程的 zebra-pack 生成,内含 universal 的 Runner.app,直接复用
-          if [ ! -f target/data.bin ]; then
-            echo "ERROR: target/data.bin not found; run the arm64 pack step first" >&2
-            exit 1
-          fi
-          cargo build --release --target x86_64-apple-darwin --bin zebra
-
-      - name: Assemble Zebra-x64.app bundle
-        run: |
-          # arm64 版 Zebra.app 的图标与 Info.plist 与 x64 完全一致,
-          # 直接复制整个 bundle 后替换其中的 zebra 可执行文件即可
-          APP_BUNDLE="$PWD/packer/target/release/Zebra-x64.app"
-          rm -rf "$APP_BUNDLE"
-          cp -R packer/target/release/Zebra.app "$APP_BUNDLE"
-          cp packer/target/x86_64-apple-darwin/release/zebra "$APP_BUNDLE/Contents/MacOS/zebra"
-          chmod +x "$APP_BUNDLE/Contents/MacOS/zebra"
+          # 内容与 arm64 版完全一致(universal 二进制),仅按 x86_64 命名
+          cp -R Zebra.app Zebra-x64.app
 
       - name: Zip Zebra-x64.app
         run: |
-          cd packer/target/release
           zip -r zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.zip Zebra-x64.app
 
       - name: Create x64 DMG
         run: |
-          cd packer/target/release
           # 内嵌 .VolumeIcon.icns 卷宗图标,否则 dmg 文件/挂载卷显示系统默认磁盘图标
           STAGE="dmg-stage"
           rm -rf "$STAGE" && mkdir -p "$STAGE"
           cp -R Zebra-x64.app "$STAGE/"
-          cp "$STAGE/Zebra-x64.app/Contents/Resources/AppIcon.icns" "$STAGE/.VolumeIcon.icns"
+          cp volume.icns "$STAGE/.VolumeIcon.icns"
           hdiutil create \
             -volname "Zebra" \
             -srcfolder "$STAGE" \
@@ -770,7 +684,6 @@ jobs:
 
       - name: Create x64 PKG
         run: |
-          cd packer/target/release
           pkgbuild \
             --component Zebra-x64.app \
             --install-location /Applications \
@@ -780,33 +693,34 @@ jobs:
 
       - name: Verify macOS architectures
         run: |
-          # 自解压壳:arm64 版应为 arm64,x64 版应为 x86_64
-          lipo -info packer/target/release/Zebra.app/Contents/MacOS/zebra
-          lipo -info packer/target/release/Zebra-x64.app/Contents/MacOS/zebra
-          # Runner.app(被打进 data.bin)必须是 universal(同时含 x86_64 + arm64),
-          # 否则 x64 包在 Intel Mac 上无法运行,这里显式校验并报错
-          RUNNER_BIN="build/macos/Build/Products/Release/Runner.app/Contents/MacOS/Runner"
-          if [ -f "$RUNNER_BIN" ]; then
-            lipo -info "$RUNNER_BIN"
-            if ! lipo -info "$RUNNER_BIN" | grep -q "x86_64"; then
-              echo "ERROR: Runner.app 不含 x86_64,Intel 包将无法运行,请检查 Flutter 构建配置" >&2
+          # 真实 .app 方案的 Zebra.app 直接来自 Flutter 构建产物,
+          # 必须是 universal(同时含 x86_64 + arm64),否则 x64 包在 Intel Mac 上无法运行,
+          # 这里显式校验并报错
+          for BIN in Zebra.app/Contents/MacOS/Runner Zebra-x64.app/Contents/MacOS/Runner; do
+            if [ -f "$BIN" ]; then
+              echo "== $BIN =="
+              lipo -info "$BIN"
+              if ! lipo -info "$BIN" | grep -q "x86_64"; then
+                echo "ERROR: $BIN 不含 x86_64,Intel 包将无法运行,请检查 Flutter 构建配置" >&2
+                exit 1
+              fi
+            else
+              echo "ERROR: $BIN not found" >&2
               exit 1
             fi
-          else
-            echo "WARNING: Runner binary not found at $RUNNER_BIN,跳过校验" >&2
-          fi
+          done
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: zebra-macos
           path: |
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.zip
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.dmg
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.pkg
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.zip
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.dmg
-            packer/target/release/zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.pkg
+            zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.zip
+            zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.dmg
+            zebra-macos-${{ steps.pkgver.outputs.version }}-arm64.pkg
+            zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.zip
+            zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.dmg
+            zebra-macos-${{ steps.pkgver.outputs.version }}-x86_64.pkg
 
   # ==================== iOS ====================
   # iOS 构建同样消耗 macOS runner 分钟数,与 macOS 一样只在打 tag 或手动触发时跑。

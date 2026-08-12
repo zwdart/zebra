@@ -35,7 +35,7 @@ do_build() {
     echo "========================================"
     echo
 
-    echo "[1/7] Running flutter pub get..."
+    echo "[1/4] Running flutter pub get..."
     flutter pub get
     if [ $? -ne 0 ]; then
         echo "[ERROR] flutter pub get failed!"
@@ -43,7 +43,7 @@ do_build() {
     fi
 
     echo
-    echo "[2/7] Building Flutter macOS release..."
+    echo "[2/4] Building Flutter macOS release..."
     cat > "$SCRIPT_DIR/lib/build_info.dart" << EOF
 // Auto-generated build info - overwritten by build scripts
 const String buildTime = '$BUILD_TIME';
@@ -55,102 +55,33 @@ EOF
     fi
 
     echo
-    echo "[3/7] Building zebra-pack tool..."
-    cd "$SCRIPT_DIR/packer"
-    cargo build --release --bin zebra-pack
-    if [ $? -ne 0 ]; then
-        echo "[ERROR] Packer tool build failed!"
-        cd "$SCRIPT_DIR"
+    echo "[3/4] Preparing Zebra.app (real .app bundle)..."
+    # 真实 .app 方案:直接使用 Flutter 构建产物 Runner.app,不经 zebra-pack 自解压壳,
+    # 保证 Dock 图标/代码签名/Gatekeeper/商店行为全部正常。
+    # 产物路径在不同 Flutter/Xcode 版本下可能有差异,先按标准路径取,
+    # 取不到则在 build/macos 下动态查找 .app
+    APP_BUNDLE="$SCRIPT_DIR/build/macos/Build/Products/Release/Runner.app"
+    if [ ! -d "$APP_BUNDLE" ]; then
+        APP_BUNDLE="$(find "$SCRIPT_DIR/build/macos" -maxdepth 6 -name '*.app' -type d 2>/dev/null | head -1)"
+    fi
+    if [ -z "$APP_BUNDLE" ] || [ ! -d "$APP_BUNDLE" ]; then
+        echo "[ERROR] macOS app bundle not found under build/macos"
+        find "$SCRIPT_DIR/build/macos" -maxdepth 6 2>/dev/null || echo "(build/macos does not exist)"
         return 1
     fi
+    echo "  Using app bundle: $APP_BUNDLE"
+    ZEBRA_APP="$SCRIPT_DIR/build/macos/Zebra.app"
+    rm -rf "$ZEBRA_APP"
+    cp -R "$APP_BUNDLE" "$ZEBRA_APP"
+    # 应用显示名与旧版自解压壳一致(真实产物 CFBundleName 为 Runner)
+    /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Zebra SSH" "$ZEBRA_APP/Contents/Info.plist" 2>/dev/null || \
+        /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Zebra SSH" "$ZEBRA_APP/Contents/Info.plist"
 
     echo
-    echo "[4/7] Packing files into data.bin..."
-    APP_DIR="$SCRIPT_DIR/build/macos/Build/Products/Release/Runner.app"
-    EXE_PATH="Contents/MacOS/Runner"
-    target/release/zebra-pack -f "$APP_DIR" -e "$EXE_PATH" -n zebra-ssh
-    if [ $? -ne 0 ]; then
-        echo "[ERROR] Packing failed!"
-        cd "$SCRIPT_DIR"
-        return 1
-    fi
-
+    echo "[4/4] Done!"
     echo
-    echo "[5/7] Building self-extracting exe..."
-    cargo build --release --bin zebra
-    if [ $? -ne 0 ]; then
-        echo "[ERROR] Self-extracting exe build failed!"
-        cd "$SCRIPT_DIR"
-        return 1
-    fi
-    cd "$SCRIPT_DIR"
-
-    echo
-    echo "[6/7] Creating .app bundle..."
-    APP_BUNDLE="packer/target/release/Zebra.app"
-    rm -rf "$APP_BUNDLE"
-    mkdir -p "$APP_BUNDLE/Contents/MacOS"
-    mkdir -p "$APP_BUNDLE/Contents/Resources"
-    cp packer/target/release/zebra "$APP_BUNDLE/Contents/MacOS/zebra"
-    chmod +x "$APP_BUNDLE/Contents/MacOS/zebra"
-
-    # Generate .iconset from PNGs and convert to .icns
-    ICONSET="packer/macos_iconset"
-    ICON_SRC="macos/Runner/Assets.xcassets/AppIcon.appiconset"
-    if [ -d "$ICONSET" ]; then
-        iconutil -c icns "$ICONSET" --output "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
-    else
-        echo "  [WARN] macos_iconset not found, generating from app icons..."
-        ICONSET="$APP_BUNDLE/Contents/Resources/AppIcon.iconset"
-        mkdir -p "$ICONSET"
-        sips -z 16 16     "$ICON_SRC/app_icon_1024.png" --out "$ICONSET/icon_16x16.png"        2>/dev/null
-        sips -z 32 32     "$ICON_SRC/app_icon_1024.png" --out "$ICONSET/icon_16x16@2x.png"     2>/dev/null
-        sips -z 32 32     "$ICON_SRC/app_icon_1024.png" --out "$ICONSET/icon_32x32.png"        2>/dev/null
-        sips -z 64 64     "$ICON_SRC/app_icon_1024.png" --out "$ICONSET/icon_32x32@2x.png"     2>/dev/null
-        sips -z 128 128   "$ICON_SRC/app_icon_1024.png" --out "$ICONSET/icon_128x128.png"      2>/dev/null
-        sips -z 256 256   "$ICON_SRC/app_icon_1024.png" --out "$ICONSET/icon_128x128@2x.png"   2>/dev/null
-        sips -z 256 256   "$ICON_SRC/app_icon_1024.png" --out "$ICONSET/icon_256x256.png"      2>/dev/null
-        sips -z 512 512   "$ICON_SRC/app_icon_1024.png" --out "$ICONSET/icon_256x256@2x.png"   2>/dev/null
-        sips -z 512 512   "$ICON_SRC/app_icon_1024.png" --out "$ICONSET/icon_512x512.png"      2>/dev/null
-        cp "$ICON_SRC/app_icon_1024.png" "$ICONSET/icon_512x512@2x.png"
-        iconutil -c icns "$ICONSET" --output "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
-        rm -rf "$ICONSET"
-    fi
-
-    cat > "$APP_BUNDLE/Contents/Info.plist" << 'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleName</key>
-    <string>Zebra</string>
-    <key>CFBundleDisplayName</key>
-    <string>Zebra SSH</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.zebra.ssh</string>
-    <key>CFBundleVersion</key>
-    <string>1.0.0</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
-    <key>CFBundleExecutable</key>
-    <string>zebra</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>Zebra 需要访问本地网络,用于局域网设备发现和聊天。</string>
-</dict>
-</plist>
-PLIST
-
-    echo
-    echo "[7/7] Done!"
-    echo
-    echo "Output: $APP_BUNDLE"
-    ls -lh "$APP_BUNDLE/Contents/MacOS/zebra"
+    echo "Output: $ZEBRA_APP"
+    ls -lh "$ZEBRA_APP/Contents/MacOS/Runner"
 }
 
 # 兼容旧用法: ./build_mac.sh --clean 或 ./build_mac.sh
