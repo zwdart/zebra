@@ -24,8 +24,24 @@ class RssDatabaseService {
     if (!dbDir.existsSync()) {
       dbDir.createSync(recursive: true);
     }
-
     _dbPath = p.join(dbDir.path, 'zebra_rss.db');
+
+    try {
+      _openDb();
+      _createTables();
+    } catch (e) {
+      // 数据库打开/建表失败（损坏或密钥不匹配）：备份坏库后重建
+      debugPrint('RSS database init failed ($e), backing up and rebuilding');
+      _db?.close();
+      _db = null;
+      _backupCorruptDb();
+      _openDb();
+      _createTables();
+    }
+  }
+
+  /// 打开数据库并做损坏自检（quick_check 非 ok 时抛出）
+  static void _openDb() {
     _db = sqlite3.open(_dbPath!);
 
     // Release 构建启用数据库加密，调试模式不加密方便开发
@@ -33,6 +49,26 @@ class RssDatabaseService {
       _db!.execute("PRAGMA key = '$_dbEncryptionKey'");
     }
 
+    // 损坏自检：quick_check 失败说明库已损坏，交给 init 备份重建
+    final check = _db!.select('PRAGMA quick_check').first.values.first.toString();
+    if (check != 'ok') {
+      throw StateError('RSS database corrupt: $check');
+    }
+  }
+
+  /// 备份损坏的数据库文件（保留现场）并删除原文件，等待重建
+  static void _backupCorruptDb() {
+    try {
+      final bak = '$_dbPath.corrupt-${DateTime.now().millisecondsSinceEpoch}';
+      File(_dbPath!).copySync(bak);
+    } catch (_) {}
+    try {
+      File(_dbPath!).deleteSync();
+    } catch (_) {}
+  }
+
+  /// 建表与迁移（原 init 主体）
+  static void _createTables() {
     _db!.execute('''
       CREATE TABLE IF NOT EXISTS feed_sources (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,6 +96,17 @@ class RssDatabaseService {
       _db!.execute("ALTER TABLE feed_sources ADD COLUMN last_sync_error TEXT DEFAULT NULL");
     }
 
+    // Migration: add unread_count redundant column (O(1) 未读计数)
+    if (!columns.contains('unread_count')) {
+      _db!.execute("ALTER TABLE feed_sources ADD COLUMN unread_count INTEGER NOT NULL DEFAULT 0");
+      // 回填现有未读数
+      _db!.execute('''
+        UPDATE feed_sources SET unread_count = (
+          SELECT COUNT(*) FROM articles WHERE articles.feed_source_id = feed_sources.id AND is_read = 0
+        )
+      ''');
+    }
+
     _db!.execute('''
       CREATE TABLE IF NOT EXISTS articles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,6 +129,9 @@ class RssDatabaseService {
     _db!.execute('CREATE INDEX IF NOT EXISTS idx_articles_read ON articles(is_read)');
     _db!.execute('CREATE INDEX IF NOT EXISTS idx_articles_starred ON articles(is_starred)');
     _db!.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_feed_guid ON articles(feed_source_id, guid)');
+    // 组合索引：未读过滤 + keyset 分页
+    _db!.execute('CREATE INDEX IF NOT EXISTS idx_articles_feed_read ON articles(feed_source_id, is_read)');
+    _db!.execute('CREATE INDEX IF NOT EXISTS idx_articles_created_id ON articles(created_at DESC, id DESC)');
 
     _db!.execute('''
       CREATE TABLE IF NOT EXISTS rss_folders (
@@ -106,6 +156,12 @@ class RssDatabaseService {
     ''');
     _db!.execute('CREATE INDEX IF NOT EXISTS idx_local_folder_items_folder ON rss_folder_items(folder_id)');
     _db!.execute('CREATE INDEX IF NOT EXISTS idx_local_folder_items_source ON rss_folder_items(source_id)');
+
+    // 清理：移除 FTS5 虚拟表及其触发器。
+    // sqlite3mc 加密库与 FTS5 外部内容表触发器不兼容——UPDATE/INSERT articles
+    // 触发同步时报 SQLITE_CORRUPT (267)（database disk image is malformed），
+    // 导致点击文章标已读直接崩溃。搜索改用 LIKE 实现（见 searchArticles）。
+    _db!.execute('DROP TABLE IF EXISTS articles_fts');
 
     // Auto-seed default RSS sources if database is empty
     _seedDefaultSources();
@@ -268,34 +324,69 @@ class RssDatabaseService {
   // ==================== Articles ====================
 
   /// Lightweight query for list views — skips summary & content columns.
-  static List<RssArticle> getArticles(int feedSourceId, {int page = 1, int size = 20}) {
-    final offset = (page - 1) * size;
-    final results = _db!.select(
-      'SELECT id, feed_source_id, guid, title, link, author, published_at, is_read, is_starred, created_at FROM articles WHERE feed_source_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
-      [feedSourceId, size, offset],
+  /// keyset 分页：传入 [beforeCreatedAt]/[beforeId] 游标时按游标翻页，否则按 [page]/[size]。
+  static List<RssArticle> getArticles(int feedSourceId,
+      {int page = 1, int size = 20, String? beforeCreatedAt, int? beforeId}) {
+    final results = _cursorQuery(
+      'SELECT id, feed_source_id, guid, title, link, author, published_at, is_read, is_starred, created_at FROM articles WHERE feed_source_id = ?',
+      [feedSourceId],
+      page: page,
+      size: size,
+      beforeCreatedAt: beforeCreatedAt,
+      beforeId: beforeId,
     );
     return results.map((row) => RssArticle.fromMap(row)).toList();
   }
 
-  static List<RssArticle> getAllArticles({int page = 1, int size = 20}) {
-    final offset = (page - 1) * size;
-    final results = _db!.select(
-      'SELECT id, feed_source_id, guid, title, link, author, published_at, is_read, is_starred, created_at FROM articles ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
-      [size, offset],
+  static List<RssArticle> getAllArticles(
+      {int page = 1, int size = 20, String? beforeCreatedAt, int? beforeId}) {
+    final results = _cursorQuery(
+      'SELECT id, feed_source_id, guid, title, link, author, published_at, is_read, is_starred, created_at FROM articles',
+      const [],
+      page: page,
+      size: size,
+      beforeCreatedAt: beforeCreatedAt,
+      beforeId: beforeId,
     );
     return results.map((row) => RssArticle.fromMap(row)).toList();
   }
 
   /// Get articles from multiple feed sources (for folder view).
-  static List<RssArticle> getArticlesByFeedIds(List<int> feedIds, {int page = 1, int size = 20}) {
+  static List<RssArticle> getArticlesByFeedIds(List<int> feedIds,
+      {int page = 1, int size = 20, String? beforeCreatedAt, int? beforeId}) {
     if (feedIds.isEmpty) return [];
-    final offset = (page - 1) * size;
     final placeholders = feedIds.map((_) => '?').join(',');
-    final results = _db!.select(
-      'SELECT id, feed_source_id, guid, title, link, author, published_at, is_read, is_starred, created_at FROM articles WHERE feed_source_id IN ($placeholders) ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
-      [...feedIds, size, offset],
+    final results = _cursorQuery(
+      'SELECT id, feed_source_id, guid, title, link, author, published_at, is_read, is_starred, created_at FROM articles WHERE feed_source_id IN ($placeholders)',
+      feedIds,
+      page: page,
+      size: size,
+      beforeCreatedAt: beforeCreatedAt,
+      beforeId: beforeId,
     );
     return results.map((row) => RssArticle.fromMap(row)).toList();
+  }
+
+  /// keyset 分页公共查询：按 created_at DESC, id DESC 排序，游标条件 (created_at, id) < (beforeCreatedAt, beforeId)
+  static List<Row> _cursorQuery(
+    String baseSql,
+    List<Object?> params, {
+    int page = 1,
+    int size = 20,
+    String? beforeCreatedAt,
+    int? beforeId,
+  }) {
+    // baseSql 可能已带 WHERE（如 feed_source_id = ?），也可能没有（如全部文章）
+    final hasWhere = RegExp(r'\bWHERE\b', caseSensitive: false).hasMatch(baseSql);
+    final join = hasWhere ? ' AND ' : ' WHERE ';
+    final orderBy = ' ORDER BY created_at DESC, id DESC';
+    if (beforeCreatedAt != null && beforeId != null) {
+      final cursorSql = '$baseSql$join(created_at < ? OR (created_at = ? AND id < ?))$orderBy LIMIT ?';
+      return _db!.select(cursorSql, [...params, beforeCreatedAt, beforeCreatedAt, beforeId, size]).toList();
+    }
+    final offset = (page - 1) * size;
+    final pageSql = '$baseSql$orderBy LIMIT ? OFFSET ?';
+    return _db!.select(pageSql, [...params, size, offset]).toList();
   }
 
   /// Fetch full article (with summary & content) by id — used by detail screen.
@@ -311,16 +402,23 @@ class RssDatabaseService {
   }
 
   static int getUnreadCount(int feedSourceId) {
+    final result = _db!.select('SELECT unread_count as cnt FROM feed_sources WHERE id = ?', [feedSourceId]);
+    return result.isEmpty ? 0 : (result.first['cnt'] as int);
+  }
+
+  static int getTotalUnreadCount() {
+    final result = _db!.select('SELECT COALESCE(SUM(unread_count), 0) as cnt FROM feed_sources');
+    return result.first['cnt'] as int;
+  }
+
+  /// 重新统计指定订阅源的未读数（批量删除后校正用）
+  static void _recountUnread(int feedSourceId) {
     final result = _db!.select(
       'SELECT COUNT(*) as cnt FROM articles WHERE feed_source_id = ? AND is_read = 0',
       [feedSourceId],
     );
-    return result.first['cnt'] as int;
-  }
-
-  static int getTotalUnreadCount() {
-    final result = _db!.select('SELECT COUNT(*) as cnt FROM articles WHERE is_read = 0');
-    return result.first['cnt'] as int;
+    _db!.execute('UPDATE feed_sources SET unread_count = ? WHERE id = ?',
+        [result.first['cnt'] as int, feedSourceId]);
   }
 
   static RssArticle? getArticleByGuid(int feedSourceId, String guid) {
@@ -349,36 +447,79 @@ class RssDatabaseService {
       article.isRead ? 1 : 0,
       article.isStarred ? 1 : 0,
     ]);
+    // 判断是否真正插入（INSERT OR IGNORE 可能因 guid 冲突被跳过）
+    final changed = _db!.select('SELECT changes() as c').first['c'] as int;
     final lastId = _db!.lastInsertRowId;
     stmt.close();
+    if (changed > 0 && !article.isRead) {
+      _db!.execute(
+        'UPDATE feed_sources SET unread_count = unread_count + 1 WHERE id = ?',
+        [article.feedSourceId],
+      );
+    }
     return lastId;
   }
 
-  static List<RssArticle> getStarredArticles({int page = 1, int size = 20}) {
-    final offset = (page - 1) * size;
-    final results = _db!.select(
-      'SELECT id, feed_source_id, guid, title, link, author, published_at, is_read, is_starred, created_at FROM articles WHERE is_starred = 1 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
-      [size, offset],
+  static List<RssArticle> getStarredArticles(
+      {int page = 1, int size = 20, String? beforeCreatedAt, int? beforeId}) {
+    final results = _cursorQuery(
+      'SELECT id, feed_source_id, guid, title, link, author, published_at, is_read, is_starred, created_at FROM articles WHERE is_starred = 1',
+      const [],
+      page: page,
+      size: size,
+      beforeCreatedAt: beforeCreatedAt,
+      beforeId: beforeId,
     );
     return results.map((row) => RssArticle.fromMap(row)).toList();
   }
 
+  /// 全文搜索（标题/摘要/正文 LIKE，兼容 sqlite3mc 加密库），按时间倒序分页返回
+  static List<RssArticle> searchArticles(String keyword,
+      {int page = 1, int size = 20, String? beforeCreatedAt, int? beforeId}) {
+    final k = keyword.trim();
+    if (k.isEmpty) return [];
+
+    final like = '%$k%';
+    final cols = 'id, feed_source_id, guid, title, link, author, published_at, is_read, is_starred, created_at';
+    final base = 'SELECT $cols FROM articles WHERE (title LIKE ? OR summary LIKE ? OR content LIKE ?)';
+    final String sql;
+    final List<Object?> params;
+    if (beforeCreatedAt != null && beforeId != null) {
+      sql = '$base AND (created_at < ? OR (created_at = ? AND id < ?)) ORDER BY created_at DESC, id DESC LIMIT ?';
+      params = [like, like, like, beforeCreatedAt, beforeCreatedAt, beforeId, size];
+    } else {
+      sql = '$base ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?';
+      params = [like, like, like, size, (page - 1) * size];
+    }
+    final results = _db!.select(sql, params);
+    return results.map((row) => RssArticle.fromMap(row)).toList();
+  }
+
   static void markAsRead(int articleId) {
+    final row = _db!.select('SELECT feed_source_id, is_read FROM articles WHERE id = ?', [articleId]);
+    if (row.isEmpty || (row.first['is_read'] as int) == 1) return;
+    final feedId = row.first['feed_source_id'] as int;
     final stmt = _db!.prepare('UPDATE articles SET is_read = 1 WHERE id = ?');
     stmt.execute([articleId]);
     stmt.close();
+    _db!.execute('UPDATE feed_sources SET unread_count = MAX(0, unread_count - 1) WHERE id = ?', [feedId]);
   }
 
   static void markAsUnread(int articleId) {
+    final row = _db!.select('SELECT feed_source_id, is_read FROM articles WHERE id = ?', [articleId]);
+    if (row.isEmpty || (row.first['is_read'] as int) == 0) return;
+    final feedId = row.first['feed_source_id'] as int;
     final stmt = _db!.prepare('UPDATE articles SET is_read = 0 WHERE id = ?');
     stmt.execute([articleId]);
     stmt.close();
+    _db!.execute('UPDATE feed_sources SET unread_count = unread_count + 1 WHERE id = ?', [feedId]);
   }
 
   static void markAllAsRead(int feedSourceId) {
     final stmt = _db!.prepare('UPDATE articles SET is_read = 1 WHERE feed_source_id = ? AND is_read = 0');
     stmt.execute([feedSourceId]);
     stmt.close();
+    _db!.execute('UPDATE feed_sources SET unread_count = 0 WHERE id = ?', [feedSourceId]);
   }
 
   static void toggleStar(int articleId) {
@@ -388,23 +529,37 @@ class RssDatabaseService {
   }
 
   static void deleteArticlesBefore(DateTime date) {
+    final iso = date.toUtc().toIso8601String();
+    final affected = _db!.select('SELECT DISTINCT feed_source_id FROM articles WHERE published_at < ?', [iso]);
     final stmt = _db!.prepare('DELETE FROM articles WHERE published_at < ?');
-    stmt.execute([date.toUtc().toIso8601String()]);
+    stmt.execute([iso]);
     stmt.close();
+    for (final row in affected) {
+      _recountUnread(row['feed_source_id'] as int);
+    }
   }
 
   static void deleteAllArticles() {
     _db!.execute('DELETE FROM articles');
+    _db!.execute('UPDATE feed_sources SET unread_count = 0');
   }
 
   static void deleteArticle(int id) {
+    final row = _db!.select('SELECT feed_source_id, is_read FROM articles WHERE id = ?', [id]);
     final stmt = _db!.prepare('DELETE FROM articles WHERE id = ?');
     stmt.execute([id]);
     stmt.close();
+    if (row.isNotEmpty && (row.first['is_read'] as int) == 0) {
+      _db!.execute(
+        'UPDATE feed_sources SET unread_count = MAX(0, unread_count - 1) WHERE id = ?',
+        [row.first['feed_source_id']],
+      );
+    }
   }
 
   static void clearFeedArticles(int feedSourceId) {
     _db!.execute('DELETE FROM articles WHERE feed_source_id = ?', [feedSourceId]);
+    _db!.execute('UPDATE feed_sources SET unread_count = 0 WHERE id = ?', [feedSourceId]);
   }
 
   static void clearHistory({int? feedSourceId, DateTime? before}) {
@@ -413,12 +568,20 @@ class RssDatabaseService {
         'DELETE FROM articles WHERE feed_source_id = ? AND published_at < ?',
         [feedSourceId, before.toUtc().toIso8601String()],
       );
+      _recountUnread(feedSourceId);
     } else if (feedSourceId != null) {
       _db!.execute('DELETE FROM articles WHERE feed_source_id = ?', [feedSourceId]);
+      _db!.execute('UPDATE feed_sources SET unread_count = 0 WHERE id = ?', [feedSourceId]);
     } else if (before != null) {
-      _db!.execute('DELETE FROM articles WHERE published_at < ?', [before.toUtc().toIso8601String()]);
+      final iso = before.toUtc().toIso8601String();
+      final affected = _db!.select('SELECT DISTINCT feed_source_id FROM articles WHERE published_at < ?', [iso]);
+      _db!.execute('DELETE FROM articles WHERE published_at < ?', [iso]);
+      for (final row in affected) {
+        _recountUnread(row['feed_source_id'] as int);
+      }
     } else {
       _db!.execute('DELETE FROM articles');
+      _db!.execute('UPDATE feed_sources SET unread_count = 0');
     }
   }
 

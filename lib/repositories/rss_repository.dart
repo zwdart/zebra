@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xml/xml.dart';
 import '../database/rss_database_service.dart';
 import '../models/feed_source.dart';
@@ -37,20 +41,35 @@ class RssRepository {
 
   // ==================== Articles ====================
 
-  List<RssArticle> getArticles(int feedSourceId, {int page = 1, int size = 20}) {
-    return RssDatabaseService.getArticles(feedSourceId, page: page, size: size);
+  List<RssArticle> getArticles(int feedSourceId,
+      {int page = 1, int size = 20, String? beforeCreatedAt, int? beforeId}) {
+    return RssDatabaseService.getArticles(feedSourceId,
+        page: page, size: size, beforeCreatedAt: beforeCreatedAt, beforeId: beforeId);
   }
 
-  List<RssArticle> getAllArticles({int page = 1, int size = 20}) {
-    return RssDatabaseService.getAllArticles(page: page, size: size);
+  List<RssArticle> getAllArticles(
+      {int page = 1, int size = 20, String? beforeCreatedAt, int? beforeId}) {
+    return RssDatabaseService.getAllArticles(
+        page: page, size: size, beforeCreatedAt: beforeCreatedAt, beforeId: beforeId);
   }
 
-  List<RssArticle> getArticlesByFeedIds(List<int> feedIds, {int page = 1, int size = 20}) {
-    return RssDatabaseService.getArticlesByFeedIds(feedIds, page: page, size: size);
+  List<RssArticle> getArticlesByFeedIds(List<int> feedIds,
+      {int page = 1, int size = 20, String? beforeCreatedAt, int? beforeId}) {
+    return RssDatabaseService.getArticlesByFeedIds(feedIds,
+        page: page, size: size, beforeCreatedAt: beforeCreatedAt, beforeId: beforeId);
   }
 
-  List<RssArticle> getStarredArticles({int page = 1, int size = 20}) {
-    return RssDatabaseService.getStarredArticles(page: page, size: size);
+  List<RssArticle> getStarredArticles(
+      {int page = 1, int size = 20, String? beforeCreatedAt, int? beforeId}) {
+    return RssDatabaseService.getStarredArticles(
+        page: page, size: size, beforeCreatedAt: beforeCreatedAt, beforeId: beforeId);
+  }
+
+  /// FTS5 全文搜索
+  List<RssArticle> searchArticles(String keyword,
+      {int page = 1, int size = 20, String? beforeCreatedAt, int? beforeId}) {
+    return RssDatabaseService.searchArticles(keyword,
+        page: page, size: size, beforeCreatedAt: beforeCreatedAt, beforeId: beforeId);
   }
 
   RssArticle? getArticle(int id) {
@@ -99,15 +118,38 @@ class RssRepository {
 
   // ==================== Sync / Parse ====================
 
+  /// 连续失败计数（内存态，重启即重置，允许重启后重新尝试）
+  final Map<int, int> _failureCounts = {};
+  int _syncCycle = 0;
+
+  /// 插入文章到本地库(INSERT OR IGNORE 按 (feed_source_id, guid) 唯一索引去重)
+  /// 返回 true 表示真正新增,false 表示已存在被忽略
+  bool insertArticle(RssArticle article) {
+    final existing = RssDatabaseService.getArticleByGuid(article.feedSourceId, article.guid);
+    if (existing != null) return false;
+    RssDatabaseService.insertArticle(article);
+    return true;
+  }
+
   /// 同步单个订阅源，返回新增文章数
   Future<int> syncFeedSource(FeedSource source) async {
-    final result = await RssApiService.fetchFeed(source.url);
+    final result = await RssApiService.fetchFeed(source.url, ifModifiedSince: source.lastSyncedAt);
+
+    // 304 Not Modified：源内容未变化，只更新时间戳
+    if (result.containsKey('notModified')) {
+      if (source.id != null) {
+        RssDatabaseService.updateFeedSourceSyncTime(source.id!);
+        _failureCounts[source.id!] = 0;
+      }
+      return 0;
+    }
 
     // Check for errors
     if (result.containsKey('error')) {
       final errorMsg = 'HTTP Error: ${result['error']}';
       if (source.id != null) {
         RssDatabaseService.updateFeedSourceSyncError(source.id!, errorMsg);
+        _failureCounts[source.id!] = (_failureCounts[source.id!] ?? 0) + 1;
       }
       return 0;
     }
@@ -126,20 +168,39 @@ class RssRepository {
 
     if (source.id != null) {
       RssDatabaseService.updateFeedSourceSyncTime(source.id!);
+      _failureCounts[source.id!] = 0;
     }
     return newCount;
   }
 
-  /// 同步所有启用的订阅源
-  Future<Map<int, int>> syncAllFeedSources() async {
-    final sources = getAllFeedSources().where((s) => s.syncEnabled).toList();
+  /// 同步所有启用的订阅源（受限并发，单批 4 个）
+  /// 连续失败 >= 3 次的源降频：每第 3 个同步周期才重试一次，避免反复拖慢整体。
+  Future<Map<int, int>> syncAllFeedSources({
+    void Function(int done, int total, String? title)? onProgress,
+  }) async {
+    _syncCycle++;
+    final all = getAllFeedSources().where((s) => s.syncEnabled).toList();
+    final sources = all.where((s) {
+      if (s.id == null) return true;
+      final fails = _failureCounts[s.id!] ?? 0;
+      return fails < 3 || _syncCycle % 3 == 0;
+    }).toList();
+
     final results = <int, int>{};
-    for (final source in sources) {
-      try {
+    const batchSize = 4;
+    var done = 0;
+
+    for (var i = 0; i < sources.length; i += batchSize) {
+      final end = (i + batchSize).clamp(0, sources.length);
+      final batch = sources.sublist(i, end);
+      final batchResults = await Future.wait(batch.map((source) async {
         final count = await syncFeedSource(source);
-        results[source.id!] = count;
-      } catch (_) {
-        results[source.id!] = 0;
+        done++;
+        onProgress?.call(done, sources.length, source.title);
+        return (id: source.id, count: count);
+      }));
+      for (final r in batchResults) {
+        if (r.id != null) results[r.id!] = r.count;
       }
     }
     return results;
@@ -444,5 +505,74 @@ class RssRepository {
 
   List<Map<String, dynamic>> getSourceFolderReferences(int sourceId) {
     return RssDatabaseService.getSourceFolderReferences(sourceId);
+  }
+
+  // ==================== Auto Backup ====================
+
+  static const _prefAutoBackupEnabled = 'rss_auto_backup_enabled';
+  static const _prefLastBackupAt = 'rss_last_backup_at';
+
+  /// 自动备份开关状态
+  Future<bool> isAutoBackupEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_prefAutoBackupEnabled) ?? false;
+  }
+
+  Future<void> setAutoBackupEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefAutoBackupEnabled, enabled);
+  }
+
+  /// 检查并按需执行定时备份（每 7 天一次，保留最近 3 份）
+  Future<bool> maybeAutoBackup() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool(_prefAutoBackupEnabled) ?? false)) return false;
+
+    final last = prefs.getString(_prefLastBackupAt);
+    if (last != null) {
+      final lastTime = DateTime.tryParse(last);
+      if (lastTime != null && DateTime.now().difference(lastTime).inDays < 7) {
+        return false;
+      }
+    }
+
+    final ok = await writeBackupNow();
+    if (ok) {
+      await prefs.setString(_prefLastBackupAt, DateTime.now().toIso8601String());
+    }
+    return ok;
+  }
+
+  /// 立即执行一次 OPML 备份到 ApplicationSupportDirectory/zebra/backups/
+  Future<bool> writeBackupNow() async {
+    try {
+      final appDir = await getApplicationSupportDirectory();
+      final backupDir = Directory(p.join(appDir.path, 'zebra', 'backups'));
+      if (!backupDir.existsSync()) backupDir.createSync(recursive: true);
+
+      final stamp = DateTime.now()
+          .toIso8601String()
+          .replaceAll(':', '-')
+          .split('.')
+          .first;
+      final file = File(p.join(backupDir.path, 'rss_backup_$stamp.opml'));
+      await file.writeAsString(exportToOpml(getAllFeedSources()));
+
+      // 保留最近 3 份
+      final files = backupDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.opml'))
+          .toList()
+        ..sort((a, b) => b.path.compareTo(a.path));
+      for (final f in files.skip(3)) {
+        try {
+          f.deleteSync();
+        } catch (_) {}
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }

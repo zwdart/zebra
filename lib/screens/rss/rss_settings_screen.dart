@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/rss_provider.dart';
 import '../../widgets/custom_title_bar.dart';
 import '../../l10n/app_localizations.dart';
+import 'server/rss_server_home_screen.dart';
 
 class RssSettingsScreen extends StatefulWidget {
   const RssSettingsScreen({super.key});
@@ -12,6 +13,28 @@ class RssSettingsScreen extends StatefulWidget {
 }
 
 class _RssSettingsScreenState extends State<RssSettingsScreen> {
+  bool _autoBackupEnabled = false;
+  bool _backupBusy = false;
+  bool _serverMode = false;
+  final TextEditingController _serverUrlController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final provider = context.read<RssProvider>();
+    provider.isAutoBackupEnabled().then((v) {
+      if (mounted) setState(() => _autoBackupEnabled = v);
+    });
+    _serverMode = provider.serverMode;
+    _serverUrlController.text = provider.serverUrl;
+  }
+
+  @override
+  void dispose() {
+    _serverUrlController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
@@ -32,9 +55,173 @@ class _RssSettingsScreenState extends State<RssSettingsScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        _buildServerModeSection(context),
+        const SizedBox(height: 24),
+        _buildServerSyncSection(context),
+        const SizedBox(height: 24),
         _buildSyncIntervalSection(context),
         const SizedBox(height: 24),
+        _buildBackupSection(context),
+        const SizedBox(height: 24),
         _buildHistoryCleanupSection(context),
+      ],
+    );
+  }
+
+  Widget _buildServerModeSection(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final provider = context.read<RssProvider>();
+
+    return _buildSection(
+      context,
+      title: loc.rssServerMode,
+      children: [
+        Card(
+          child: Column(
+            children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.cloud_outlined),
+                title: Text(loc.rssServerMode),
+                subtitle: Text(loc.rssServerModeDesc),
+                value: _serverMode,
+                onChanged: (value) async {
+                  setState(() => _serverMode = value);
+                  await provider.setServerMode(value, url: _serverUrlController.text);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(value ? loc.rssServerModeOn : loc.rssServerModeOff)),
+                  );
+                  if (value) {
+                    // 开启服务器模式 → 进入独立的服务器模式主页
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const RssServerHomeScreen()),
+                    );
+                  } else {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  }
+                },
+              ),
+              if (_serverMode) ...[
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: TextField(
+                    controller: _serverUrlController,
+                    decoration: InputDecoration(
+                      labelText: loc.rssServerUrl,
+                      hintText: 'https://zebra.dart.xin',
+                      prefixIcon: const Icon(Icons.link, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      isDense: true,
+                    ),
+                    keyboardType: TextInputType.url,
+                    onSubmitted: (url) => provider.setServerMode(true, url: url),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 从服务器同步已订阅源的文章到本地库(离线模式可用)。
+  /// 按本地已订阅源遍历,url 匹配服务器源后拉取最近 N 天文章。
+  Widget _buildServerSyncSection(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final provider = context.read<RssProvider>();
+
+    return _buildSection(
+      context,
+      title: loc.rssSyncToLocal,
+      children: [
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.cloud_download_outlined),
+                title: Text(loc.rssSyncWindow),
+                subtitle: Text(loc.rssServerModeDesc),
+                trailing: DropdownButton<int>(
+                  value: provider.serverSyncDays,
+                  items: const [
+                    DropdownMenuItem(value: 7, child: Text('7 天')),
+                    DropdownMenuItem(value: 30, child: Text('30 天')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) provider.setServerSyncDays(v);
+                  },
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () async {
+                      final count = await provider.syncServerSourcesToLocal(
+                        days: provider.serverSyncDays,
+                      );
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(loc.rssSyncToLocalDone(count))),
+                      );
+                    },
+                    icon: const Icon(Icons.download),
+                    label: Text(loc.rssSyncToLocal),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBackupSection(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    final provider = context.read<RssProvider>();
+
+    return _buildSection(
+      context,
+      title: loc.rssAutoBackup,
+      children: [
+        Card(
+          child: Column(
+            children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.backup_outlined),
+                title: Text(loc.rssAutoBackup),
+                subtitle: Text(loc.rssAutoBackupDesc),
+                value: _autoBackupEnabled,
+                onChanged: (value) async {
+                  setState(() => _autoBackupEnabled = value);
+                  await provider.setAutoBackupEnabled(value);
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.save_alt),
+                title: Text(loc.rssBackupNow),
+                subtitle: Text(loc.rssBackupNowDesc),
+                enabled: !_backupBusy,
+                onTap: () async {
+                  setState(() => _backupBusy = true);
+                  final ok = await provider.backupNow();
+                  if (!mounted) return;
+                  setState(() => _backupBusy = false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(ok ? loc.rssBackupDone : loc.rssBackupFailed)),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

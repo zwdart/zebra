@@ -8,6 +8,7 @@ class FeedSource {
   final String category;
   final String? lastSyncedAt;
   final bool syncEnabled;
+  final bool fetchEnabled;
   final int sortOrder;
   final String source; // local, server
   final String? createdAt;
@@ -24,6 +25,7 @@ class FeedSource {
     this.category = '',
     this.lastSyncedAt,
     this.syncEnabled = true,
+    this.fetchEnabled = true,
     this.sortOrder = 0,
     this.source = 'local',
     this.createdAt,
@@ -41,6 +43,7 @@ class FeedSource {
     String? category,
     String? lastSyncedAt,
     bool? syncEnabled,
+    bool? fetchEnabled,
     int? sortOrder,
     String? source,
     String? createdAt,
@@ -57,6 +60,7 @@ class FeedSource {
       category: category ?? this.category,
       lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
       syncEnabled: syncEnabled ?? this.syncEnabled,
+      fetchEnabled: fetchEnabled ?? this.fetchEnabled,
       sortOrder: sortOrder ?? this.sortOrder,
       source: source ?? this.source,
       createdAt: createdAt ?? this.createdAt,
@@ -89,6 +93,7 @@ class FeedSource {
       category: map['category'] as String? ?? '',
       lastSyncedAt: map['last_synced_at'] as String?,
       syncEnabled: (map['sync_enabled'] as int? ?? 1) == 1,
+      fetchEnabled: (map['fetch_enabled'] as int? ?? 1) == 1,
       sortOrder: map['sort_order'] as int? ?? 0,
       source: map['source'] as String? ?? 'local',
       createdAt: map['created_at'] as String?,
@@ -108,6 +113,7 @@ class FeedSource {
       category: json['category'] as String? ?? '',
       lastSyncedAt: json['last_synced_at'] as String?,
       syncEnabled: json['sync_enabled'] as bool? ?? true,
+      fetchEnabled: json['fetch_enabled'] as bool? ?? true,
       sortOrder: json['sort_order'] as int? ?? 0,
       source: json['source'] as String? ?? 'local',
       createdAt: json['created_at'] as String?,
@@ -127,6 +133,7 @@ class FeedSource {
       'category': category,
       'last_synced_at': lastSyncedAt,
       'sync_enabled': syncEnabled ? 1 : 0,
+      'fetch_enabled': fetchEnabled ? 1 : 0,
       'sort_order': sortOrder,
       'source': source,
       'created_at': createdAt,
@@ -144,6 +151,7 @@ class FeedSource {
       'icon_url': iconUrl,
       'category': category,
       'sync_enabled': syncEnabled,
+      'fetch_enabled': fetchEnabled,
       'sort_order': sortOrder,
       'source': source,
       'last_sync_error': lastSyncError,

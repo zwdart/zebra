@@ -17,6 +17,12 @@ static_dir = "static"
 log_max_bytes = 2048
 
 # 管理员用户名
-admin_username = "admin"     
-# 管理员密码        
-admin_password = "zebra2026"         
+admin_username = "admin"
+# 管理员密码
+admin_password = "zebra2026"
+
+# ===== RSS 抓取间隔配置（分钟）=====
+# 抓取任务扫描间隔（分钟），最小 15，默认 15
+rss_scan_interval_min = 120
+# 订阅源过期重抓时间（分钟），默认 30（距上次抓取超过该值才重新抓取）
+rss_fetch_stale_min = 30

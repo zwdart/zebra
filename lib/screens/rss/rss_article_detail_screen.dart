@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../models/rss_article.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/rss_provider.dart';
+import '../../services/rss_api_service.dart';
 import '../../widgets/custom_title_bar.dart';
 
 enum ContentDisplayMode { hidden, rendered, raw }
@@ -31,6 +35,10 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
   late bool _isStarred = widget.article.isStarred;
   late bool _isRead = widget.article.isRead;
 
+  // 阅读进度：滚动位置按 articleId 保存/恢复
+  final ScrollController _scrollController = ScrollController();
+  Timer? _scrollSaveTimer;
+
   // Cached built widgets to avoid re-parsing HTML on setState.
   Widget? _cachedSummaryHtml;
   String? _cachedSummaryData;
@@ -39,15 +47,56 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
 
   RssArticle get article => widget.article;
 
+  static String _progressKey(int articleId) => 'rss_scroll_$articleId';
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
+    _restoreScrollOffset();
     // Defer HTML parsing to after the first frame paints, so the page
     // opens instantly with plain text while flutter_html parses in the
     // background.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() => _htmlReady = true);
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollSaveTimer?.cancel();
+    _saveScrollOffset();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    _scrollSaveTimer?.cancel();
+    _scrollSaveTimer = Timer(const Duration(milliseconds: 300), _saveScrollOffset);
+  }
+
+  void _saveScrollOffset() {
+    if (!_scrollController.hasClients || _scrollController.position.maxScrollExtent <= 0) return;
+    SharedPreferences.getInstance().then((prefs) {
+      final offset = _scrollController.offset;
+      if (offset > 0) {
+        prefs.setDouble(_progressKey(article.id ?? -1), offset);
+      }
+    });
+  }
+
+  Future<void> _restoreScrollOffset() async {
+    final prefs = await SharedPreferences.getInstance();
+    final offset = prefs.getDouble(_progressKey(article.id ?? -1)) ?? 0;
+    if (offset > 0 && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(
+            offset.clamp(0.0, _scrollController.position.maxScrollExtent),
+          );
+        }
+      });
+    }
   }
 
   SummaryDisplayMode _detectSummaryMode(String text) {
@@ -149,8 +198,32 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
       await Future<void>.delayed(Duration.zero);
       if (!mounted) return article;
       final provider = context.read<RssProvider>();
-      final full = provider.getArticle(article.id!);
-      final result = full ?? article;
+      RssArticle result;
+      if (provider.serverMode) {
+        // server 模式：从服务器拉取全文
+        final server = await RssApiService.getServerArticle(article.id ?? -1);
+        if (server != null) {
+          result = RssArticle(
+            id: server['id'] as int?,
+            feedSourceId: (server['source_id'] as int?) ?? 0,
+            guid: server['guid'] as String? ?? '',
+            title: server['title'] as String? ?? '',
+            link: server['link'] as String? ?? '',
+            author: server['author'] as String? ?? '',
+            summary: server['summary'] as String? ?? '',
+            content: server['content'] as String? ?? '',
+            publishedAt: server['published_at'] as String?,
+            isRead: server['is_read'] as bool? ?? false,
+            isStarred: server['is_starred'] as bool? ?? false,
+            createdAt: server['created_at'] as String?,
+          );
+        } else {
+          result = article;
+        }
+      } else {
+        final full = provider.getArticle(article.id!);
+        result = full ?? article;
+      }
       if (mounted) {
         setState(() {
           _isStarred = result.isStarred;
@@ -248,6 +321,7 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
 
     return SelectionArea(
       child: SingleChildScrollView(
+      controller: _scrollController,
       padding: const EdgeInsets.all(16),
       child: Center(
         child: ConstrainedBox(
@@ -708,7 +782,12 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
   }
 
   void _toggleStar(BuildContext context) {
-    context.read<RssProvider>().toggleStar(article.id!);
+    final provider = context.read<RssProvider>();
+    if (provider.serverMode) {
+      provider.syncServerState(article.id!, starred: !_isStarred);
+    } else {
+      provider.toggleStar(article.id!);
+    }
     setState(() => _isStarred = !_isStarred);
   }
 
@@ -725,10 +804,13 @@ class _RssArticleDetailScreenState extends State<RssArticleDetailScreen> {
         Share.share('${article.title}\n${article.link}');
         break;
       case 'read':
-        if (_isRead) {
-          context.read<RssProvider>().markAsUnread(article.id!);
+        final provider = context.read<RssProvider>();
+        if (provider.serverMode) {
+          provider.syncServerState(article.id!, read: !_isRead);
+        } else if (_isRead) {
+          provider.markAsUnread(article.id!);
         } else {
-          context.read<RssProvider>().markAsRead(article.id!);
+          provider.markAsRead(article.id!);
         }
         setState(() => _isRead = !_isRead);
         break;

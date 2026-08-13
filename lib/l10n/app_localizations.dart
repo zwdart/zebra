@@ -452,6 +452,11 @@ class AppLocalizations {
   String get rssMaxSelect => translate('rssMaxSelect');
   String get rssViewingFolder => translate('rssViewingFolder');
   String get rssFetchFromServer => translate('rssFetchFromServer');
+  String get rssSyncWindow => translate('rssSyncWindow');
+  String get rssSyncDays7 => translate('rssSyncDays7');
+  String get rssSyncDays30 => translate('rssSyncDays30');
+  String get rssSyncToLocal => translate('rssSyncToLocal');
+  String rssSyncToLocalDone(int count) => translate('rssSyncToLocalDone').replaceAll('{count}', '$count');
   String get rssTotalCount => translate('rssTotalCount');
   String get rssAddToFolder => translate('rssAddToFolder');
   String get rssAddedToFolder => translate('rssAddedToFolder');
@@ -502,6 +507,36 @@ class AppLocalizations {
   String get rssLastSync => translate('rssLastSync');
   String get rssSyncError => translate('rssSyncError');
   String get rssSearchSources => translate('rssSearchSources');
+  String get rssOpenArticle => translate('rssOpenArticle');
+  String get rssSelectArticleHint => translate('rssSelectArticleHint');
+  String get rssAutoBackup => translate('rssAutoBackup');
+  String get rssAutoBackupDesc => translate('rssAutoBackupDesc');
+  String get rssBackupNow => translate('rssBackupNow');
+  String get rssBackupNowDesc => translate('rssBackupNowDesc');
+  String get rssBackupDone => translate('rssBackupDone');
+  String get rssBackupFailed => translate('rssBackupFailed');
+  String get rssServerMode => translate('rssServerMode');
+  String get rssServerModeDesc => translate('rssServerModeDesc');
+  String get rssServerUrl => translate('rssServerUrl');
+  String get rssServerModeOn => translate('rssServerModeOn');
+  String get rssServerModeOff => translate('rssServerModeOff');
+  String get rssServerSettings => translate('rssServerSettings');
+  String get rssServerConnection => translate('rssServerConnection');
+  String get rssServerTestConnection => translate('rssServerTestConnection');
+  String get rssServerConnectionOk => translate('rssServerConnectionOk');
+  String get rssServerConnectionFail => translate('rssServerConnectionFail');
+  String get rssServerFetchNow => translate('rssServerFetchNow');
+  String get rssServerFetchTriggered => translate('rssServerFetchTriggered');
+  String get rssServerFetchFailed => translate('rssServerFetchFailed');
+  String get rssServerStatus => translate('rssServerStatus');
+  String get rssServerSourceCount => translate('rssServerSourceCount');
+  String get rssServerTotalUnread => translate('rssServerTotalUnread');
+  String get rssServerPending => translate('rssServerPending');
+  String get rssServerPaused => translate('rssServerPaused');
+  String get rssServerLastFetch => translate('rssServerLastFetch');
+  String get rssServerDisable => translate('rssServerDisable');
+  String get rssServerDisableConfirm => translate('rssServerDisableConfirm');
+  String get rssServerDisableDesc => translate('rssServerDisableDesc');
   String get rssNoAddableSources => translate('rssNoAddableSources');
   String get rssAddFromLocal => translate('rssAddFromLocal');
   String get rssAddCount => translate('rssAddCount');
@@ -1187,6 +1222,11 @@ class AppLocalizations {
     'rssMaxSelect': 'Max 10',
     'rssViewingFolder': 'Viewing "{name}"',
     'rssFetchFromServer': 'Fetch from server',
+    'rssSyncWindow': 'Sync window',
+    'rssSyncDays7': 'Last 7 days',
+    'rssSyncDays30': 'Last 30 days',
+    'rssSyncToLocal': 'Sync to local',
+    'rssSyncToLocalDone': 'Synced {count} new articles',
     'rssTotalCount': 'Total: {count}',
     'rssAddToFolder': 'Add to Folder',
     'rssAddedToFolder': 'Added to "{name}"',
@@ -1237,6 +1277,36 @@ class AppLocalizations {
     'rssLastSync': 'Last Sync',
     'rssSyncError': 'Sync Error',
     'rssSearchSources': 'Search feeds...',
+    'rssOpenArticle': 'Open Article',
+    'rssSelectArticleHint': 'Select an article to preview',
+    'rssAutoBackup': 'Auto Backup',
+    'rssAutoBackupDesc': 'Back up subscriptions as OPML every 7 days (keep latest 3)',
+    'rssBackupNow': 'Back Up Now',
+    'rssBackupNowDesc': 'Export subscriptions to local backups folder',
+    'rssBackupDone': 'Backup completed',
+    'rssBackupFailed': 'Backup failed',
+    'rssServerMode': 'Server Mode',
+    'rssServerModeDesc': 'Load articles from the RSS server (unified management)',
+    'rssServerUrl': 'Server URL',
+    'rssServerModeOn': 'Server mode enabled',
+    'rssServerModeOff': 'Server mode disabled',
+    'rssServerSettings': 'Server Settings',
+    'rssServerConnection': 'Connection',
+    'rssServerTestConnection': 'Test Connection',
+    'rssServerConnectionOk': 'Connected successfully',
+    'rssServerConnectionFail': 'Connection failed',
+    'rssServerFetchNow': 'Fetch Now',
+    'rssServerFetchTriggered': 'Fetch triggered',
+    'rssServerFetchFailed': 'Failed to trigger fetch',
+    'rssServerStatus': 'Status',
+    'rssServerSourceCount': 'Sources',
+    'rssServerTotalUnread': 'Unread',
+    'rssServerPending': 'Pending',
+    'rssServerPaused': 'Paused (failures >= 5)',
+    'rssServerLastFetch': 'Last Fetch',
+    'rssServerDisable': 'Disable Server Mode',
+    'rssServerDisableConfirm': 'Switch back to offline mode?',
+    'rssServerDisableDesc': 'Disable server mode and return to local reading',
     'rssNoAddableSources': 'No feeds to add',
     'rssAddFromLocal': 'Add from Local',
     'rssAddCount': 'Add ({count})',
@@ -1863,6 +1933,11 @@ class AppLocalizations {
     'rssMaxSelect': '最多选 10 个',
     'rssViewingFolder': '正在查看「{name}」内的订阅源',
     'rssFetchFromServer': '从服务器获取推荐订阅源',
+    'rssSyncWindow': '同步时间窗口',
+    'rssSyncDays7': '最近 7 天',
+    'rssSyncDays30': '最近 30 天',
+    'rssSyncToLocal': '同步到本地',
+    'rssSyncToLocalDone': '已同步 {count} 篇新文章',
     'rssTotalCount': '共 {count} 个',
     'rssAddToFolder': '加入收藏夹',
     'rssAddedToFolder': '已加入「{name}」',
@@ -1913,6 +1988,36 @@ class AppLocalizations {
     'rssLastSync': '上次同步',
     'rssSyncError': '同步错误',
     'rssSearchSources': '搜索订阅源...',
+    'rssOpenArticle': '打开文章',
+    'rssSelectArticleHint': '选择一篇文章预览',
+    'rssAutoBackup': '自动备份',
+    'rssAutoBackupDesc': '每 7 天将订阅清单备份为 OPML（保留最近 3 份）',
+    'rssBackupNow': '立即备份',
+    'rssBackupNowDesc': '导出订阅清单到本地备份目录',
+    'rssBackupDone': '备份完成',
+    'rssBackupFailed': '备份失败',
+    'rssServerMode': '服务器模式',
+    'rssServerModeDesc': '文章流从 RSS 服务器拉取（统一管理）',
+    'rssServerUrl': '服务器地址',
+    'rssServerModeOn': '已启用服务器模式',
+    'rssServerModeOff': '已关闭服务器模式',
+    'rssServerSettings': '服务器设置',
+    'rssServerConnection': '连接',
+    'rssServerTestConnection': '测试连接',
+    'rssServerConnectionOk': '连接成功',
+    'rssServerConnectionFail': '连接失败',
+    'rssServerFetchNow': '立即抓取',
+    'rssServerFetchTriggered': '已触发抓取',
+    'rssServerFetchFailed': '抓取触发失败',
+    'rssServerStatus': '状态',
+    'rssServerSourceCount': '订阅源数',
+    'rssServerTotalUnread': '未读总数',
+    'rssServerPending': '待抓取',
+    'rssServerPaused': '暂停（失败≥5）',
+    'rssServerLastFetch': '最近抓取',
+    'rssServerDisable': '关闭服务器模式',
+    'rssServerDisableConfirm': '确定关闭服务器模式，回到离线阅读？',
+    'rssServerDisableDesc': '关闭服务器模式，返回本地阅读',
     'rssNoAddableSources': '没有可添加的订阅源',
     'rssAddFromLocal': '从本地添加',
     'rssAddCount': '添加 ({count})',

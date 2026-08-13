@@ -147,11 +147,13 @@ td { font-size: 14px; }
 </div>
 
 <div class="header">
-  <h1>Zebra SSH - 管理后台</h1>
-  <div style="display:flex;align-items:center;gap:12px;">
-    <a href="/api/blog" target="_blank" class="btn btn-ghost" style="color:white;border-color:rgba(255,255,255,0.3);font-size:12px;">查看博客</a>
-    <span class="badge">Admin</span>
-    <button class="btn btn-ghost" onclick="doLogout()" style="color:white;border-color:rgba(255,255,255,0.3);font-size:12px;">退出</button>
+  <h1>Zebra SSH - 管理后台 <span class="badge">Admin</span></h1>
+  <div style="position:relative;display:inline-block;">
+    <button class="btn btn-ghost" onclick="toggleDropdown('adminHeaderDropdown')" style="display:inline-flex;align-items:center;gap:4px;color:white;border-color:rgba(255,255,255,0.3);font-size:13px;">☰ 菜单</button>
+    <div id="adminHeaderDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:white;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;min-width:180px;overflow:hidden;">
+      <a href="/api/blog" target="_blank" style="display:block;padding:10px 14px;font-size:13px;color:#333;text-decoration:none;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">查看博客</a>
+      <div onclick="doLogout()" style="padding:10px 14px;font-size:13px;color:#c62828;cursor:pointer;border-top:1px solid #eee;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">退出登录</div>
+    </div>
   </div>
 </div>
 

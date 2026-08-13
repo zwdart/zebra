@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/connection_provider.dart';
+import '../providers/rss_provider.dart';
 import '../providers/update_provider.dart';
 import '../services/update_service.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
 import 'rss/rss_feed_list_screen.dart';
+import 'rss/server/rss_server_home_screen.dart';
 import 'home_screen.dart';
 import 'diary_screen.dart';
 import 'settings_screen.dart';
@@ -50,9 +52,11 @@ class _ShellScreenState extends State<ShellScreen> {
   Widget build(BuildContext context) {
     final loc = AppLocalizations.of(context);
     final isDesktop = CustomTitleBar.isDesktop;
+    // server 模式开启时，RSS 主页切换到独立的服务器模式页面
+    final rssServerMode = context.watch<RssProvider>().serverMode;
 
     final tabs = [
-      const RssFeedListScreen(),
+      rssServerMode ? const RssServerHomeScreen() : const RssFeedListScreen(),
       const HomeScreen(),
       const LanChatHomeScreen(),
       const DiaryScreen(),

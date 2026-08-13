@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/rss_provider.dart';
@@ -21,6 +22,11 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
   final ScrollController _scrollController = ScrollController();
   late AnimationController _refreshAnimController;
 
+  // 快捷键选中项（三栏模式：J/K 上下移动、R 已读、S 星标）
+  final FocusNode _listFocusNode = FocusNode();
+  int _selectedIndex = -1;
+  RssArticle? _previewArticle;
+
   @override
   void initState() {
     super.initState();
@@ -38,10 +44,13 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
 
   @override
   void dispose() {
+    _listFocusNode.dispose();
     _refreshAnimController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
+
+  bool get _isWide => MediaQuery.sizeOf(context).width > 1000;
 
   String _title(RssProvider provider, AppLocalizations loc) {
     switch (provider.viewMode) {
@@ -107,30 +116,69 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
                 ),
               ],
             ),
-      body: Column(
-        children: [
-          if (isDesktop)
-            CustomTitleBar(
-              title: _title(provider, loc),
-              showBackButton: false,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.explore),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const RssExploreScreen()),
+      body: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.keyJ): _onKeyDown,
+          const SingleActivator(LogicalKeyboardKey.keyK): _onKeyUp,
+          const SingleActivator(LogicalKeyboardKey.keyR): _onKeyRead,
+          const SingleActivator(LogicalKeyboardKey.keyS): _onKeyStar,
+        },
+        child: Focus(
+          focusNode: _listFocusNode,
+          autofocus: true,
+          child: Column(
+            children: [
+              if (isDesktop)
+                CustomTitleBar(
+                  title: _title(provider, loc),
+                  showBackButton: false,
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.explore),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const RssExploreScreen()),
+                      ),
+                      tooltip: loc.rssExplore,
+                    ),
+                    PopupMenuButton<String>(
+                      onSelected: _handleMenuAction,
+                      itemBuilder: (context) => _buildMenuItems(),
+                    ),
+                  ],
+                ),
+              if (_isWide)
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildSideNav(provider),
+                      const VerticalDivider(width: 1),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            _buildFolderChips(),
+                            Expanded(child: _buildBody()),
+                          ],
+                        ),
+                      ),
+                      const VerticalDivider(width: 1),
+                      _buildPreviewPane(provider),
+                    ],
                   ),
-                  tooltip: loc.rssExplore,
+                )
+              else
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildFolderChips(),
+                      Expanded(child: _buildBody()),
+                    ],
+                  ),
                 ),
-                PopupMenuButton<String>(
-                  onSelected: _handleMenuAction,
-                  itemBuilder: (context) => _buildMenuItems(),
-                ),
-              ],
-            ),
-          _buildFolderChips(),
-          Expanded(child: _buildBody()),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -148,6 +196,186 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
       PopupMenuItem(value: 'folders', child: Text(loc.rssFolderManagement)),
       PopupMenuItem(value: 'settings', child: Text(loc.settings)),
     ];
+  }
+
+  // ==================== 快捷键处理 ====================
+
+  void _moveSelection(int delta) {
+    final provider = context.read<RssProvider>();
+    if (provider.articles.isEmpty) return;
+    final next = (_selectedIndex + delta).clamp(0, provider.articles.length - 1);
+    setState(() {
+      _selectedIndex = next;
+      _previewArticle = provider.articles[next];
+    });
+    _scrollToSelected();
+  }
+
+  void _scrollToSelected() {
+    if (_selectedIndex < 0 || !_scrollController.hasClients) return;
+    final offset = (_selectedIndex * 76.0).clamp(0.0, _scrollController.position.maxScrollExtent);
+    _scrollController.animateTo(
+      offset,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _onKeyDown() => _moveSelection(1);
+  void _onKeyUp() => _moveSelection(-1);
+
+  void _onKeyRead() {
+    final provider = context.read<RssProvider>();
+    if (_selectedIndex < 0 || _selectedIndex >= provider.articles.length) return;
+    final a = provider.articles[_selectedIndex];
+    if (!a.isRead) provider.markAsRead(a.id!);
+  }
+
+  void _onKeyStar() {
+    final provider = context.read<RssProvider>();
+    if (_selectedIndex < 0 || _selectedIndex >= provider.articles.length) return;
+    provider.toggleStar(provider.articles[_selectedIndex].id!);
+  }
+
+  // ==================== 三栏布局（宽屏） ====================
+
+  Widget _buildSideNav(RssProvider provider) {
+    final loc = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final sources = provider.feeds;
+
+    return Container(
+      width: 220,
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+              loc.rssSubscription,
+              style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline),
+            ),
+          ),
+          ListView(
+            shrinkWrap: true,
+            children: [
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.article_outlined, size: 20),
+                title: Text(loc.discoveryFilterAll),
+                trailing: _UnreadBadge(count: provider.totalUnreadCount),
+                selected: provider.viewMode == ViewMode.all && provider.currentFeed == null,
+                onTap: () => provider.switchToAll(),
+              ),
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.star_border, size: 20),
+                title: Text(loc.rssFavorites),
+                selected: provider.viewMode == ViewMode.starred,
+                onTap: () => provider.switchToStarred(),
+              ),
+              const Divider(height: 8),
+              for (final folder in provider.getAllFolders())
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.folder_outlined, size: 20),
+                  title: Text(folder['name'] as String, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  selected: provider.viewMode == ViewMode.folder && provider.selectedFolderId == folder['id'],
+                  onTap: () => provider.switchToFolder(folder['id'] as int, folder['name'] as String),
+                ),
+              const Divider(height: 8),
+              for (final source in sources)
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.rss_feed, size: 20),
+                  title: Text(source.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  trailing: _UnreadBadge(count: provider.getUnreadCountForFeed(source.id ?? -1)),
+                  selected: provider.currentFeed?.id == source.id,
+                  onTap: () => provider.loadArticles(source.id!, refresh: true),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreviewPane(RssProvider provider) {
+    final loc = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final article = _previewArticle;
+
+    return Container(
+      width: 340,
+      color: theme.colorScheme.surfaceContainerLow,
+      child: article == null
+          ? Center(
+              child: Text(
+                loc.rssSelectArticleHint,
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+              ),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    article.title,
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    article.displayTime,
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                  ),
+                  if (article.author.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(article.author, style: theme.textTheme.bodySmall),
+                  ],
+                  const Divider(height: 24),
+                  if (article.summary.isNotEmpty)
+                    Text(
+                      article.summary.replaceAll(RegExp(r'<[^>]+>'), ''),
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () => _openArticle(article),
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        label: Text(loc.rssOpenArticle),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: Icon(
+                          article.isStarred ? Icons.star : Icons.star_border,
+                          color: article.isStarred ? Colors.amber : null,
+                        ),
+                        onPressed: () => context.read<RssProvider>().toggleStar(article.id!),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.done, size: 18),
+                        tooltip: loc.rssMarkAsRead,
+                        onPressed: () => context.read<RssProvider>().markAsRead(article.id!),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  void _openArticle(RssArticle article) {
+    final provider = context.read<RssProvider>();
+    if (!article.isRead) provider.markAsRead(article.id!);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => RssArticleDetailScreen(article: article)),
+    );
   }
 
   Widget _buildFolderChips() {
@@ -227,7 +455,7 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
                 );
               }
               final article = provider.articles[index];
-              return _buildArticleCard(article);
+              return _buildArticleCard(article, selected: index == _selectedIndex);
             },
           ),
         );
@@ -287,7 +515,7 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
     );
   }
 
-  Widget _buildArticleCard(RssArticle article) {
+  Widget _buildArticleCard(RssArticle article, {bool selected = false}) {
     final loc = AppLocalizations.of(context);
     final feedTitle = context.read<RssProvider>().getFeedTitle(article.feedSourceId);
 
@@ -331,6 +559,12 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
       },
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        shape: selected
+            ? RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
+              )
+            : null,
         child: ListTile(
           leading: Container(
             width: 40,
@@ -406,13 +640,21 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
                 )
               : null,
           onTap: () {
-            context.read<RssProvider>().markAsRead(article.id!);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => RssArticleDetailScreen(article: article),
-              ),
-            );
+            final provider = context.read<RssProvider>();
+            if (!article.isRead) provider.markAsRead(article.id!);
+            if (_isWide) {
+              setState(() {
+                _selectedIndex = provider.articles.indexWhere((a) => a.id == article.id);
+                _previewArticle = article;
+              });
+            } else {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => RssArticleDetailScreen(article: article),
+                ),
+              );
+            }
           },
         ),
       ),
@@ -450,5 +692,29 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
         Navigator.push(context, MaterialPageRoute(builder: (_) => const RssSettingsScreen()));
         break;
     }
+  }
+}
+
+/// 未读徽标（0 时隐藏）
+class _UnreadBadge extends StatelessWidget {
+  final int count;
+
+  const _UnreadBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    if (count <= 0) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        count > 999 ? '999+' : '$count',
+        style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onPrimary),
+      ),
+    );
   }
 }

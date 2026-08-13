@@ -1,5 +1,7 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]  // 调试时暂时关闭
 
+pub mod fetch_worker;
+pub mod feed_parser;
 pub mod rss_server;
 
 use axum::{
@@ -42,6 +44,10 @@ pub struct Config {
     pub admin_username: Option<String>,
     /// Admin login password (default: zebra2016)
     pub admin_password: Option<String>,
+    /// RSS 抓取扫描间隔（分钟），默认 15，最小 15
+    pub rss_scan_interval_min: Option<u64>,
+    /// RSS 源过期重抓时间（分钟），默认 30
+    pub rss_fetch_stale_min: Option<i64>,
 }
 
 impl Config {
@@ -72,6 +78,8 @@ impl Config {
             log_max_bytes: None,
             admin_username: None,
             admin_password: None,
+            rss_scan_interval_min: None,
+            rss_fetch_stale_min: None,
         }
     }
 
@@ -110,6 +118,8 @@ impl Default for Config {
             log_max_bytes: None,
             admin_username: None,
             admin_password: None,
+            rss_scan_interval_min: None,
+            rss_fetch_stale_min: None,
         }
     }
 }
@@ -3164,8 +3174,21 @@ async fn main() {
     let conn = Connection::open(&db_path).expect("Failed to open database");
     init_db(&conn);
 
-    // 初始化 RSS 独立数据库
-    let rss_db = Arc::new(rss_server::RssDb::open(runtimes_dir));
+    // 初始化 RSS 独立数据库（间隔从 config.toml 读取，分钟单位，扫描最小 15）
+    let scan_interval_min = config.rss_scan_interval_min.unwrap_or(15);
+    let fetch_stale_min = config.rss_fetch_stale_min.unwrap_or(30);
+    let mut rss_db_raw = rss_server::RssDb::open(runtimes_dir);
+    rss_db_raw.set_fetch_interval(scan_interval_min, fetch_stale_min);
+    let rss_db = Arc::new(rss_db_raw);
+
+    // 启动 RSS 定时抓取任务（后台 tokio 任务）
+    fetch_worker::start(
+        rss_db.clone(),
+        fetch_worker::FetchConfig {
+            scan_interval_min,
+            fetch_stale_min,
+        },
+    );
 
     let state = Arc::new(AppState {
         db: Mutex::new(conn),

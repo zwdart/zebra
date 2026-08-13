@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="same-origin">
 <title>Zebra RSS - 数据源管理</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -31,9 +32,14 @@ td { font-size: 14px; }
 .btn-filter { background: transparent; color: #666; border: 1px solid #ddd; padding: 6px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
 .btn-filter:hover { background: #f5f5f5; }
 .btn-filter.active { background: #1a73e8; color: white; border-color: #1a73e8; }
-.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; overflow-y: auto; }
 .modal-overlay.active { display: flex; }
-.modal { background: white; border-radius: 12px; width: 520px; max-height: 90vh; overflow-y: auto; }
+.modal { background: white; border-radius: 12px; width: 520px; max-height: 90vh; overflow-y: auto; margin: auto; }
+.modal.fullscreen { width: calc(100vw - 12px) !important; max-width: calc(100vw - 12px); height: calc(100vh - 12px); max-height: calc(100vh - 12px); border-radius: 8px; }
+.modal.fullscreen #articleDetailBody { max-height: calc(100vh - 150px); }
+#articleDetailBody img { max-width: 100%; height: auto; }
+#articleTableBody td[onclick] { cursor: pointer; }
+#articleTableBody td[onclick]:hover strong { color: #1a73e8; }
 .modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
 .modal-header h3 { font-size: 18px; }
 .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
@@ -75,7 +81,7 @@ td { font-size: 14px; }
 .tab-btn:hover { color: #333; }
 .tab-btn.active { color: #1a73e8; border-bottom-color: #1a73e8; }
 .tab-panel { display: none; }
-.tab-panel.active { display: block; }
+.tab-panel.active { display: block; min-height: calc(100vh - 190px); }
 @media (max-width: 768px) {
   .header { padding: 12px 16px; }
   .header h1 { font-size: 16px; }
@@ -102,20 +108,76 @@ td { font-size: 14px; }
 
 <div class="header">
   <h1>Zebra RSS - 数据源管理</h1>
-  <div style="display:flex;gap:8px;align-items:center;">
-    <button class="btn btn-ghost" onclick="doRssLogout()" id="rssLogoutBtn" style="color:white;border-color:rgba(255,255,255,0.3);font-size:12px;display:none;">退出登录</button>
-    <a href="/api/admin" class="btn btn-ghost" style="color:white;border-color:rgba(255,255,255,0.3);font-size:12px;">返回管理后台</a>
+  <div style="position:relative;display:inline-block;">
+    <button class="btn btn-ghost" onclick="toggleDropdown('headerDropdown')" style="display:inline-flex;align-items:center;gap:4px;color:white;border-color:rgba(255,255,255,0.3);font-size:13px;">☰ 菜单</button>
+    <div id="headerDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:white;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;min-width:300px;overflow:hidden;">
+      <div style="padding:10px 14px;border-bottom:1px solid #eee;">
+        <div style="font-size:12px;color:#999;font-weight:600;margin-bottom:6px;">📡 服务器地址</div>
+        <div style="display:flex;align-items:center;gap:8px;" title="客户端「服务器模式」设置页填入此地址">
+          <strong id="serverAddrDisplay" style="font-family:monospace;font-size:13px;color:#333;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">...</strong>
+          <button class="btn btn-ghost btn-sm" onclick="copyServerAddr()">复制</button>
+        </div>
+      </div>
+      <a href="/api/admin" style="display:block;padding:10px 14px;font-size:13px;color:#333;text-decoration:none;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">返回管理后台</a>
+      <div id="rssLogoutBtn" onclick="doRssLogout()" style="display:none;padding:10px 14px;font-size:13px;color:#c62828;cursor:pointer;border-top:1px solid #eee;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">退出登录</div>
+    </div>
   </div>
 </div>
 
 <div class="container">
   <div class="tab-nav">
-    <button class="tab-btn active" onclick="switchTab('sources')">订阅源管理</button>
+    <button class="tab-btn active" onclick="switchTab('articles')">文章管理</button>
+    <button class="tab-btn" onclick="switchTab('sources')">订阅源管理</button>
     <button class="tab-btn" onclick="switchTab('folders')">收藏夹管理</button>
+    <button class="tab-btn" onclick="switchTab('sync')">抓取状态</button>
+    <button class="tab-btn" onclick="switchTab('stats')">统计分析</button>
+  </div>
+
+  <!-- 文章管理 Tab -->
+  <div class="tab-panel active" id="tab-articles">
+    <div class="card" style="border-radius:0 0 8px 8px;">
+      <div class="card-header">
+        <h2>文章列表</h2>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <select id="articleSourceFilter" onchange="articlePage=1;loadArticles()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;max-width:220px;">
+            <option value="">全部数据源</option>
+          </select>
+          <input type="text" id="articleSearchInput" placeholder="搜索标题、摘要、正文..." style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:220px;" oninput="debounceArticleSearch()">
+          <button class="btn btn-primary btn-sm" onclick="showArticleModal()">+ 新增文章</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportArticlesCsv()">导出 CSV</button>
+          <label style="cursor:pointer;margin:0;"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('articleCsvInput').click()">导入 CSV</button><input type="file" id="articleCsvInput" accept=".csv" style="display:none;" onchange="handleArticleCsvImport(event)"></label>
+        </div>
+      </div>
+      <div class="stats-bar" id="articleStatsBar"></div>
+      <div class="card-body" style="padding-bottom:0;">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>标题</th>
+                <th>来源</th>
+                <th>作者</th>
+                <th>已读</th>
+                <th>星标</th>
+                <th>发布时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="articleTableBody"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="articleEmptyState" style="display:none">
+          <div class="icon">📰</div>
+          <div>暂无文章</div>
+        </div>
+      </div>
+      <div class="pagination" id="articlePagination"></div>
+    </div>
   </div>
 
   <!-- 订阅源 Tab -->
-  <div class="tab-panel active" id="tab-sources">
+  <div class="tab-panel" id="tab-sources">
     <div class="card" style="border-radius:0 0 8px 8px;">
       <div class="card-header">
         <h2>订阅源列表</h2>
@@ -161,6 +223,7 @@ td { font-size: 14px; }
                 <th>类型</th>
                 <th>分类</th>
                 <th>状态</th>
+                <th>抓取</th>
                 <th>创建时间</th>
                 <th>操作</th>
               </tr>
@@ -255,6 +318,156 @@ td { font-size: 14px; }
       </div>
     </div>
   </div>
+
+  <!-- 抓取状态 Tab -->
+  <div class="tab-panel" id="tab-sync">
+    <div class="card" style="border-radius:0 0 8px 8px;">
+      <div class="card-header">
+        <h2>抓取状态</h2>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <button class="btn btn-primary btn-sm" onclick="forceSyncAll()">立即抓取全部</button>
+          <button class="btn btn-ghost btn-sm" onclick="loadSyncStatus()">刷新</button>
+        </div>
+      </div>
+      <div class="stats-bar" id="syncStatsBar"></div>
+      <div class="card-body" style="padding-bottom:0;">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>来源</th>
+                <th>URL</th>
+                <th>上次抓取</th>
+                <th>连续失败</th>
+                <th>状态</th>
+                <th>错误信息</th>
+              </tr>
+            </thead>
+            <tbody id="syncTableBody"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="syncEmptyState" style="display:none">
+          <div class="icon">🔄</div>
+          <div>暂无抓取记录</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 统计分析 Tab -->
+  <div class="tab-panel" id="tab-stats">
+    <div class="card" style="border-radius:0 0 8px 8px;">
+      <div class="card-header">
+        <h2>统计分析</h2>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <button class="btn btn-ghost btn-sm" onclick="loadStats()">刷新</button>
+        </div>
+      </div>
+      <div class="stats-bar" id="statsOverviewBar"></div>
+      <div class="card-body" style="padding-bottom:0;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:20px;">
+          <!-- 来源排行 -->
+          <div>
+            <h3 style="font-size:14px;margin-bottom:10px;">来源文章数排行（Top 15）</h3>
+            <div id="sourceRankingChart"></div>
+          </div>
+          <!-- 分类分布 -->
+          <div>
+            <h3 style="font-size:14px;margin-bottom:10px;">分类分布</h3>
+            <div id="categoryChart"></div>
+          </div>
+          <!-- 发文趋势 -->
+          <div style="grid-column:1/-1;">
+            <h3 style="font-size:14px;margin-bottom:10px;">近 30 天发文趋势</h3>
+            <div id="dailyTrendChart"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 文章详情弹窗 -->
+<div class="modal-overlay" id="articleDetailModal">
+  <div class="modal" style="width:780px;">
+    <div class="modal-header">
+      <h3 id="articleDetailTitle">文章详情</h3>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-ghost btn-sm" id="articleDetailFullscreenBtn" onclick="toggleArticleDetailFullscreen()">⛶ 全屏</button>
+        <button class="modal-close" onclick="closeModal('articleDetailModal')">&times;</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:12px;">
+        <div id="articleDetailMeta" style="font-size:12px;color:#888;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" id="articleDetailToggleBtn" onclick="toggleArticleDetailRender()">未渲染</button>
+          <button class="btn btn-ghost btn-sm" id="articleDetailRawBtn" onclick="toggleArticleDetailRaw()">查看原始代码</button>
+        </div>
+      </div>
+      <div id="articleDetailBody" style="border:1px solid #eee;border-radius:6px;padding:16px;min-height:300px;max-height:60vh;overflow-y:auto;background:#fafafa;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 文章新增/编辑弹窗 -->
+<div class="modal-overlay" id="articleModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="articleModalTitle">新增文章</h3>
+      <button class="modal-close" onclick="closeModal('articleModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>所属订阅源 ID *</label>
+        <input type="number" id="aformSourceId" placeholder="例如：1" min="1">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>标题 *</label>
+          <input type="text" id="aformTitle" placeholder="文章标题">
+        </div>
+        <div class="form-group">
+          <label>GUID</label>
+          <input type="text" id="aformGuid" placeholder="唯一标识">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>链接</label>
+          <input type="text" id="aformLink" placeholder="https://...">
+        </div>
+        <div class="form-group">
+          <label>作者</label>
+          <input type="text" id="aformAuthor" placeholder="作者">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>发布时间</label>
+          <input type="text" id="aformPublishedAt" placeholder="2026-08-13 10:00:00">
+        </div>
+        <div class="form-group">
+          <label>摘要</label>
+          <input type="text" id="aformSummary" placeholder="摘要">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>正文</label>
+        <textarea id="aformContent" placeholder="文章正文（支持 HTML）"></textarea>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:14px;">
+          <span style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="aformRead"> 已读</span>
+          <span style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="aformStarred"> 星标</span>
+        </label>
+      </div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-ghost" onclick="closeModal('articleModal')">取消</button>
+        <button class="btn btn-primary" onclick="saveArticle()">保存</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- 新增/编辑订阅源弹窗 -->
@@ -292,8 +505,11 @@ td { font-size: 14px; }
         </div>
       </div>
       <div class="form-group">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-          <input type="checkbox" id="formEnabled" checked> 启用
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
+          <input type="checkbox" id="formEnabled" checked style="width:auto;margin:0;padding:0;flex:none;"> 启用
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;margin-top:8px;">
+          <input type="checkbox" id="formFetchEnabled" checked style="width:auto;margin:0;padding:0;flex:none;"> 自动抓取
         </label>
       </div>
       <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
@@ -443,12 +659,458 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
   if (tab === 'sources') {
-    document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
-    document.getElementById('tab-sources').classList.add('active');
-  } else if (tab === 'folders') {
     document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+    document.getElementById('tab-sources').classList.add('active');
+    loadSources();
+  } else if (tab === 'folders') {
+    document.querySelector('.tab-btn:nth-child(3)').classList.add('active');
     document.getElementById('tab-folders').classList.add('active');
     showFolderList();
+  } else if (tab === 'articles') {
+    document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+    document.getElementById('tab-articles').classList.add('active');
+    loadArticles();
+  } else if (tab === 'sync') {
+    document.querySelector('.tab-btn:nth-child(4)').classList.add('active');
+    document.getElementById('tab-sync').classList.add('active');
+    loadSyncStatus();
+  } else if (tab === 'stats') {
+    document.querySelector('.tab-btn:nth-child(5)').classList.add('active');
+    document.getElementById('tab-stats').classList.add('active');
+    loadStats();
+  }
+}
+
+// ===================== Stats (S5) =====================
+async function loadStats() {
+  try {
+    const resp = await fetch('/api/admin/rss/stats');
+    const json = await resp.json();
+    const d = json.data || {};
+
+    // 总体概览
+    const t = d.totals || {};
+    const fh = d.fetch_health || {};
+    document.getElementById('statsOverviewBar').innerHTML =
+      `<span>订阅源: <span class="count">${t.sources ?? 0}</span></span>` +
+      `<span>启用: <span class="count">${t.sources_enabled ?? 0}</span></span>` +
+      `<span>停抓: <span class="count" style="color:#c62828">${t.sources_fetch_off ?? 0}</span></span>` +
+      `<span>文章: <span class="count">${t.articles ?? 0}</span></span>` +
+      `<span>未读: <span class="count" style="color:#1a73e8">${t.unread ?? 0}</span></span>` +
+      `<span>星标: <span class="count" style="color:#e65100">${t.starred ?? 0}</span></span>` +
+      `<span>收藏夹: <span class="count">${t.folders ?? 0}</span></span>` +
+      `<span>待抓取: <span class="count">${fh.pending ?? 0}</span></span>` +
+      `<span>暂停: <span class="count" style="color:#c62828">${fh.failed ?? 0}</span></span>`;
+
+    // 来源排行（横向条形图）
+    const ranking = d.source_ranking || [];
+    const rankingMax = Math.max(1, ...ranking.map(s => s.count || 0));
+    document.getElementById('sourceRankingChart').innerHTML = ranking.length
+      ? ranking.map(s => `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="width:180px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(s.title)}">${esc(s.title)}</span>
+            <div style="flex:1;background:#f0f0f0;border-radius:4px;height:16px;overflow:hidden;">
+              <div style="width:${Math.max(2, (s.count / rankingMax) * 100)}%;background:#1a73e8;height:100%;border-radius:4px;"></div>
+            </div>
+            <span style="width:90px;font-size:12px;text-align:right;color:#666;">${s.count} <span style="color:#c62828;font-size:11px;">未读 ${s.unread || 0}</span></span>
+          </div>`).join('')
+      : '<div class="empty-state">暂无数据</div>';
+
+    // 分类分布（横向条形图）
+    const cats = d.category_distribution || [];
+    const catMax = Math.max(1, ...cats.map(c => c.count || 0));
+    document.getElementById('categoryChart').innerHTML = cats.length
+      ? cats.map(c => `
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="width:140px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(c.category)}">${esc(c.category)}</span>
+            <div style="flex:1;background:#f0f0f0;border-radius:4px;height:16px;overflow:hidden;">
+              <div style="width:${Math.max(2, (c.count / catMax) * 100)}%;background:#2e7d32;height:100%;border-radius:4px;"></div>
+            </div>
+            <span style="width:50px;font-size:12px;text-align:right;color:#666;">${c.count}</span>
+          </div>`).join('')
+      : '<div class="empty-state">暂无数据</div>';
+
+    // 近 30 天发文趋势（柱状图）
+    const trend = d.daily_trend || [];
+    const trendMax = Math.max(1, ...trend.map(t => t.count || 0));
+    const now = new Date();
+    // 补全 30 天（无数据的日期补 0）;服务端按 UTC 日期分组,先转本地日期 key 对齐
+    const map = {};
+    trend.forEach(t => map[localDateKey(t.date)] = t.count);
+    const days = [];
+    for (let i = 29; i >= 0; i--) {
+      const dt = new Date(now.getTime() - i * 86400000);
+      const key = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+      days.push({ key, count: map[key] || 0 });
+    }
+    document.getElementById('dailyTrendChart').innerHTML = `
+      <div style="display:flex;align-items:flex-end;gap:2px;height:160px;padding:8px;background:#fafafa;border-radius:6px;overflow-x:auto;">
+        ${days.map(t => `
+          <div style="flex:1;min-width:8px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;">
+            <div title="${t.key}: ${t.count} 篇" style="width:80%;background:${t.count ? '#1a73e8' : '#e0e0e0'};height:${Math.max(2, (t.count / trendMax) * 130)}px;border-radius:2px;"></div>
+          </div>`).join('')}
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#999;padding:4px 8px;">
+        <span>${days[0].key}</span><span>${days[14].key}</span><span>${days[29].key}</span>
+      </div>`;
+  } catch (e) {
+    showToast('加载失败: ' + e.message, 'error');
+  }
+}
+
+// ===================== Articles (S4) =====================
+let articlePage = 1;
+let articlePageSize = 20;
+let articleTotal = 0;
+let articleSearchTimer = null;
+
+async function loadArticles(page) {
+  if (page !== undefined) articlePage = page;
+  const search = document.getElementById('articleSearchInput').value;
+  const sourceFilter = document.getElementById('articleSourceFilter').value;
+  const params = new URLSearchParams({ page: articlePage, size: articlePageSize });
+  if (search) params.set('search', search);
+  if (sourceFilter) params.set('source_id', sourceFilter);
+
+  try {
+    const resp = await fetch(`/api/admin/rss/articles?${params}`);
+    const data = await resp.json();
+    const articles = data.data || [];
+    articleTotal = data.total || 0;
+    articlePage = data.page || 1;
+
+    renderArticles(articles);
+    renderArticlePagination();
+    document.getElementById('articleStatsBar').innerHTML =
+      `<span>共 <span class="count">${articleTotal}</span> 篇文章</span>`;
+  } catch (e) {
+    showToast('加载失败: ' + e.message, 'error');
+  }
+}
+
+function debounceArticleSearch() {
+  clearTimeout(articleSearchTimer);
+  articleSearchTimer = setTimeout(() => { articlePage = 1; loadArticles(); }, 400);
+}
+
+// 拉取订阅源列表,填充文章列表的数据源筛选下拉框
+async function loadArticleSourceFilter() {
+  try {
+    const resp = await fetch('/api/admin/rss/sources?size=100');
+    const json = await resp.json();
+    const sources = json.data || [];
+    const sel = document.getElementById('articleSourceFilter');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">全部数据源</option>' +
+      sources.map(s => `<option value="${s.id}">${esc(s.title)}</option>`).join('');
+    if (prev) sel.value = prev;
+  } catch (e) {
+    // 填充失败保持默认(全部数据源),不影响列表加载
+  }
+}
+
+function renderArticles(articles) {
+  const tbody = document.getElementById('articleTableBody');
+  const empty = document.getElementById('articleEmptyState');
+  if (!articles.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = articles.map(a => `
+    <tr>
+      <td style="font-size:12px;color:#888">${a.id}</td>
+      <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.title)}" onclick="showArticleDetail('${encodeURIComponent(JSON.stringify(a)).replace(/'/g, '%27')}')"><strong>${esc(a.title) || '(无标题)'}</strong></td>
+      <td style="font-size:12px;color:#666">${a.source_id || '-'}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.author) || '-'}</td>
+      <td>${a.is_read ? '<span class="enabled-badge enabled-true">已读</span>' : '<span class="enabled-badge enabled-false">未读</span>'}</td>
+      <td>${a.is_starred ? '⭐' : '-'}</td>
+      <td style="font-size:12px;color:#888">${esc(fmtLocalTime(a.published_at || a.created_at))}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm btn-ghost" onclick="showArticleDetail('${encodeURIComponent(JSON.stringify(a)).replace(/'/g, '%27')}')">详情</button>
+        <button class="btn btn-sm btn-ghost" onclick="editArticle('${encodeURIComponent(JSON.stringify(a)).replace(/'/g, '%27')}')">编辑</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteArticle(${a.id}, '${esc(a.title || '').replace(/'/g, "\\'")}')">删除</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderArticlePagination() {
+  const totalPages = Math.max(1, Math.ceil(articleTotal / articlePageSize));
+  const container = document.getElementById('articlePagination');
+  let html = '';
+  html += `<select class="page-size-select" onchange="articlePageSize=+this.value;articlePage=1;loadArticles()">${PAGE_SIZES.map(s => `<option value="${s}" ${s===articlePageSize?'selected':''}>${s} 条/页</option>`).join('')}</select>`;
+  html += `<button ${articlePage<=1?'disabled':''} onclick="loadArticles(1)">首页</button>`;
+  html += `<button ${articlePage<=1?'disabled':''} onclick="loadArticles(${articlePage-1})">上一页</button>`;
+  const start = Math.max(1, articlePage - 2);
+  const end = Math.min(totalPages, articlePage + 2);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="${i===articlePage?'active':''}" onclick="loadArticles(${i})">${i}</button>`;
+  }
+  html += `<button ${articlePage>=totalPages?'disabled':''} onclick="loadArticles(${articlePage+1})">下一页</button>`;
+  html += `<button ${articlePage>=totalPages?'disabled':''} onclick="loadArticles(${totalPages})">末页</button>`;
+  html += `<span class="page-info">第 ${articlePage}/${totalPages} 页，共 ${articleTotal} 条</span>`;
+  html += `<span class="page-info">跳转到 <input type="number" id="jumpArticlePageInput" min="1" max="${totalPages}" value="${articlePage}" style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:13px;text-align:center;" onkeydown="if(event.key==='Enter'){jumpToArticlePage(${totalPages})}"> 页</span>`;
+  html += `<button class="btn btn-sm btn-ghost" onclick="jumpToArticlePage(${totalPages})">GO</button>`;
+  container.innerHTML = html;
+}
+
+function jumpToArticlePage(totalPages) {
+  const input = document.getElementById('jumpArticlePageInput');
+  if (!input) return;
+  const page = parseInt(input.value);
+  if (isNaN(page) || page < 1 || page > totalPages) {
+    showToast('请输入有效页码 (1-' + totalPages + ')', 'error');
+    return;
+  }
+  loadArticles(page);
+}
+
+async function deleteArticle(id, title) {
+  if (!confirm(`确定删除文章「${title}」？`)) return;
+  try {
+    const resp = await fetch(`/api/admin/rss/articles/${id}`, { method: 'DELETE' });
+    const json = await resp.json();
+    if (json.success) {
+      showToast('文章已删除');
+      loadArticles();
+    } else {
+      showToast('删除失败', 'error');
+    }
+  } catch (e) {
+    showToast('删除失败: ' + e.message, 'error');
+  }
+}
+
+function exportArticlesCsv() {
+  window.open(`/api/admin/rss/articles?size=1000&search=${encodeURIComponent(document.getElementById('articleSearchInput').value)}&format=csv`, '_blank');
+}
+
+// ===================== Article Detail Modal =====================
+let articleDetailData = null;
+let articleDetailRendered = true; // true=HTML 渲染, false=未渲染(纯文本)
+let articleDetailRaw = false;     // true=查看原始代码(转义后展示 HTML 源码)
+
+function showArticleDetail(a) {
+  if (typeof a === 'string') { try { a = JSON.parse(decodeURIComponent(a)); } catch (e) { showToast('文章数据解析失败', 'error'); return; } }
+  articleDetailData = a;
+  articleDetailRendered = true;
+  articleDetailRaw = false;
+  document.getElementById('articleDetailTitle').textContent = a.title || '(无标题)';
+  document.getElementById('articleDetailMeta').innerHTML =
+    `<span>ID: ${a.id}</span> · <span>源: ${a.source_id}</span>` +
+    (a.author ? ` · <span>作者: ${esc(a.author)}</span>` : '') +
+    (a.published_at || a.created_at ? ` · <span>时间: ${esc(fmtLocalTime(a.published_at || a.created_at))}</span>` : '') +
+    (a.link ? ` · <span><a href="${esc(a.link)}" target="_blank" rel="noopener" onclick="openArticleDetailLink();return false;">原文链接</a></span>` : '');
+  document.getElementById('articleDetailToggleBtn').textContent = '未渲染';
+  document.getElementById('articleDetailRawBtn').textContent = '查看原始代码';
+  renderArticleDetailBody();
+  document.getElementById('articleDetailModal').classList.add('active');
+}
+
+function renderArticleDetailBody() {
+  const body = document.getElementById('articleDetailBody');
+  const a = articleDetailData;
+  if (!a) return;
+  if (articleDetailRaw) {
+    // 原始代码：转义展示 content 的 HTML 源码（与渲染结果分开，便于排查）
+    const src = a.content || a.summary || a.title || '';
+    body.innerHTML = `<pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;margin:0;font-family:Consolas,Menlo,monospace;">${esc(src)}</pre>`;
+    return;
+  }
+  if (articleDetailRendered) {
+    // 默认 HTML 渲染
+    const content = a.content || a.summary || a.title || '';
+    body.innerHTML = `<div style="word-break:break-word;">${content}</div>`;
+  } else {
+    // 未渲染：纯文本（去 HTML 标签后展示）
+    const plain = (a.content || a.summary || a.title || '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+    body.innerHTML = `<pre style="white-space:pre-wrap;word-break:break-word;font-size:13px;margin:0;">${esc(plain)}</pre>`;
+  }
+}
+
+function toggleArticleDetailRender() {
+  articleDetailRaw = false;
+  articleDetailRendered = !articleDetailRendered;
+  document.getElementById('articleDetailToggleBtn').textContent = articleDetailRendered ? '未渲染' : 'HTML 渲染';
+  document.getElementById('articleDetailRawBtn').textContent = '查看原始代码';
+  renderArticleDetailBody();
+}
+
+function toggleArticleDetailRaw() {
+  articleDetailRaw = !articleDetailRaw;
+  document.getElementById('articleDetailRawBtn').textContent = articleDetailRaw ? '返回渲染' : '查看原始代码';
+  renderArticleDetailBody();
+}
+
+function toggleArticleDetailFullscreen() {
+  const modal = document.querySelector('#articleDetailModal .modal');
+  const btn = document.getElementById('articleDetailFullscreenBtn');
+  const isFull = modal.classList.toggle('fullscreen');
+  btn.textContent = isFull ? '⛶ 还原' : '⛶ 全屏';
+}
+
+function openArticleDetailLink() {
+  const link = articleDetailData && articleDetailData.link;
+  if (!link) { showToast('无源地址', 'error'); return; }
+  window.open(link, '_blank');
+}
+
+// ===================== Article Create/Edit (S6) =====================
+let articleEditId = null;
+
+function showArticleModal() {
+  articleEditId = null;
+  document.getElementById('articleModalTitle').textContent = '新增文章';
+  document.getElementById('aformSourceId').value = '';
+  document.getElementById('aformGuid').value = '';
+  document.getElementById('aformTitle').value = '';
+  document.getElementById('aformLink').value = '';
+  document.getElementById('aformAuthor').value = '';
+  document.getElementById('aformSummary').value = '';
+  document.getElementById('aformContent').value = '';
+  document.getElementById('aformPublishedAt').value = '';
+  document.getElementById('aformRead').checked = false;
+  document.getElementById('aformStarred').checked = false;
+  document.getElementById('articleModal').classList.add('active');
+}
+
+function editArticle(a) {
+  if (typeof a === 'string') { try { a = JSON.parse(decodeURIComponent(a)); } catch (e) { showToast('文章数据解析失败', 'error'); return; } }
+  articleEditId = a.id;
+  document.getElementById('articleModalTitle').textContent = '编辑文章 #' + a.id;
+  document.getElementById('aformSourceId').value = a.source_id;
+  document.getElementById('aformGuid').value = a.guid || '';
+  document.getElementById('aformTitle').value = a.title || '';
+  document.getElementById('aformLink').value = a.link || '';
+  document.getElementById('aformAuthor').value = a.author || '';
+  document.getElementById('aformSummary').value = a.summary || '';
+  document.getElementById('aformContent').value = a.content || '';
+  document.getElementById('aformPublishedAt').value = a.published_at || '';
+  document.getElementById('aformRead').checked = !!a.is_read;
+  document.getElementById('aformStarred').checked = !!a.is_starred;
+  document.getElementById('articleModal').classList.add('active');
+}
+
+async function saveArticle() {
+  const data = {
+    source_id: parseInt(document.getElementById('aformSourceId').value),
+    guid: document.getElementById('aformGuid').value.trim(),
+    title: document.getElementById('aformTitle').value.trim(),
+    link: document.getElementById('aformLink').value.trim(),
+    author: document.getElementById('aformAuthor').value.trim(),
+    summary: document.getElementById('aformSummary').value.trim(),
+    content: document.getElementById('aformContent').value,
+    published_at: document.getElementById('aformPublishedAt').value.trim() || null,
+    is_read: document.getElementById('aformRead').checked,
+    is_starred: document.getElementById('aformStarred').checked,
+  };
+  if (!data.source_id || isNaN(data.source_id)) { showToast('请填写订阅源 ID', 'error'); return; }
+  if (!data.title) { showToast('请填写标题', 'error'); return; }
+  try {
+    const method = articleEditId ? 'PUT' : 'POST';
+    const url = articleEditId ? `/api/admin/rss/articles/${articleEditId}` : '/api/admin/rss/articles';
+    const resp = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+    });
+    const json = await resp.json();
+    if (json.success) {
+      closeModal('articleModal');
+      loadArticles(articlePage);
+      showToast(articleEditId ? '更新成功' : '添加成功');
+    } else { showToast('操作失败', 'error'); }
+  } catch (e) { showToast('错误: ' + e.message, 'error'); }
+}
+
+async function handleArticleCsvImport(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const resp = await fetch('/api/admin/rss/articles/import', { method: 'POST', body: form });
+    const json = await resp.json();
+    if (json.success) {
+      showToast(`导入成功 ${json.imported} 条` + (json.skipped ? `，跳过 ${json.skipped} 条` : ''));
+      loadArticles(1);
+    } else { showToast('导入失败', 'error'); }
+  } catch (err) { showToast('导入失败: ' + err.message, 'error'); }
+  e.target.value = '';
+}
+
+// ===================== Server Address Display (S6) =====================
+function initServerAddr() {
+  const addr = window.location.origin;
+  document.getElementById('serverAddrDisplay').textContent = addr;
+}
+
+function copyServerAddr() {
+  const addr = document.getElementById('serverAddrDisplay').textContent;
+  safeCopyText(addr, '服务器地址已复制');
+}
+
+// ===================== Sync Status (S4) =====================
+async function loadSyncStatus() {
+  try {
+    const resp = await fetch('/api/rss/sync/status');
+    const json = await resp.json();
+    const d = json.data || { total: 0, pending: 0, failed: 0, sources: [] };
+    document.getElementById('syncStatsBar').innerHTML =
+      `<span>源总数: <span class="count">${d.total}</span></span>` +
+      `<span>待抓取: <span class="count">${d.pending}</span></span>` +
+      `<span>暂停(连续失败≥5): <span class="count" style="color:#c62828">${d.failed}</span></span>` +
+      `<span>最近抓取: <span class="count">${esc(fmtLocalTime(d.last_fetch_at))}</span></span>` +
+      `<span>扫描间隔: <span class="count">${d.scan_interval_min || 15} 分钟</span></span>` +
+      `<span>源过期重抓: <span class="count">${d.fetch_stale_min || 30} 分钟</span></span>`;
+
+    const tbody = document.getElementById('syncTableBody');
+    const empty = document.getElementById('syncEmptyState');
+    const sources = d.sources || [];
+    if (!sources.length) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    tbody.innerHTML = sources.map(s => {
+      const failed = s.consecutive_failures || 0;
+      const paused = failed >= 5;
+      return `
+        <tr>
+          <td><strong>${esc(s.title)}</strong> <span style="font-size:11px;color:#999">#${s.source_id}</span></td>
+          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#1a73e8" title="${esc(s.url || '')}">${esc(s.url || '-')}</td>
+          <td style="font-size:12px;color:#888">${esc(fmtLocalTime(s.last_fetch_at))}</td>
+          <td><span class="enabled-badge ${paused ? 'enabled-false' : 'enabled-true'}">${failed}</span></td>
+          <td>${paused ? '<span class="enabled-badge enabled-false">已暂停</span>' : (s.last_fetch_at ? '<span class="enabled-badge enabled-true">正常</span>' : '<span class="enabled-badge enabled-false">未抓取</span>')}</td>
+          <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#c62828" title="${esc(s.last_error || '')}">${esc(s.last_error || '-')}</td>
+        </tr>
+      `;
+    }).join('');
+  } catch (e) {
+    showToast('加载失败: ' + e.message, 'error');
+  }
+}
+
+async function forceSyncAll() {
+  try {
+    const resp = await fetch('/api/admin/rss/sync', { method: 'POST' });
+    const json = await resp.json();
+    if (json.success) {
+      showToast('已触发全量抓取，请稍后刷新查看');
+      setTimeout(loadSyncStatus, 3000);
+    } else {
+      showToast('触发失败', 'error');
+    }
+  } catch (e) {
+    showToast('触发失败: ' + e.message, 'error');
   }
 }
 
@@ -525,9 +1187,10 @@ function renderTable(sources) {
       <td><span class="badge badge-${s.feed_type}">${s.feed_type.toUpperCase()}</span></td>
       <td>${esc(s.category || '-')}</td>
       <td><span class="enabled-badge ${s.enabled ? 'enabled-true' : 'enabled-false'}">${s.enabled ? '启用' : '禁用'}</span></td>
+      <td><span class="enabled-badge ${s.fetch_enabled !== false ? 'enabled-true' : 'enabled-false'}">${s.fetch_enabled !== false ? '抓取' : '停抓'}</span></td>
       <td style="font-size:12px;color:#888">${s.created_at || '-'}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-sm btn-ghost" onclick='editSource(${JSON.stringify(s)})'>编辑</button>
+        <button class="btn btn-sm btn-ghost" onclick="editSource('${encodeURIComponent(JSON.stringify(s)).replace(/'/g, '%27')}')">编辑</button>
         <button class="btn btn-sm btn-success" onclick='showSingleAddToFolder(${s.id}, "${esc(s.title)}")'>收藏夹</button>
         <button class="btn btn-sm btn-danger" onclick="deleteSource(${s.id}, '${esc(s.title).replace(/'/g, "\\'")}', '${esc(s.url).replace(/'/g, "\\'")}')">删除</button>
       </td>
@@ -569,8 +1232,58 @@ function jumpToPage(totalPages) {
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
+// 服务端 SQLite datetime('now') 存的是 UTC 字符串(如 "2026-08-13 05:30:00"),
+// 前端按 UTC 解析后转本地时间显示;解析失败/空值原样兜底。
+function fmtLocalTime(utcStr) {
+  if (!utcStr) return '-';
+  const s = String(utcStr).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return s;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]));
+  if (isNaN(d.getTime())) return s;
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+// 服务端按 UTC 日期分组(date(created_at)),转成本地日期 key(YYYY-MM-DD)用于趋势图对齐
+function localDateKey(utcDate) {
+  const m = String(utcDate || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return String(utcDate || '');
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (isNaN(d.getTime())) return String(utcDate);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// 兼容复制:优先 Clipboard API(HTTPS/localhost 安全上下文),
+// 不可用时回退 textarea + execCommand('copy'),覆盖 http://IP:端口 访问管理后台的场景
+function safeCopyText(text, successMsg) {
+  const okMsg = successMsg || '已复制';
+  const fallback = () => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok ? showToast(okMsg, 'success') : showToast('复制失败', 'error');
+    } catch (e) {
+      showToast('复制失败', 'error');
+    }
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => showToast(okMsg, 'success')).catch(fallback);
+  } else {
+    fallback();
+  }
+}
+
 function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => showToast('已复制', 'success')).catch(() => showToast('复制失败', 'error'));
+  safeCopyText(text);
 }
 
 function showAddModal() {
@@ -582,10 +1295,12 @@ function showAddModal() {
   document.getElementById('formFeedType').value = 'rss2';
   document.getElementById('formCategory').value = '';
   document.getElementById('formEnabled').checked = true;
+  document.getElementById('formFetchEnabled').checked = true;
   document.getElementById('modal').classList.add('active');
 }
 
 function editSource(s) {
+  if (typeof s === 'string') { try { s = JSON.parse(decodeURIComponent(s)); } catch (e) { showToast('订阅源数据解析失败', 'error'); return; } }
   editingId = s.id;
   document.getElementById('modalTitle').textContent = '编辑订阅源';
   document.getElementById('formTitle').value = s.title;
@@ -594,6 +1309,7 @@ function editSource(s) {
   document.getElementById('formFeedType').value = s.feed_type;
   document.getElementById('formCategory').value = s.category || '';
   document.getElementById('formEnabled').checked = s.enabled;
+  document.getElementById('formFetchEnabled').checked = s.fetch_enabled !== false;
   document.getElementById('modal').classList.add('active');
 }
 
@@ -607,6 +1323,7 @@ async function saveSource() {
     feed_type: document.getElementById('formFeedType').value,
     category: document.getElementById('formCategory').value.trim(),
     enabled: document.getElementById('formEnabled').checked,
+    fetch_enabled: document.getElementById('formFetchEnabled').checked,
   };
   if (!data.title || !data.url) { showToast('请填写标题和URL', 'error'); return; }
   try {
@@ -732,7 +1449,7 @@ function renderFolderTable() {
       <td style="font-size:12px;color:#888">${f.created_at || '-'}</td>
       <td style="white-space:nowrap;">
         <button class="btn btn-sm btn-primary" onclick="openFolder(${f.id}, '${esc(f.name)}')">查看</button>
-        <button class="btn btn-sm btn-ghost" onclick='editFolder(${JSON.stringify(f)})'>编辑</button>
+        <button class="btn btn-sm btn-ghost" onclick="editFolder('${encodeURIComponent(JSON.stringify(f)).replace(/'/g, '%27')}')">编辑</button>
         <button class="btn btn-sm btn-danger" onclick="deleteFolder(${f.id}, '${esc(f.name)}')">删除</button>
       </td>
     </tr>
@@ -929,6 +1646,7 @@ function showCreateFolderModal() {
 }
 
 function editFolder(f) {
+  if (typeof f === 'string') { try { f = JSON.parse(decodeURIComponent(f)); } catch (e) { showToast('收藏夹数据解析失败', 'error'); return; } }
   document.getElementById('folderModalTitle').textContent = '编辑收藏夹';
   document.getElementById('folderName').value = f.name;
   document.getElementById('folderDesc').value = f.description || '';
@@ -1247,7 +1965,8 @@ function checkRssLogin() {
   if (token) {
     document.getElementById('loginOverlay').style.display = 'none';
     document.getElementById('rssLogoutBtn').style.display = '';
-    loadSources(getPageFromUrl());
+    loadArticles();
+    loadArticleSourceFilter();
     window.addEventListener('popstate', function() { loadSources(getPageFromUrl()); });
   } else {
     // Not logged in — show login overlay, don't load sources yet
@@ -1275,7 +1994,8 @@ function handleRssLogin(e) {
       localStorage.setItem('admin_token', json.token);
       document.getElementById('loginOverlay').style.display = 'none';
       document.getElementById('rssLogoutBtn').style.display = '';
-      loadSources(getPageFromUrl());
+      loadArticles();
+      loadArticleSourceFilter();
       window.addEventListener('popstate', function() { loadSources(getPageFromUrl()); });
     } else {
       errEl.textContent = json.error || '登录失败';
@@ -1300,6 +2020,7 @@ function doRssLogout() {
 }
 
 checkRssLogin();
+initServerAddr();
 </script>
 </body>
 </html>

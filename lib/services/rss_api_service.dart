@@ -24,7 +24,14 @@ class RssPageResult {
 }
 
 class RssApiService {
-  static String get _baseUrl => UpdateService.apiBaseUrl;
+  /// 服务器模式专用基址（独立于主 API 地址，server 模式开启时由 Provider 设置）
+  static String? rssServerBaseUrl;
+
+  /// RSS API 基址：server 模式优先用独立地址，否则回退主 API 地址
+  static String get _baseUrl {
+    final rss = rssServerBaseUrl;
+    return (rss != null && rss.isNotEmpty) ? rss : UpdateService.apiBaseUrl;
+  }
 
   /// 获取服务器上的收藏夹列表
   static Future<List<Map<String, dynamic>>?> getFolders({int page = 1, int size = 50}) async {
@@ -42,6 +49,123 @@ class RssApiService {
     } catch (e) {
       debugPrint('Get RSS folders failed: $e');
       return null;
+    }
+  }
+
+  // ==================== Server 模式文章流（S3 API） ====================
+
+  /// 从服务器拉取文章分页（?source_id=&page=&size=&search=&read=&starred=&days=）
+  /// [days]>0 时仅拉最近 N 天入库的文章（由服务端按 UTC 计算,避免时区偏差）
+  static Future<List<dynamic>?> getServerArticles({
+    int? sourceId,
+    int page = 1,
+    int size = 20,
+    String? search,
+    String? read,
+    bool? starred,
+    int? days,
+  }) async {
+    try {
+      final params = <String, String>{'page': '$page', 'size': '$size'};
+      if (sourceId != null) params['source_id'] = '$sourceId';
+      if (search != null && search.isNotEmpty) params['search'] = search;
+      if (read != null) params['read'] = read;
+      if (starred != null) params['starred'] = '$starred';
+      if (days != null && days > 0) params['days'] = '$days';
+      final uri = Uri.parse('$_baseUrl/api/rss/articles').replace(queryParameters: params);
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json['data'] as List<dynamic>? ?? [];
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Get server articles failed: $e');
+      return null;
+    }
+  }
+
+  /// 获取文章详情（含 content 全文）
+  static Future<Map<String, dynamic>?> getServerArticle(int id) async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_baseUrl/api/rss/articles/$id'))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json['data'] as Map<String, dynamic>?;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Get server article failed: $e');
+      return null;
+    }
+  }
+
+  /// 各源未读数汇总
+  static Future<Map<String, dynamic>?> getServerUnreadSummary() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_baseUrl/api/rss/articles/unread'))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Get server unread summary failed: $e');
+      return null;
+    }
+  }
+
+  /// 服务器抓取状态（total/pending/failed/last_fetch_at/sources）
+  static Future<Map<String, dynamic>?> getServerSyncStatus() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_baseUrl/api/rss/sync/status'))
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json['data'] as Map<String, dynamic>?;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Get server sync status failed: $e');
+      return null;
+    }
+  }
+
+  /// 触发服务器立即抓取
+  static Future<bool> triggerServerSync() async {
+    try {
+      final response = await http
+          .post(Uri.parse('$_baseUrl/api/rss/sync'))
+          .timeout(const Duration(seconds: 10));
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Trigger server sync failed: $e');
+      return false;
+    }
+  }
+
+  /// 同步单篇文章状态（已读/星标）
+  static Future<bool> updateServerArticleState(int id, {bool? read, bool? starred}) async {
+    try {
+      final body = <String, dynamic>{};
+      if (read != null) body['read'] = read;
+      if (starred != null) body['starred'] = starred;
+      if (body.isEmpty) return false;
+      final response = await http
+          .patch(
+            Uri.parse('$_baseUrl/api/rss/articles/$id/state'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 10));
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Update server article state failed: $e');
+      return false;
     }
   }
 
@@ -159,10 +283,19 @@ class RssApiService {
   }
 
   /// 从 URL 抓取并解析 RSS/Atom feed
-  static Future<Map<String, dynamic>> fetchFeed(String url) async {
+  /// [ifModifiedSince] 传入上次同步时间（RFC 1123），源返回 304 时返回 {'notModified': true}
+  static Future<Map<String, dynamic>> fetchFeed(String url, {String? ifModifiedSince}) async {
     final client = _createClient();
     try {
-      final response = await client.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+      final request = http.Request('GET', Uri.parse(url));
+      if (ifModifiedSince != null && ifModifiedSince.isNotEmpty) {
+        request.headers['If-Modified-Since'] = ifModifiedSince;
+      }
+      final streamed = await client.send(request).timeout(const Duration(seconds: 15));
+      final response = await http.Response.fromStream(streamed);
+      if (response.statusCode == 304) {
+        return {'notModified': true};
+      }
       if (response.statusCode == 200) {
         final body = _decodeBody(response.bodyBytes, response.headers['content-type']);
         return {'body': body, 'contentType': response.headers['content-type']};
