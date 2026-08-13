@@ -1633,6 +1633,22 @@ pub async fn admin_delete_rss_article(
     Ok(Json(serde_json::json!({ "success": true, "deleted": deleted })))
 }
 
+/// POST /api/admin/rss/articles/batch-delete — 批量删除文章
+pub async fn admin_batch_delete_rss_articles(
+    State(state): State<Arc<RssDb>>,
+    Json(body): Json<BatchDeleteRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    if body.ids.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let db = state.db.lock().unwrap();
+    let placeholders: Vec<String> = body.ids.iter().map(|_| "?".to_string()).collect();
+    let sql = format!("DELETE FROM rss_articles WHERE id IN ({})", placeholders.join(","));
+    let refs: Vec<&dyn rusqlite::types::ToSql> = body.ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+    db.execute(&sql, refs.as_slice()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(serde_json::json!({ "success": true, "deleted": body.ids.len() })))
+}
+
 /// 后台新增/编辑文章的请求体
 #[derive(Debug, Deserialize)]
 pub struct ArticleUpsertRequest {
@@ -1995,6 +2011,7 @@ pub fn rss_routes() -> Router<Arc<RssDb>> {
         .route("/api/admin/rss/articles/import", post(admin_import_rss_articles_csv))
         .route("/api/admin/rss/articles/{id}", axum::routing::put(admin_update_rss_article))
         .route("/api/admin/rss/articles/{id}", axum::routing::delete(admin_delete_rss_article))
+        .route("/api/admin/rss/articles/batch-delete", post(admin_batch_delete_rss_articles))
         .route("/api/admin/rss/sync", post(admin_rss_force_sync))
         // 统计分析（S5）
         .route("/api/admin/rss/stats", get(admin_rss_stats))

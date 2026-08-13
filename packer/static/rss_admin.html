@@ -142,10 +142,17 @@ td { font-size: 14px; }
           <select id="articleSourceFilter" onchange="articlePage=1;loadArticles()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;max-width:220px;">
             <option value="">全部数据源</option>
           </select>
+          <div style="position:relative;display:inline-block;">
+            <button class="btn btn-primary btn-sm" onclick="toggleDropdown('articleActionsDropdown')" style="display:inline-flex;align-items:center;gap:4px;">+ 新增文章 <span style="font-size:10px;">▼</span></button>
+            <div id="articleActionsDropdown" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:white;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:100;min-width:160px;overflow:hidden;">
+              <a href="javascript:void(0)" onclick="showArticleModal();closeDropdown('articleActionsDropdown')" style="display:block;padding:8px 14px;font-size:13px;color:#333;text-decoration:none;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">➕ 新增文章</a>
+              <div style="padding:8px 14px;font-size:12px;color:#999;font-weight:600;border-bottom:1px solid #eee;border-top:1px solid #eee;">导入 / 导出</div>
+              <label style="display:block;padding:8px 14px;font-size:13px;color:#333;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📥 导入 CSV<input type="file" id="articleCsvInput" accept=".csv" style="display:none;" onchange="handleArticleCsvImport(event);closeDropdown('articleActionsDropdown')"></label>
+              <a href="javascript:void(0)" onclick="exportArticlesCsv();closeDropdown('articleActionsDropdown')" style="display:block;padding:8px 14px;font-size:13px;color:#333;text-decoration:none;cursor:pointer;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background=''">📄 导出 CSV</a>
+            </div>
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="batchDeleteArticles()" id="articleBatchDeleteBtn" style="display:none">批量删除</button>
           <input type="text" id="articleSearchInput" placeholder="搜索标题、摘要、正文..." style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;width:220px;" oninput="debounceArticleSearch()">
-          <button class="btn btn-primary btn-sm" onclick="showArticleModal()">+ 新增文章</button>
-          <button class="btn btn-ghost btn-sm" onclick="exportArticlesCsv()">导出 CSV</button>
-          <label style="cursor:pointer;margin:0;"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('articleCsvInput').click()">导入 CSV</button><input type="file" id="articleCsvInput" accept=".csv" style="display:none;" onchange="handleArticleCsvImport(event)"></label>
         </div>
       </div>
       <div class="stats-bar" id="articleStatsBar"></div>
@@ -154,6 +161,7 @@ td { font-size: 14px; }
           <table>
             <thead>
               <tr>
+                <th style="width:40px"><input type="checkbox" id="selectAllArticles" onchange="toggleSelectAllArticles()"></th>
                 <th>ID</th>
                 <th>标题</th>
                 <th>来源</th>
@@ -815,11 +823,13 @@ function renderArticles(articles) {
   if (!articles.length) {
     tbody.innerHTML = '';
     empty.style.display = 'block';
+    updateArticleBatchBtn();
     return;
   }
   empty.style.display = 'none';
   tbody.innerHTML = articles.map(a => `
     <tr>
+      <td><input type="checkbox" class="article-check" value="${a.id}" onchange="updateArticleBatchBtn()"></td>
       <td style="font-size:12px;color:#888">${a.id}</td>
       <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.title)}" onclick="showArticleDetail('${encodeURIComponent(JSON.stringify(a)).replace(/'/g, '%27')}')"><strong>${esc(a.title) || '(无标题)'}</strong></td>
       <td style="font-size:12px;color:#666">${a.source_id || '-'}</td>
@@ -834,6 +844,7 @@ function renderArticles(articles) {
       </td>
     </tr>
   `).join('');
+  updateArticleBatchBtn();
 }
 
 function renderArticlePagination() {
@@ -885,6 +896,40 @@ async function deleteArticle(id, title) {
 
 function exportArticlesCsv() {
   window.open(`/api/admin/rss/articles?size=1000&search=${encodeURIComponent(document.getElementById('articleSearchInput').value)}&format=csv`, '_blank');
+}
+
+function toggleSelectAllArticles() {
+  const checked = document.getElementById('selectAllArticles').checked;
+  document.querySelectorAll('.article-check').forEach(c => c.checked = checked);
+  updateArticleBatchBtn();
+}
+
+function updateArticleBatchBtn() {
+  const boxes = document.querySelectorAll('.article-check');
+  const count = document.querySelectorAll('.article-check:checked').length;
+  document.getElementById('articleBatchDeleteBtn').style.display = count > 0 ? 'inline-block' : 'none';
+  const selectAll = document.getElementById('selectAllArticles');
+  if (selectAll) selectAll.checked = boxes.length > 0 && count === boxes.length;
+}
+
+async function batchDeleteArticles() {
+  const ids = [...document.querySelectorAll('.article-check:checked')].map(c => parseInt(c.value));
+  if (!ids.length) return;
+  if (!confirm(`确定删除选中的 ${ids.length} 篇文章？`)) return;
+  try {
+    const resp = await fetch('/api/admin/rss/articles/batch-delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids })
+    });
+    const json = await resp.json();
+    if (json.success) {
+      showToast(`已删除 ${json.deleted || ids.length} 篇文章`);
+      loadArticles(articlePage);
+    } else {
+      showToast('批量删除失败', 'error');
+    }
+  } catch (e) {
+    showToast('批量删除失败: ' + e.message, 'error');
+  }
 }
 
 // ===================== Article Detail Modal =====================
