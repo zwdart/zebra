@@ -92,6 +92,8 @@ impl RssDb {
             CREATE INDEX IF NOT EXISTS idx_rss_articles_published ON rss_articles(published_at DESC);
             CREATE INDEX IF NOT EXISTS idx_rss_articles_read ON rss_articles(is_read);
             CREATE INDEX IF NOT EXISTS idx_rss_articles_starred ON rss_articles(is_starred);
+            -- 列表按 created_at 倒序分页，需要对应索引避免全表排序
+            CREATE INDEX IF NOT EXISTS idx_rss_articles_created ON rss_articles(created_at DESC, id DESC);
 
             -- 抓取状态表：每源最近抓取结果、ETag、失败次数
             CREATE TABLE IF NOT EXISTS rss_sync_state (
@@ -1282,6 +1284,8 @@ pub struct PaginatedRssArticles {
 }
 
 const ARTICLE_COLS: &str = "id, source_id, guid, title, link, author, summary, content, published_at, is_read, is_starred, created_at, updated_at";
+/// 列表用列（不含 content 全文），content 占位为空串，保持列数与 row_to_article 一致
+const ARTICLE_COLS_NO_CONTENT: &str = "id, source_id, guid, title, link, author, summary, '' AS content, published_at, is_read, is_starred, created_at, updated_at";
 
 fn row_to_article(row: &rusqlite::Row) -> rusqlite::Result<RssArticleOut> {
     Ok(RssArticleOut {
@@ -1312,9 +1316,11 @@ fn fts_match_expr(keyword: &str) -> String {
 }
 
 /// 通用文章查询（公开与管理共用）
+/// include_content=false 时列表不取 content 全文（后台列表页只展示摘要信息，避免大字段拖慢响应）
 fn query_articles(
     db: &rusqlite::Connection,
     q: &RssArticleQuery,
+    include_content: bool,
 ) -> (Vec<RssArticleOut>, i64) {
     let page = q.page.unwrap_or(1).max(1);
     let size = q.size.unwrap_or(20).min(100);
@@ -1399,11 +1405,16 @@ fn query_articles(
     // 数据行
     let (sql, query_params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if use_fts {
         let fts = fts_match_expr(search);
+        let cols = if include_content {
+            "a.id, a.source_id, a.guid, a.title, a.link, a.author, a.summary, a.content, a.published_at, a.is_read, a.is_starred, a.created_at, a.updated_at"
+        } else {
+            "a.id, a.source_id, a.guid, a.title, a.link, a.author, a.summary, '' AS content, a.published_at, a.is_read, a.is_starred, a.created_at, a.updated_at"
+        };
         let sql = format!(
-            "SELECT a.id, a.source_id, a.guid, a.title, a.link, a.author, a.summary, a.content, a.published_at, a.is_read, a.is_starred, a.created_at, a.updated_at \
+            "SELECT {} \
              FROM rss_articles_fts f JOIN rss_articles a ON a.id = f.rowid \
              WHERE rss_articles_fts MATCH ?1{} ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?",
-            where_sql
+            cols, where_sql
         );
         let mut qp: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
         qp.push(Box::new(fts));
@@ -1412,9 +1423,10 @@ fn query_articles(
         qp.push(Box::new(offset));
         (sql, qp)
     } else {
+        let cols = if include_content { ARTICLE_COLS } else { ARTICLE_COLS_NO_CONTENT };
         let sql = format!(
             "SELECT {} FROM rss_articles{} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
-            ARTICLE_COLS, where_sql
+            cols, where_sql
         );
         let mut qp: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
         qp.extend(params);
@@ -1443,7 +1455,7 @@ pub async fn list_rss_articles(
     axum::extract::Query(q): axum::extract::Query<RssArticleQuery>,
 ) -> Json<PaginatedRssArticles> {
     let db = state.db.lock().unwrap();
-    let (data, total) = query_articles(&db, &q);
+    let (data, total) = query_articles(&db, &q, true);
     Json(PaginatedRssArticles {
         data,
         total,
@@ -1581,7 +1593,7 @@ pub async fn admin_list_rss_articles(
     axum::extract::Query(q): axum::extract::Query<RssArticleQuery>,
 ) -> impl IntoResponse {
     let db = state.db.lock().unwrap();
-    let (data, total) = query_articles(&db, &q);
+    let (data, total) = query_articles(&db, &q, false);
 
     if q.format.as_deref() == Some("csv") {
         let mut csv = String::from("id,source_id,guid,title,link,author,published_at,is_read,is_starred,created_at\n");

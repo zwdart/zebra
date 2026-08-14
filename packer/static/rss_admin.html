@@ -37,6 +37,11 @@ td { font-size: 14px; }
 .modal { background: white; border-radius: 12px; width: 520px; max-height: 90vh; overflow-y: auto; margin: auto; }
 .modal.fullscreen { width: calc(100vw - 12px) !important; max-width: calc(100vw - 12px); height: calc(100vh - 12px); max-height: calc(100vh - 12px); border-radius: 8px; }
 .modal.fullscreen #articleDetailBody { max-height: calc(100vh - 150px); }
+/* 全屏:详情弹框 flex 纵向布局,正文区撑满剩余高度,消除底部留白 */
+#articleDetailModal .modal.fullscreen { display: flex; flex-direction: column; overflow: hidden; }
+#articleDetailModal .modal.fullscreen .modal-header { flex-shrink: 0; }
+#articleDetailModal .modal.fullscreen .modal-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+#articleDetailModal .modal.fullscreen #articleDetailBody { flex: 1; min-height: 0 !important; max-height: none !important; }
 #articleDetailBody img { max-width: 100%; height: auto; }
 #articleTableBody td[onclick] { cursor: pointer; }
 #articleTableBody td[onclick]:hover strong { color: #1a73e8; }
@@ -97,6 +102,37 @@ td { font-size: 14px; }
   .page-info { font-size: 12px; }
   .page-size-select { font-size: 11px; }
   .modal { width: 95%; max-width: 520px; }
+  /* 文章详情弹框:手机端直接占满全屏(左右/顶部不留边),正文区 flex 撑满剩余高度 */
+  #articleDetailModal .modal,
+  #articleDetailModal .modal.fullscreen {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    border-radius: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #articleDetailModal .modal-header { flex-shrink: 0; padding: 12px 16px; }
+  #articleDetailModal .modal-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 12px 14px;
+  }
+  #articleDetailModal #articleDetailBody {
+    flex: 1;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+  /* 手机端详情弹框默认已全屏,全屏切换按钮无意义,隐藏避免误导 */
+  #articleDetailFullscreenBtn { display: none; }
   .form-row { flex-direction: column; gap: 0; }
   th, td { padding: 8px 10px; font-size: 12px; }
   .btn-sm { padding: 4px 8px; font-size: 11px; }
@@ -401,7 +437,6 @@ td { font-size: 14px; }
     <div class="modal-header">
       <h3 id="articleDetailTitle">文章详情</h3>
       <div style="display:flex;align-items:center;gap:8px;">
-        <button class="btn btn-ghost btn-sm" id="articleDetailFullscreenBtn" onclick="toggleArticleDetailFullscreen()">⛶ 全屏</button>
         <button class="modal-close" onclick="closeModal('articleDetailModal')">&times;</button>
       </div>
     </div>
@@ -410,10 +445,11 @@ td { font-size: 14px; }
         <div id="articleDetailMeta" style="font-size:12px;color:#888;margin-bottom:8px;"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-ghost btn-sm" id="articleDetailToggleBtn" onclick="toggleArticleDetailRender()">未渲染</button>
-          <button class="btn btn-ghost btn-sm" id="articleDetailRawBtn" onclick="toggleArticleDetailRaw()">查看原始代码</button>
+          <button class="btn btn-ghost btn-sm" id="articleDetailRawBtn" onclick="toggleArticleDetailRaw()">查看源码</button>
+          <button class="btn btn-ghost btn-sm" id="articleDetailFullscreenBtn" onclick="toggleArticleDetailFullscreen()">⛶ 全屏</button>
         </div>
       </div>
-      <div id="articleDetailBody" style="border:1px solid #eee;border-radius:6px;padding:16px;min-height:300px;max-height:60vh;overflow-y:auto;background:#fafafa;"></div>
+      <div id="articleDetailBody" style="border:1px solid #eee;border-radius:6px;padding:16px;min-height:45vh;max-height:60vh;overflow-y:auto;background:#fafafa;"></div>
     </div>
   </div>
 </div>
@@ -437,7 +473,10 @@ td { font-size: 14px; }
         </div>
         <div class="form-group">
           <label>GUID</label>
-          <input type="text" id="aformGuid" placeholder="唯一标识">
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="aformGuid" placeholder="唯一标识" style="flex:1;min-width:0;">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="generateArticleGuid()" style="flex-shrink:0;white-space:nowrap;">🪄 生成</button>
+          </div>
         </div>
       </div>
       <div class="form-row">
@@ -465,9 +504,9 @@ td { font-size: 14px; }
         <textarea id="aformContent" placeholder="文章正文（支持 HTML）"></textarea>
       </div>
       <div class="form-group">
-        <label style="display:flex;align-items:center;gap:14px;">
-          <span style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="aformRead"> 已读</span>
-          <span style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="aformStarred"> 星标</span>
+        <label style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0;"><input type="checkbox" id="aformRead"> 已读</span>
+          <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0;"><input type="checkbox" id="aformStarred"> 星标</span>
         </label>
       </div>
       <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
@@ -780,6 +819,12 @@ async function loadArticles(page) {
   if (search) params.set('search', search);
   if (sourceFilter) params.set('source_id', sourceFilter);
 
+  // 加载占位:请求期间提示用户,避免静止表格造成"卡死"感
+  const tbody = document.getElementById('articleTableBody');
+  const empty = document.getElementById('articleEmptyState');
+  empty.style.display = 'none';
+  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;padding:28px 0;">加载中...</td></tr>';
+
   try {
     const resp = await fetch(`/api/admin/rss/articles?${params}`);
     const data = await resp.json();
@@ -831,15 +876,15 @@ function renderArticles(articles) {
     <tr>
       <td><input type="checkbox" class="article-check" value="${a.id}" onchange="updateArticleBatchBtn()"></td>
       <td style="font-size:12px;color:#888">${a.id}</td>
-      <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.title)}" onclick="showArticleDetail('${encodeURIComponent(JSON.stringify(a)).replace(/'/g, '%27')}')"><strong>${esc(a.title) || '(无标题)'}</strong></td>
+      <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.title)}" onclick="showArticleDetail(${a.id})"><strong>${esc(a.title) || '(无标题)'}</strong></td>
       <td style="font-size:12px;color:#666">${a.source_id || '-'}</td>
       <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.author) || '-'}</td>
       <td>${a.is_read ? '<span class="enabled-badge enabled-true">已读</span>' : '<span class="enabled-badge enabled-false">未读</span>'}</td>
       <td>${a.is_starred ? '⭐' : '-'}</td>
       <td style="font-size:12px;color:#888">${esc(fmtLocalTime(a.published_at || a.created_at))}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-sm btn-ghost" onclick="showArticleDetail('${encodeURIComponent(JSON.stringify(a)).replace(/'/g, '%27')}')">详情</button>
-        <button class="btn btn-sm btn-ghost" onclick="editArticle('${encodeURIComponent(JSON.stringify(a)).replace(/'/g, '%27')}')">编辑</button>
+        <button class="btn btn-sm btn-ghost" onclick="showArticleDetail(${a.id})">详情</button>
+        <button class="btn btn-sm btn-ghost" onclick="editArticle(${a.id})">编辑</button>
         <button class="btn btn-sm btn-danger" onclick="deleteArticle(${a.id}, '${esc(a.title || '').replace(/'/g, "\\'")}')">删除</button>
       </td>
     </tr>
@@ -935,10 +980,22 @@ async function batchDeleteArticles() {
 // ===================== Article Detail Modal =====================
 let articleDetailData = null;
 let articleDetailRendered = true; // true=HTML 渲染, false=未渲染(纯文本)
-let articleDetailRaw = false;     // true=查看原始代码(转义后展示 HTML 源码)
+let articleDetailRaw = false;     // true=查看源码(转义后展示 HTML 源码)
 
 function showArticleDetail(a) {
+  // 兼容旧调用:直接传对象;新调用传 id,按 id 拉全文
+  if (typeof a === 'number' || /^\d+$/.test(String(a))) {
+    fetchArticleFull(a, (full) => {
+      if (!full) { showToast('文章加载失败', 'error'); return; }
+      renderArticleDetail(full);
+    });
+    return;
+  }
   if (typeof a === 'string') { try { a = JSON.parse(decodeURIComponent(a)); } catch (e) { showToast('文章数据解析失败', 'error'); return; } }
+  renderArticleDetail(a);
+}
+
+function renderArticleDetail(a) {
   articleDetailData = a;
   articleDetailRendered = true;
   articleDetailRaw = false;
@@ -949,9 +1006,21 @@ function showArticleDetail(a) {
     (a.published_at || a.created_at ? ` · <span>时间: ${esc(fmtLocalTime(a.published_at || a.created_at))}</span>` : '') +
     (a.link ? ` · <span><a href="${esc(a.link)}" target="_blank" rel="noopener" onclick="openArticleDetailLink();return false;">原文链接</a></span>` : '');
   document.getElementById('articleDetailToggleBtn').textContent = '未渲染';
-  document.getElementById('articleDetailRawBtn').textContent = '查看原始代码';
+  document.getElementById('articleDetailRawBtn').textContent = '查看源码';
   renderArticleDetailBody();
   document.getElementById('articleDetailModal').classList.add('active');
+}
+
+/// 按 id 拉取文章全文（列表接口不含 content，详情/编辑需要全文时按需请求）
+async function fetchArticleFull(id, cb) {
+  try {
+    const resp = await fetch(`/api/rss/articles/${id}`);
+    if (!resp.ok) { showToast('文章加载失败: HTTP ' + resp.status, 'error'); return; }
+    const json = await resp.json();
+    cb(json.data || null);
+  } catch (e) {
+    showToast('文章加载失败: ' + e.message, 'error');
+  }
 }
 
 function renderArticleDetailBody() {
@@ -986,13 +1055,13 @@ function toggleArticleDetailRender() {
   articleDetailRaw = false;
   articleDetailRendered = !articleDetailRendered;
   document.getElementById('articleDetailToggleBtn').textContent = articleDetailRendered ? '未渲染' : 'HTML 渲染';
-  document.getElementById('articleDetailRawBtn').textContent = '查看原始代码';
+  document.getElementById('articleDetailRawBtn').textContent = '查看源码';
   renderArticleDetailBody();
 }
 
 function toggleArticleDetailRaw() {
   articleDetailRaw = !articleDetailRaw;
-  document.getElementById('articleDetailRawBtn').textContent = articleDetailRaw ? '返回渲染' : '查看原始代码';
+  document.getElementById('articleDetailRawBtn').textContent = articleDetailRaw ? '返回渲染' : '查看源码';
   renderArticleDetailBody();
 }
 
@@ -1028,8 +1097,36 @@ function showArticleModal() {
   document.getElementById('articleModal').classList.add('active');
 }
 
+/// 生成随机 GUID 并填入「唯一标识」输入框
+function generateArticleGuid() {
+  let guid = '';
+  if (window.crypto && typeof crypto.randomUUID === 'function') {
+    guid = crypto.randomUUID();
+  } else {
+    // 兼容旧环境:手工生成 UUID v4
+    guid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+  document.getElementById('aformGuid').value = guid;
+}
+
 function editArticle(a) {
+  // 兼容旧调用:直接传对象;新调用传 id,按 id 拉全文
+  if (typeof a === 'number' || /^\d+$/.test(String(a))) {
+    fetchArticleFull(a, (full) => {
+      if (!full) { showToast('文章加载失败', 'error'); return; }
+      fillArticleForm(full);
+    });
+    return;
+  }
   if (typeof a === 'string') { try { a = JSON.parse(decodeURIComponent(a)); } catch (e) { showToast('文章数据解析失败', 'error'); return; } }
+  fillArticleForm(a);
+}
+
+function fillArticleForm(a) {
   articleEditId = a.id;
   document.getElementById('articleModalTitle').textContent = '编辑文章 #' + a.id;
   document.getElementById('aformSourceId').value = a.source_id;
