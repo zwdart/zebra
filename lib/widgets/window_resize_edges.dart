@@ -130,13 +130,15 @@ class _EdgeRegion extends StatelessWidget {
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: cursor,
-      child: Listener(
+      child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onPointerDown: (_) {
-          // 按下即进入系统缩放流程，后续拖动由系统接管；
-          // 个别平台原生未实现 startResizing 时静默失败（保留系统边框缩放）。
-          windowManager.startResizing(edge).ignore();
-        },
+        // 必须用 onPanStart(手势识别完成)而非 onPointerDown 触发：
+        // Windows 上按下瞬间 Flutter 引擎仍持有鼠标捕获/尚未释放指针，
+        // 此时调用 startResizing 发送的 WM_NCLBUTTONDOWN 无法进入系统
+        // 缩放模态循环，表现为光标出现但拖不动（与官方 DragToResizeArea、
+        // WindowDragRegion 的 startDragging 一致，参见 window_manager #399）。
+        // 手势识别（越过 slop）后引擎已释放指针，系统才接管缩放。
+        onPanStart: (_) => windowManager.startResizing(edge).ignore(),
       ),
     );
   }
