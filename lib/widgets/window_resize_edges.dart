@@ -120,25 +120,130 @@ class WindowResizeEdges extends StatelessWidget {
   }
 }
 
-class _EdgeRegion extends StatelessWidget {
+/// 边缘热区：按下并拖动时，用 [WindowManager.setBounds] 手动计算窗口
+/// 新矩形，实现宽高/位置调整。
+///
+/// 不调用 [WindowManager.startResizing]：该 API 在 Windows 上通过异步
+/// PostMessage(WM_NCLBUTTONDOWN) 请求系统进入缩放模态循环，在 Flutter
+/// 引擎窗口下常因时序/捕获问题不生效（表现为光标出现但拖不动）。
+/// 手动 setBounds 不依赖系统模态循环，各平台行为一致可靠。
+class _EdgeRegion extends StatefulWidget {
   final ResizeEdge edge;
   final MouseCursor cursor;
 
   const _EdgeRegion({required this.edge, required this.cursor});
 
   @override
+  State<_EdgeRegion> createState() => _EdgeRegionState();
+}
+
+class _EdgeRegionState extends State<_EdgeRegion> {
+  /// 缩放最小尺寸（逻辑像素），避免拖到负值/窗口塌陷
+  static const double _minWidth = 400;
+  static const double _minHeight = 300;
+
+  /// 按下时的窗口矩形（拖拽基准，避免增量误差累积）
+  Rect? _startBounds;
+
+  /// 按下时的指针全局坐标（逻辑像素）
+  Offset? _startPos;
+
+  Future<void> _onPointerDown(PointerDownEvent event) async {
+    // 最大化时不允许拖动缩放
+    if (await windowManager.isMaximized()) return;
+    _startBounds = await windowManager.getBounds();
+    _startPos = event.position;
+  }
+
+  Future<void> _onPointerMove(PointerMoveEvent event) async {
+    final start = _startBounds;
+    final origin = _startPos;
+    if (start == null || origin == null) return;
+    final delta = event.position - origin;
+    await windowManager.setBounds(_resizeRect(start, delta));
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    _startBounds = null;
+    _startPos = null;
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    _startBounds = null;
+    _startPos = null;
+  }
+
+  /// 根据拖拽增量计算新的窗口矩形（逻辑像素）。
+  Rect _resizeRect(Rect start, Offset delta) {
+    double left = start.left;
+    double top = start.top;
+    double right = start.right;
+    double bottom = start.bottom;
+
+    switch (widget.edge) {
+      case ResizeEdge.top:
+        top += delta.dy;
+        break;
+      case ResizeEdge.bottom:
+        bottom += delta.dy;
+        break;
+      case ResizeEdge.left:
+        left += delta.dx;
+        break;
+      case ResizeEdge.right:
+        right += delta.dx;
+        break;
+      case ResizeEdge.topLeft:
+        top += delta.dy;
+        left += delta.dx;
+        break;
+      case ResizeEdge.topRight:
+        top += delta.dy;
+        right += delta.dx;
+        break;
+      case ResizeEdge.bottomLeft:
+        bottom += delta.dy;
+        left += delta.dx;
+        break;
+      case ResizeEdge.bottomRight:
+        bottom += delta.dy;
+        right += delta.dx;
+        break;
+    }
+
+    // 钳制最小宽高：缩小时优先保持固定边不动，移动对侧边
+    if (right - left < _minWidth) {
+      if (widget.edge == ResizeEdge.left ||
+          widget.edge == ResizeEdge.topLeft ||
+          widget.edge == ResizeEdge.bottomLeft) {
+        left = right - _minWidth;
+      } else {
+        right = left + _minWidth;
+      }
+    }
+    if (bottom - top < _minHeight) {
+      if (widget.edge == ResizeEdge.top ||
+          widget.edge == ResizeEdge.topLeft ||
+          widget.edge == ResizeEdge.topRight) {
+        top = bottom - _minHeight;
+      } else {
+        bottom = top + _minHeight;
+      }
+    }
+
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      cursor: cursor,
-      child: GestureDetector(
+      cursor: widget.cursor,
+      child: Listener(
         behavior: HitTestBehavior.opaque,
-        // 必须用 onPanStart(手势识别完成)而非 onPointerDown 触发：
-        // Windows 上按下瞬间 Flutter 引擎仍持有鼠标捕获/尚未释放指针，
-        // 此时调用 startResizing 发送的 WM_NCLBUTTONDOWN 无法进入系统
-        // 缩放模态循环，表现为光标出现但拖不动（与官方 DragToResizeArea、
-        // WindowDragRegion 的 startDragging 一致，参见 window_manager #399）。
-        // 手势识别（越过 slop）后引擎已释放指针，系统才接管缩放。
-        onPanStart: (_) => windowManager.startResizing(edge).ignore(),
+        onPointerDown: (e) => _onPointerDown(e),
+        onPointerMove: (e) => _onPointerMove(e),
+        onPointerUp: _onPointerUp,
+        onPointerCancel: _onPointerCancel,
       ),
     );
   }
