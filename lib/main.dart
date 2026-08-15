@@ -32,6 +32,7 @@ import 'providers/diary_provider.dart';
 import 'database/rss_database_service.dart';
 import 'services/update_service.dart';
 import 'services/window_service.dart';
+import 'widgets/window_resize_edges.dart';
 import 'features/lan_chat/providers/lan_discovery_provider.dart';
 import 'features/lan_chat/providers/chat_provider.dart';
 import 'features/lan_chat/providers/room_provider.dart';
@@ -177,6 +178,9 @@ class ZebraApp extends StatelessWidget {
               '/processes': (_) => const ProcessScreen(),
               '/cleanup': (_) => const CleanupScreen(),
             },
+            // 无边框窗口的边缘缩放热区，覆盖所有路由页面
+            builder: (context, child) =>
+                WindowResizeEdges(child: child ?? const SizedBox.shrink()),
           );
         },
       ),

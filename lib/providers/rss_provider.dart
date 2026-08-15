@@ -148,6 +148,14 @@ class RssProvider extends ChangeNotifier {
     await prefs.setBool(_prefKeyServerMode, _serverMode);
     if (enabled) await prefs.setString(_prefKeyServerUrl, _serverUrl);
     notifyListeners();
+    // 切换数据源：开启时加载服务器数据，关闭时恢复本地数据。
+    // 否则 _feeds/_articles 共享槽位会残留另一套数据（在线/离线混在一起）。
+    if (enabled) {
+      await loadServerAll();
+    } else {
+      loadFeedSources();
+      loadAllArticles(refresh: true);
+    }
   }
 
   /// 服务器源列表（server 模式下拉取）

@@ -302,7 +302,13 @@ class _SftpScreenState extends State<SftpScreen> {
                           : RefreshIndicator(
                               onRefresh: () => sftpProvider.listDirectory(),
                               child: filteredFiles.isEmpty
-                                  ? Center(child: Text(loc.search))
+                                  ? Center(
+                                      child: Text(
+                                        _searchController.text.trim().isEmpty
+                                            ? loc.folderEmpty
+                                            : loc.noMatchingFiles,
+                                      ),
+                                    )
                                   : ListView.builder(
                                       itemCount: filteredFiles.length,
                                       itemBuilder: (ctx, i) {

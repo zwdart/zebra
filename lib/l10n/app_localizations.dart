@@ -73,6 +73,8 @@ class AppLocalizations {
   String get confirm => translate('confirm');
   String get save => translate('save');
   String get search => translate('search');
+  String get folderEmpty => translate('folderEmpty');
+  String get noMatchingFiles => translate('noMatchingFiles');
   String get noConnections => translate('noConnections');
   String get connecting => translate('connecting');
   String get connectionError => translate('connectionError');
@@ -863,6 +865,8 @@ class AppLocalizations {
     'confirm': 'Confirm',
     'save': 'Save',
     'search': 'Search',
+    'folderEmpty': 'This folder is empty',
+    'noMatchingFiles': 'No matching files',
     'noConnections': 'No connections yet',
     'connecting': 'Connecting...',
     'connectionError': 'Connection Error',
@@ -1574,6 +1578,8 @@ class AppLocalizations {
     'confirm': '确认',
     'save': '保存',
     'search': '搜索',
+    'folderEmpty': '此文件夹为空',
+    'noMatchingFiles': '无匹配的文件',
     'noConnections': '暂无连接',
     'connecting': '连接中...',
     'connectionError': '连接错误',

@@ -37,6 +37,9 @@ class _RssFeedListScreenState extends State<RssFeedListScreen> with SingleTicker
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<RssProvider>();
+      // server 模式使用独立主页(RssServerHomeScreen),这里只加载本地数据,
+      // 避免本地数据覆盖共享的 _feeds/_articles 导致在线/离线混在一起。
+      if (provider.serverMode) return;
       provider.loadFeedSources();
       provider.loadAllArticles(refresh: true);
     });
