@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import '../services/native_window_resize.dart';
 
 /// 桌面端无边框窗口的边缘缩放热区。
 ///
@@ -120,13 +121,13 @@ class WindowResizeEdges extends StatelessWidget {
   }
 }
 
-/// 边缘热区：按下并拖动时，用 [WindowManager.setBounds] 手动计算窗口
-/// 新矩形，实现宽高/位置调整。
+/// 边缘热区：按下时通过 [NativeWindowResize] 进入系统原生缩放模态循环。
 ///
 /// 不调用 [WindowManager.startResizing]：该 API 在 Windows 上通过异步
 /// PostMessage(WM_NCLBUTTONDOWN) 请求系统进入缩放模态循环，在 Flutter
 /// 引擎窗口下常因时序/捕获问题不生效（表现为光标出现但拖不动）。
-/// 手动 setBounds 不依赖系统模态循环，各平台行为一致可靠。
+/// 改为 Dart FFI 直调 user32 SendMessage(WM_SYSCOMMAND, SC_SIZE) 同步
+/// 触发系统模态循环，由系统接管窗口绘制，无残影闪烁（与 RustDesk 一致）。
 class _EdgeRegion extends StatefulWidget {
   final ResizeEdge edge;
   final MouseCursor cursor;
@@ -138,100 +139,12 @@ class _EdgeRegion extends StatefulWidget {
 }
 
 class _EdgeRegionState extends State<_EdgeRegion> {
-  /// 缩放最小尺寸（逻辑像素），避免拖到负值/窗口塌陷
-  static const double _minWidth = 400;
-  static const double _minHeight = 300;
-
-  /// 按下时的窗口矩形（拖拽基准，避免增量误差累积）
-  Rect? _startBounds;
-
-  /// 按下时的指针全局坐标（逻辑像素）
-  Offset? _startPos;
-
   Future<void> _onPointerDown(PointerDownEvent event) async {
     // 最大化时不允许拖动缩放
     if (await windowManager.isMaximized()) return;
-    _startBounds = await windowManager.getBounds();
-    _startPos = event.position;
-  }
-
-  Future<void> _onPointerMove(PointerMoveEvent event) async {
-    final start = _startBounds;
-    final origin = _startPos;
-    if (start == null || origin == null) return;
-    final delta = event.position - origin;
-    await windowManager.setBounds(_resizeRect(start, delta));
-  }
-
-  void _onPointerUp(PointerUpEvent event) {
-    _startBounds = null;
-    _startPos = null;
-  }
-
-  void _onPointerCancel(PointerCancelEvent event) {
-    _startBounds = null;
-    _startPos = null;
-  }
-
-  /// 根据拖拽增量计算新的窗口矩形（逻辑像素）。
-  Rect _resizeRect(Rect start, Offset delta) {
-    double left = start.left;
-    double top = start.top;
-    double right = start.right;
-    double bottom = start.bottom;
-
-    switch (widget.edge) {
-      case ResizeEdge.top:
-        top += delta.dy;
-        break;
-      case ResizeEdge.bottom:
-        bottom += delta.dy;
-        break;
-      case ResizeEdge.left:
-        left += delta.dx;
-        break;
-      case ResizeEdge.right:
-        right += delta.dx;
-        break;
-      case ResizeEdge.topLeft:
-        top += delta.dy;
-        left += delta.dx;
-        break;
-      case ResizeEdge.topRight:
-        top += delta.dy;
-        right += delta.dx;
-        break;
-      case ResizeEdge.bottomLeft:
-        bottom += delta.dy;
-        left += delta.dx;
-        break;
-      case ResizeEdge.bottomRight:
-        bottom += delta.dy;
-        right += delta.dx;
-        break;
-    }
-
-    // 钳制最小宽高：缩小时优先保持固定边不动，移动对侧边
-    if (right - left < _minWidth) {
-      if (widget.edge == ResizeEdge.left ||
-          widget.edge == ResizeEdge.topLeft ||
-          widget.edge == ResizeEdge.bottomLeft) {
-        left = right - _minWidth;
-      } else {
-        right = left + _minWidth;
-      }
-    }
-    if (bottom - top < _minHeight) {
-      if (widget.edge == ResizeEdge.top ||
-          widget.edge == ResizeEdge.topLeft ||
-          widget.edge == ResizeEdge.topRight) {
-        top = bottom - _minHeight;
-      } else {
-        bottom = top + _minHeight;
-      }
-    }
-
-    return Rect.fromLTRB(left, top, right, bottom);
+    // 进入系统原生缩放模态循环：SendMessage 同步阻塞直到用户松开鼠标，
+    // 缩放由系统接管绘制，无残影闪烁。返回后缩放已完成。
+    await NativeWindowResize.startResizing(widget.edge);
   }
 
   @override
@@ -241,9 +154,6 @@ class _EdgeRegionState extends State<_EdgeRegion> {
       child: Listener(
         behavior: HitTestBehavior.opaque,
         onPointerDown: (e) => _onPointerDown(e),
-        onPointerMove: (e) => _onPointerMove(e),
-        onPointerUp: _onPointerUp,
-        onPointerCancel: _onPointerCancel,
       ),
     );
   }
