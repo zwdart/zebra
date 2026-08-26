@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/feed_source.dart';
 import '../../providers/rss_provider.dart';
 import '../../services/rss_api_service.dart';
+import '../../services/update_service.dart';
 import '../../widgets/custom_title_bar.dart';
 
 class RssQuickAddScreen extends StatefulWidget {
@@ -128,6 +130,23 @@ class RssQuickAddScreenState extends State<RssQuickAddScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(success ? loc.rssAddedToFolder.replaceAll('{name}', feed.title) : (provider.error == null ? loc.unknownError : loc.translate(provider.error!)))),
     );
+  }
+
+  /// 点击条目:跳转对应链接,并追加 zf=<本地设置的域名>
+  /// (UpdateService.apiBaseUrl 的主机名,用于目标站点识别来源;
+  /// 域名取不到时保持原链接不变)。
+  Future<void> _openFeedLink(FeedSource feed) async {
+    final uri = Uri.parse(feed.url);
+    final zfDomain = Uri.tryParse(UpdateService.apiBaseUrl)?.host ?? '';
+    final target = zfDomain.isEmpty
+        ? uri
+        : uri.replace(queryParameters: {
+            ...uri.queryParameters,
+            'zf': zfDomain,
+          });
+    if (await canLaunchUrl(target)) {
+      await launchUrl(target, mode: LaunchMode.externalApplication);
+    }
   }
 
   void _showFeedDetail(FeedSource feed) {
@@ -293,10 +312,36 @@ class RssQuickAddScreenState extends State<RssQuickAddScreen> {
                         return Card(
                           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           child: ListTile(
-                            title: Text(feed.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text(
-                              feed.category.isNotEmpty ? '${feed.feedTypeLabel} · ${feed.category}' : feed.feedTypeLabel,
-                              style: Theme.of(context).textTheme.bodySmall,
+                            // 名称 + 类型(小字号紧跟名称后)
+                            title: Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Flexible(
+                                  child: Text(feed.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  feed.category.isNotEmpty
+                                      ? '${feed.feedTypeLabel} · ${feed.category}'
+                                      : feed.feedTypeLabel,
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.outline,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            // 链接单独一行
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                feed.url,
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -322,6 +367,7 @@ class RssQuickAddScreenState extends State<RssQuickAddScreen> {
                             ),
                             dense: true,
                             visualDensity: VisualDensity.compact,
+                            onTap: () => _openFeedLink(feed),
                           ),
                         );
                       },
