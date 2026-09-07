@@ -25,7 +25,7 @@ dependencies:
   share_plus: ^10.1.4
   url_launcher: ^6.3.1
   flutter_html: ^3.0.0
-  html: ^0.15.6
+  html: 0.15.6
   markdown: ^7.3.0
   window_manager: ^0.5.2
   contextmenu: ^3.0.0

@@ -368,6 +368,7 @@ jobs:
           EOF
 
       - name: Clear pub cache
+        shell: bash
         run: rm -rf ~/.pub-cache
 
       - name: Flutter pub get
