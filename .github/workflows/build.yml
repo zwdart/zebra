@@ -122,6 +122,9 @@ jobs:
           const String buildTime = '$BUILD_TIME';
           EOF
 
+      - name: Clear pub cache
+        run: rm -rf ~/.pub-cache
+
       - name: Flutter pub get
         run: flutter pub get
 
@@ -364,6 +367,9 @@ jobs:
           const String buildTime = '$BUILD_TIME';
           EOF
 
+      - name: Clear pub cache
+        run: rm -rf ~/.pub-cache
+
       - name: Flutter pub get
         shell: bash
         run: flutter pub get
@@ -487,6 +493,9 @@ jobs:
           const String buildTime = '$BUILD_TIME';
           EOF
 
+      - name: Clear pub cache
+        run: rm -rf ~/.pub-cache
+
       - name: Flutter pub get
         shell: bash
         run: flutter pub get
@@ -568,6 +577,9 @@ jobs:
           // Auto-generated build info - overwritten by build scripts
           const String buildTime = '$BUILD_TIME';
           EOF
+
+      - name: Clear pub cache
+        run: rm -rf ~/.pub-cache
 
       - name: Flutter pub get
         run: flutter pub get
@@ -759,6 +771,9 @@ jobs:
           // Auto-generated build info - overwritten by build scripts
           const String buildTime = '$BUILD_TIME';
           EOF
+
+      - name: Clear pub cache
+        run: rm -rf ~/.pub-cache
 
       - name: Flutter pub get
         run: flutter pub get
