@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:xterm/xterm.dart';
+import '../models/terminal_session.dart';
 import '../providers/ssh_provider.dart';
 import '../widgets/custom_title_bar.dart';
 import '../l10n/app_localizations.dart';
@@ -18,6 +19,11 @@ class TerminalScreen extends StatefulWidget {
 
 class _TerminalScreenState extends State<TerminalScreen> {
   final ScrollController _tabScrollController = ScrollController();
+  bool _isSplitView = false;
+  final Set<GlobalKey> _panelKeys = {};
+  final Map<String, GlobalKey> _panelKeyById = {};
+  double _lastRowHeight = -1;
+  double _lastColWidth = -1;
 
   @override
   void initState() {
@@ -48,36 +54,25 @@ class _TerminalScreenState extends State<TerminalScreen> {
     final sshProvider = context.watch<SshProvider>();
     final conn = sshProvider.currentConnection;
     final sessions = sshProvider.sessions;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // 标题栏/工具栏按钮区:桌面端固定尺寸,移动端用默认
+    final btnStyle = const BoxConstraints(minWidth: 36, minHeight: 36);
 
     return Scaffold(
       appBar: CustomTitleBar.isDesktop ? null : AppBar(
         title: Text('${conn?.name ?? "SSH"} - ${loc.terminal}'),
         actions: [
+          IconButton(icon: const Icon(Icons.add), tooltip: loc.newTab, onPressed: _addTab),
           IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: loc.newTab,
-            onPressed: _addTab,
+            icon: Icon(
+              _isSplitView ? Icons.grid_on : Icons.view_column,
+              color: _isSplitView ? colorScheme.primary : null,
+            ),
+            tooltip: _isSplitView ? loc.tabView : loc.splitView,
+            onPressed: _toggleSplitView,
           ),
-          IconButton(
-            icon: const Icon(Icons.monitor_heart),
-            tooltip: loc.serverMonitor,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MonitorScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.file_copy),
-            tooltip: loc.sftp,
-            onPressed: () => Navigator.pushNamed(context, '/sftp'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Reconnect',
-            onPressed: _reconnect,
-          ),
+          _buildMoreMenu(loc, btnStyle),
         ],
       ),
       body: Column(
@@ -92,39 +87,84 @@ class _TerminalScreenState extends State<TerminalScreen> {
                   tooltip: loc.newTab,
                   onPressed: _addTab,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  constraints: btnStyle,
                 ),
                 IconButton(
-                  icon: const Icon(Icons.monitor_heart, size: 18),
-                  tooltip: loc.serverMonitor,
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const MonitorScreen()),
-                    );
-                  },
+                  icon: Icon(
+                    _isSplitView ? Icons.grid_on : Icons.view_column,
+                    size: 18,
+                    color: _isSplitView ? colorScheme.primary : null,
+                  ),
+                  tooltip: _isSplitView ? loc.tabView : loc.splitView,
+                  onPressed: _toggleSplitView,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  constraints: btnStyle,
                 ),
-                IconButton(
-                  icon: const Icon(Icons.file_copy, size: 18),
-                  tooltip: loc.sftp,
-                  onPressed: () => Navigator.pushNamed(context, '/sftp'),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.refresh, size: 18),
-                  tooltip: 'Reconnect',
-                  onPressed: _reconnect,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                ),
+                _buildMoreMenu(loc, btnStyle),
               ],
             ),
           _buildBody(sessions, sshProvider),
         ],
       ),
+    );
+  }
+
+  /// 「更多」菜单:监控 / SFTP / 重连 三个不常用按钮合并,减少工具栏按钮数量
+  Widget _buildMoreMenu(AppLocalizations loc, BoxConstraints constraints) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, size: 18),
+      tooltip: loc.more,
+      padding: EdgeInsets.zero,
+      constraints: constraints,
+      onSelected: (value) {
+        switch (value) {
+          case 'monitor':
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MonitorScreen()),
+            );
+            break;
+          case 'sftp':
+            Navigator.pushNamed(context, '/sftp');
+            break;
+          case 'reconnect':
+            _reconnect();
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'monitor',
+          child: Row(
+            children: [
+              const Icon(Icons.monitor_heart, size: 18),
+              const SizedBox(width: 8),
+              Text(loc.serverMonitor),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'sftp',
+          child: Row(
+            children: [
+              const Icon(Icons.file_copy, size: 18),
+              const SizedBox(width: 8),
+              Text(loc.sftp),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'reconnect',
+          child: Row(
+            children: [
+              const Icon(Icons.refresh, size: 18),
+              const SizedBox(width: 8),
+              Text(loc.reconnect),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -158,11 +198,195 @@ class _TerminalScreenState extends State<TerminalScreen> {
     return Expanded(
       child: Column(
         children: [
-          _buildTabBar(sessions, sshProvider),
-          Expanded(child: _buildActiveTerminal(sshProvider)),
+          if (_isSplitView)
+            Expanded(
+              child: _buildSplitGrid(sessions, sshProvider),
+            )
+          else ...[
+            _buildTabBar(sessions, sshProvider),
+            Expanded(child: _buildActiveTerminal(sshProvider)),
+          ],
         ],
       ),
     );
+  }
+
+  /// 并列模式:每个终端的标题栏(终端名 + 关闭按钮),渲染在每个面板内部顶部
+  Widget _buildSplitTitle(TerminalSession session, SshProvider sshProvider) {
+    final theme = Theme.of(context);
+    final index = sshProvider.sessions.indexWhere((s) => s.id == session.id);
+    final isActive = index == sshProvider.activeSessionIndex;
+
+    return SizedBox(
+      height: 36,
+      width: double.infinity,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isActive ? theme.colorScheme.primary : theme.dividerColor,
+              width: isActive ? 2 : 0.5,
+            ),
+          ),
+        ),
+        color: isActive
+            ? theme.colorScheme.primaryContainer
+            : theme.colorScheme.surface,
+        child: Row(
+          children: [
+            Icon(
+              Icons.terminal,
+              size: 15,
+              color: isActive
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                session.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                  color: isActive
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (index >= 0)
+              GestureDetector(
+                onTap: () => sshProvider.closeTerminalSession(index),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close,
+                    size: 15,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 并列模式:所有终端按网格排列(每行 2 个),每个终端自带标题栏,
+  /// 独立输入与输出,随窗口缩放自动占满可用空间
+  Widget _buildSplitGrid(List sessions, SshProvider sshProvider) {
+    final perRow = 2;
+    final rowCount = (sessions.length + 1) ~/ perRow;
+    // 用 LayoutBuilder 在布局期拿到网格真实可用宽高,按行数均分高度
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final rowHeight = constraints.maxHeight / rowCount;
+        final colWidth = (constraints.maxWidth - 1.0) / perRow;
+
+        // 窗口尺寸变化(拖拽边条/全屏)或 Tab 增减导致行高变化时,
+        // 重新协商每个终端 pty 尺寸,让输出按实际列宽折行
+        if (rowHeight != _lastRowHeight || colWidth != _lastColWidth) {
+          _lastRowHeight = rowHeight;
+          _lastColWidth = colWidth;
+          _scheduleSplitResize();
+        }
+
+        return GridView.builder(
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: perRow,
+            mainAxisSpacing: 1,
+            crossAxisSpacing: 1,
+            mainAxisExtent: rowHeight,
+          ),
+          itemCount: sessions.length,
+          itemBuilder: (context, index) =>
+              _buildSplitPanel(sessions[index], sshProvider),
+        );
+      },
+    );
+  }
+
+  void _scheduleSplitResize() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _resizeSplitTerminals();
+      });
+    });
+  }
+
+  Widget _buildSplitPanel(
+      TerminalSession session, SshProvider sshProvider) {
+    final theme = Theme.of(context);
+
+    final content = session.isLoading || session.terminal == null
+        ? Center(
+            child: session.isLoading
+                ? const CircularProgressIndicator()
+                : Text(AppLocalizations.of(context).terminalNotAvailable),
+          )
+        : _TerminalWidget(
+            terminal: session.terminal!,
+            key: ValueKey(session.id),
+          );
+
+    return Container(
+      key: _panelKeyForSession(session),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+      ),
+      child: Column(
+        children: [
+          _buildSplitTitle(session, sshProvider),
+          Expanded(child: content),
+        ],
+      ),
+    );
+  }
+
+  GlobalKey _panelKeyForSession(TerminalSession session) {
+    // 用 session.id 做稳定 key,避免关闭中间 Tab 后按 index 复用 key 错位到其它终端
+    var key = _panelKeyById[session.id];
+    if (key == null) {
+      key = GlobalKey();
+      _panelKeys.add(key);
+      _panelKeyById[session.id] = key;
+    }
+    return key;
+  }
+
+  /// 并列模式:按每个面板的实际像素尺寸重新协商各终端的 pty 行列,
+  /// 避免在窄面板里输出按 120 列折行导致显示错乱。
+  /// 面板是网格中的单元格,内含 36px 标题栏 + 终端区。
+  /// xterm 默认自动换行,pty 行数只需 >= 可视行数即可,
+  /// 用 1 倍行高估算终端区高度,避免行数偏少导致滚动位置错乱。
+  void _resizeSplitTerminals() {
+    final sshProvider = context.read<SshProvider>();
+    const fontSize = 14.0;
+    const charWidth = fontSize * 0.6;
+    const charHeight = fontSize; // xterm 自动换行,只需 >= 可视行数
+    const titleBar = 36.0; // 面板内标题栏高度
+
+    for (final entry in _panelKeyById.entries) {
+      TerminalSession? session;
+      for (final s in sshProvider.sessions) {
+        if (s.id == entry.key) {
+          session = s;
+          break;
+        }
+      }
+      if (session == null || session.terminal == null) continue;
+
+      final renderBox = entry.value.currentContext?.findRenderObject()
+              as RenderBox?;
+      if (renderBox == null || !renderBox.hasSize) continue;
+
+      final cols = (renderBox.size.width / charWidth).floor().clamp(20, 400);
+      final termHeight = renderBox.size.height - titleBar;
+      final rows = (termHeight / charHeight).floor().clamp(5, 300);
+      sshProvider.sshService.resizeTerminalSession(session.id, cols, rows);
+    }
   }
 
   Widget _buildTabBar(List sessions, SshProvider sshProvider) {
@@ -471,6 +695,16 @@ class _TerminalScreenState extends State<TerminalScreen> {
         ),
       );
     }
+  }
+
+  /// 切换 标签页/并列 两种布局
+  void _toggleSplitView() {
+    setState(() {
+      _isSplitView = !_isSplitView;
+      // 切走时清空,保证下次切回(即使窗口尺寸没变)也会重新协商 pty 尺寸
+      _lastRowHeight = -1;
+      _lastColWidth = -1;
+    });
   }
 
   void _reconnect() async {

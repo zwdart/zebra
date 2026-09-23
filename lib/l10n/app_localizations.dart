@@ -235,6 +235,8 @@ class AppLocalizations {
   String get closeTab => translate('closeTab');
   String get closeOtherTabs => translate('closeOtherTabs');
   String get closeAllTabs => translate('closeAllTabs');
+  String get splitView => translate('splitView');
+  String get tabView => translate('tabView');
   String get showWindow => translate('showWindow');
   String get hideWindow => translate('hideWindow');
   String get quit => translate('quit');
@@ -1016,6 +1018,8 @@ class AppLocalizations {
     'closeTab': 'Close Tab',
     'closeOtherTabs': 'Close Other Tabs',
     'closeAllTabs': 'Close All Tabs',
+    'splitView': 'Side-by-Side View',
+    'tabView': 'Tab View',
     'showWindow': 'Show Window',
     'hideWindow': 'Hide Window',
     'quit': 'Quit',
@@ -1729,6 +1733,8 @@ class AppLocalizations {
     'closeTab': '关闭标签页',
     'closeOtherTabs': '关闭其他标签页',
     'closeAllTabs': '关闭所有标签页',
+    'splitView': '并列显示终端',
+    'tabView': '标签页显示',
     'showWindow': '显示窗口',
     'hideWindow': '隐藏窗口',
     'quit': '退出',
