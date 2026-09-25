@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:dartssh2/dartssh2.dart';
+import 'package:flutter/foundation.dart' show debugPrint, ChangeNotifier;
 import 'package:path/path.dart' as p;
 import '../models/sftp_file_item.dart';
 import '../services/sftp_service.dart';
@@ -17,6 +18,12 @@ class SftpProvider extends ChangeNotifier {
   String? _error;
   final Set<String> _selectedFiles = {};
   final List<String> _pathHistory = ['/'];
+  bool _hasLoadStarted = false;
+
+  SftpProvider() {
+    // SFTP 通道缺失/失效时,自动通过当前 SSH service 重开 channel。
+    _sftpService.setOpener(_openSftpClient);
+  }
 
   SftpService get sftpService => _sftpService;
   CompressionService get compressionService => _compressionService;
@@ -27,35 +34,76 @@ class SftpProvider extends ChangeNotifier {
   Set<String> get selectedFiles => Set.unmodifiable(_selectedFiles);
   bool get isSelectionMode => _selectedFiles.isNotEmpty;
   bool get canGoBack => _pathHistory.length > 1;
+  bool get hasLoadStarted => _hasLoadStarted;
+  bool get isAttached => _sshService != null && _sftpService.hasClient;
 
   Future<void> attachToSsh(SshService sshService) async {
     _sshService = sshService;
+    // 注入 opener 让未 attach 时能自动开 channel;并发 attach 不会重复开连接。
+    _sftpService.setOpener(_openSftpClient);
+    await _sftpService.ensureClient();
     final client = sshService.client;
-    if (client == null) throw Exception('SSH not connected');
-    final sftpClient = await client.sftp();
-    _sftpService.attach(sftpClient);
-    _compressionService.attach(client);
+    if (client != null) _compressionService.attach(client);
   }
 
-  Future<void> listDirectory([String? path]) async {
+  /// 供 SftpService 在需要(未 attach / channel 失效)时自动重建 SFTP channel。
+  Future<SftpClient> _openSftpClient() async {
+    final sshService = _sshService;
+    if (sshService == null) {
+      throw Exception('SSH service not attached to SFTP provider');
+    }
+    return sshService.sftp();
+  }
+
+  /// 立即进入 loading 状态(不实际发起请求),用于让界面在 attach 阶段就显示转圈
+  void markLoading() {
+    _isLoading = true;
+    _hasLoadStarted = true;
+    _error = null;
+    notifyListeners();
+  }
+
+  /// 记录 attach 失败等错误并退出 loading(配合 markLoading 使用)
+  void reportError(String message) {
+    _error = message;
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<bool> refreshDirectory([String? path]) async {
     final targetPath = path ?? _currentPath;
     _isLoading = true;
+    _hasLoadStarted = true;
     _error = null;
     notifyListeners();
 
+    bool succeeded = false;
     try {
-      _files = await _sftpService.listDirectory(targetPath);
+      final items = await _listDirectoryOnce(targetPath);
+      _files = items;
       _currentPath = targetPath;
-      if (!_pathHistory.contains(targetPath)) {
-        _pathHistory.add(targetPath);
-      }
+      _selectedFiles.clear();
+      succeeded = true;
+      debugPrint('[SFTP] refreshDirectory($targetPath) 成功, ${items.length} 项');
     } catch (e) {
       _error = e.toString();
+      debugPrint('[SFTP] refreshDirectory($targetPath) 失败: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
+    return succeeded;
+  }
 
-    _isLoading = false;
-    _selectedFiles.clear();
-    notifyListeners();
+  Future<void> listDirectory([String? path]) async {
+    final succeeded = await refreshDirectory(path);
+    if (succeeded && path != null && !_pathHistory.contains(path)) {
+      _pathHistory.add(path);
+    }
+  }
+
+  Future<List<SftpFileItem>> _listDirectoryOnce(String targetPath) async {
+    return _sftpService.listDirectory(targetPath);
   }
 
   void navigateTo(String path) {
@@ -66,7 +114,8 @@ class SftpProvider extends ChangeNotifier {
     if (_pathHistory.length > 1) {
       _pathHistory.removeLast();
       final prevPath = _pathHistory.last;
-      listDirectory(prevPath);
+      // 回退走 refresh, 不把旧路径再次 push 进 history, 否则 canGoBack 会因去重失败而恒为 true
+      refreshDirectory(prevPath);
       return true;
     }
     return false;
@@ -131,6 +180,11 @@ class SftpProvider extends ChangeNotifier {
     await listDirectory();
   }
 
+  Future<void> remove(String path) async {
+    if (_sshService == null) throw Exception('SSH not connected');
+    await _sshService!.execute('rm -rf "$path"');
+  }
+
   Future<void> deleteSelected() async {
     if (_sshService == null) throw Exception('SSH not connected');
     for (final path in _selectedFiles) {
@@ -138,11 +192,6 @@ class SftpProvider extends ChangeNotifier {
     }
     _selectedFiles.clear();
     await listDirectory();
-  }
-
-  Future<void> remove(String path) async {
-    if (_sshService == null) throw Exception('SSH not connected');
-    await _sshService!.execute('rm -rf "$path"');
   }
 
   Future<void> compressSelected(String outputPath) async {
@@ -165,7 +214,12 @@ class SftpProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    // Close the SFTP channel so the SSH connection's channel count stays bounded
+    final sftpClient = _sftpService.currentClient;
     _sftpService.dispose();
+    if (sftpClient != null && _sshService != null) {
+      _sshService!.closeSftp(sftpClient);
+    }
     _compressionService.dispose();
     super.dispose();
   }

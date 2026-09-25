@@ -18,6 +18,11 @@ class SshService {
   final Map<String, SSHSession> _sessions = {};
   final Map<String, Terminal> _terminals = {};
 
+  /// SFTP channels opened via sftp() so they can be explicitly closed
+  /// on disconnect to avoid channel leaks that eventually exhaust the
+  /// SSH connection and cause all SFTP operations to silently fail.
+  final List<SftpClient> _sftpClients = [];
+
   bool get isConnected => _isConnected;
   SSHClient? get client => _client;
 
@@ -172,7 +177,18 @@ class SshService {
 
   Future<SftpClient> sftp() async {
     if (_client == null) throw Exception('Not connected');
-    return _client!.sftp();
+    final sftpClient = await _client!.sftp();
+    _sftpClients.add(sftpClient);
+    return sftpClient;
+  }
+
+  /// Close a specific SFTP channel (called by SftpService when it disposes).
+  void closeSftp(SftpClient sftpClient) {
+    final idx = _sftpClients.indexOf(sftpClient);
+    if (idx >= 0) _sftpClients.removeAt(idx);
+    try {
+      sftpClient.close();
+    } catch (_) {}
   }
 
   Future<String> execute(String command) async {
@@ -186,6 +202,14 @@ class SshService {
   }
 
   void disconnect() {
+    // Close all SFTP channels
+    for (final sftpClient in _sftpClients) {
+      try {
+        sftpClient.close();
+      } catch (_) {}
+    }
+    _sftpClients.clear();
+
     // Close all terminal sessions
     for (final session in _sessions.values) {
       session.close();

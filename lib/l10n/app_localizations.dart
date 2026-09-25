@@ -55,6 +55,8 @@ class AppLocalizations {
   String get upload => translate('upload');
   String get download => translate('download');
   String get newFolder => translate('newFolder');
+
+  String folderCreated(String name) => translate('folderCreated').replaceAll('{name}', name);
   String get delete => translate('delete');
   String get rename => translate('rename');
   String get copy => translate('copy');
@@ -132,6 +134,7 @@ class AppLocalizations {
   String get pauseRefresh => translate('pauseRefresh');
   String get refreshInterval => translate('refreshInterval');
   String get refresh => translate('refresh');
+  String get refreshed => translate('refreshed');
   String get retry => translate('retry');
   String get lastUpdated => translate('lastUpdated');
   String get processList => translate('processList');
@@ -237,6 +240,10 @@ class AppLocalizations {
   String get closeAllTabs => translate('closeAllTabs');
   String get splitView => translate('splitView');
   String get tabView => translate('tabView');
+  String get newSftpTab => translate('newSftpTab');
+  String get sftpTabs => translate('sftpTabs');
+  String get gridLayout => translate('gridLayout');
+  String get listLayout => translate('listLayout');
   String get showWindow => translate('showWindow');
   String get hideWindow => translate('hideWindow');
   String get quit => translate('quit');
@@ -849,6 +856,7 @@ class AppLocalizations {
     'upload': 'Upload',
     'download': 'Download',
     'newFolder': 'New Folder',
+    'folderCreated': 'Folder created: {name}',
     'delete': 'Delete',
     'rename': 'Rename',
     'copy': 'Copy',
@@ -926,6 +934,7 @@ class AppLocalizations {
     'pauseRefresh': 'Pause Refresh',
     'refreshInterval': 'Refresh Interval',
     'refresh': 'Refresh',
+    'refreshed': 'Folder refreshed',
     'retry': 'Retry',
     'lastUpdated': 'Last Updated',
     'processList': 'Process List',
@@ -1020,6 +1029,10 @@ class AppLocalizations {
     'closeAllTabs': 'Close All Tabs',
     'splitView': 'Side-by-Side View',
     'tabView': 'Tab View',
+    'newSftpTab': 'New SFTP Tab',
+    'sftpTabs': 'SFTP',
+    'gridLayout': 'Grid Layout',
+    'listLayout': 'List Layout',
     'showWindow': 'Show Window',
     'hideWindow': 'Hide Window',
     'quit': 'Quit',
@@ -1564,6 +1577,7 @@ class AppLocalizations {
     'upload': '上传',
     'download': '下载',
     'newFolder': '新建文件夹',
+    'folderCreated': '文件夹已创建：{name}',
     'delete': '删除',
     'rename': '重命名',
     'copy': '复制',
@@ -1641,6 +1655,7 @@ class AppLocalizations {
     'pauseRefresh': '暂停刷新',
     'refreshInterval': '刷新间隔',
     'refresh': '刷新',
+    'refreshed': '已刷新',
     'retry': '重试',
     'lastUpdated': '最后更新',
     'processList': '进程列表',
@@ -1735,6 +1750,10 @@ class AppLocalizations {
     'closeAllTabs': '关闭所有标签页',
     'splitView': '并列显示终端',
     'tabView': '标签页显示',
+    'newSftpTab': '新建文件窗口',
+    'sftpTabs': '文件管理',
+    'gridLayout': '网格布局',
+    'listLayout': '列表布局',
     'showWindow': '显示窗口',
     'hideWindow': '隐藏窗口',
     'quit': '退出',
