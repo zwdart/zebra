@@ -33,9 +33,7 @@ import 'database/rss_database_service.dart';
 import 'services/update_service.dart';
 import 'services/window_service.dart';
 import 'widgets/window_resize_edges.dart';
-import 'features/lan_chat/providers/lan_discovery_provider.dart';
 import 'features/lan_chat/providers/chat_provider.dart';
-import 'features/lan_chat/providers/room_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,8 +47,8 @@ void main() async {
   final userName = await _defaultUserName();
   // 设备 ID 首次生成后持久化,重启不变,避免同一设备在对方设备列表中被当成新设备重复显示
   final prefs = await SharedPreferences.getInstance();
-  final lanDeviceId = prefs.getString(_lanDeviceIdPrefKey) ??
-      const Uuid().v4().toString();
+  final lanDeviceId =
+      prefs.getString(_lanDeviceIdPrefKey) ?? const Uuid().v4().toString();
   await prefs.setString(_lanDeviceIdPrefKey, lanDeviceId);
 
   runApp(ZebraApp(defaultUserName: userName, lanDeviceId: lanDeviceId));
@@ -107,9 +105,6 @@ class ZebraApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 发现服务与聊天服务共享同一实例，用于同步实际 TCP 监听端口
-    final lanDiscovery = LanDiscoveryProvider(
-        deviceId: lanDeviceId, deviceName: defaultUserName);
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
@@ -136,23 +131,12 @@ class ZebraApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => FeedbackProvider()),
         ChangeNotifierProvider(create: (_) => DiaryProvider()..loadEntries()),
         ChangeNotifierProvider(create: (_) => RssProvider()..init()),
-        ChangeNotifierProvider(create: (_) => lanDiscovery..start()),
-        ChangeNotifierProvider(create: (_) {
-          final provider =
-              ChatProvider(selfId: lanDeviceId, selfName: defaultUserName);
-          // 服务器可能因端口占用回退到随机端口，必须同步给心跳广播
-          provider.startServer().then((port) {
-            if (port > 0) lanDiscovery.setTcpPort(port);
-          });
-          return provider;
-        }),
-        ChangeNotifierProvider(create: (_) => RoomProvider(
-              selfId: lanDeviceId,
-              selfName: defaultUserName,
-              // 建房成功后同步心跳 room 摘要,其他设备才能在「附近房间」看到
-              onRoomInfoChanged: (info) => lanDiscovery.setRoomInfo(info),
-              onRoomInfoCleared: () => lanDiscovery.clearRoomInfo(),
-            )),
+        ChangeNotifierProvider(
+          lazy: false,
+          create: (_) =>
+              ChatProvider(selfId: lanDeviceId, selfName: defaultUserName)
+                ..startServer(),
+        ),
       ],
       child: Consumer2<ThemeProvider, LocaleProvider>(
         builder: (ctx, themeProvider, localeProvider, _) {

@@ -5,7 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import '../../../utils/zebra_paths.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../models/file_transfer_session.dart' show kSmallFileThresholdBytes;
+
+const kSmallFileThresholdBytes = 8 * 1024 * 1024;
 
 /// 接收文件的保存目录策略
 ///
@@ -20,8 +21,9 @@ import '../models/file_transfer_session.dart' show kSmallFileThresholdBytes;
 /// 接收过程写入 `<name>.<transferId>.part` 临时文件(低内存落盘),
 /// 完成时转正为最终文件(无断点续传,方案 A 简化)。
 class ReceiveDirectory {
-  static const MethodChannel _channel =
-      MethodChannel('xin.dart.zebra/receive_file');
+  static const MethodChannel _channel = MethodChannel(
+    'xin.dart.zebra/receive_file',
+  );
 
   /// 保存接收到的文件字节,返回用于展示/定位的路径。
   ///
@@ -29,7 +31,9 @@ class ReceiveDirectory {
   /// 不是真实文件路径,点击时打开系统下载目录);
   /// 其余平台/降级路径返回真实文件路径(点击时打开所在目录)。
   static Future<String> saveReceivedFile(
-      List<int> bytes, String fileName) async {
+    List<int> bytes,
+    String fileName,
+  ) async {
     if (Platform.isAndroid) {
       try {
         final result = await _channel.invokeMapMethod<String, String>(
@@ -89,7 +93,9 @@ class ReceiveDirectory {
   /// 已存在同名 .part(断点续传)时直接复用,便于追加写入。
   /// [transferId] 来自网络不可信,先消毒再拼入文件名,防止路径穿越。
   static Future<String> createPartFile(
-      String transferId, String fileName) async {
+    String transferId,
+    String fileName,
+  ) async {
     final dir = await ZebraPaths.received;
     await dir.create(recursive: true);
     final safeName = _safeName(fileName);
@@ -108,7 +114,9 @@ class ReceiveDirectory {
   /// MediaStore 下载目录(用户可见,免权限),失败降级流式复制到文档目录
   /// (避免整文件读入内存导致 OOM);其余平台直接改名;失败返回空串。
   static Future<String> finalizePartFile(
-      String partPath, String fileName) async {
+    String partPath,
+    String fileName,
+  ) async {
     final part = File(partPath);
     if (!await part.exists()) return '';
     if (Platform.isAndroid) {
@@ -127,7 +135,9 @@ class ReceiveDirectory {
             return path;
           }
         } catch (e) {
-          debugPrint('[ReceiveDirectory] finalize part to MediaStore failed: $e');
+          debugPrint(
+            '[ReceiveDirectory] finalize part to MediaStore failed: $e',
+          );
         }
         // 降级:文档目录流式复制(私有但保底,不整读内存)
         return _finalizePartToDocumentsStream(part, fileName);
@@ -146,7 +156,9 @@ class ReceiveDirectory {
     final safeName = _safeName(fileName);
     var target = File(p.join(dir.path, safeName));
     if (await target.exists()) {
-      target = File(p.join(dir.path, '${DateTime.now().millisecondsSinceEpoch}-$safeName'));
+      target = File(
+        p.join(dir.path, '${DateTime.now().millisecondsSinceEpoch}-$safeName'),
+      );
     }
     await part.rename(target.path);
     debugPrint('[ReceiveDirectory] finalized part -> ${target.path}');
@@ -155,7 +167,9 @@ class ReceiveDirectory {
 
   /// Android 大文件转正:流式复制 .part 到应用文档目录(避免整文件读入内存 OOM)
   static Future<String> _finalizePartToDocumentsStream(
-      File part, String fileName) async {
+    File part,
+    String fileName,
+  ) async {
     try {
       final dir = await ZebraPaths.received;
       await dir.create(recursive: true);
@@ -163,11 +177,17 @@ class ReceiveDirectory {
       var target = File(p.join(dir.path, safeName));
       if (await target.exists()) {
         target = File(
-            p.join(dir.path, '${DateTime.now().millisecondsSinceEpoch}-$safeName'));
+          p.join(
+            dir.path,
+            '${DateTime.now().millisecondsSinceEpoch}-$safeName',
+          ),
+        );
       }
       await part.openRead().pipe(target.openWrite());
       await part.delete();
-      debugPrint('[ReceiveDirectory] finalized part (stream) -> ${target.path}');
+      debugPrint(
+        '[ReceiveDirectory] finalized part (stream) -> ${target.path}',
+      );
       return target.path;
     } catch (e) {
       debugPrint('[ReceiveDirectory] finalize part stream failed: $e');
@@ -189,7 +209,9 @@ class ReceiveDirectory {
       fileName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
 
   static Future<String> _saveToDocuments(
-      List<int> bytes, String fileName) async {
+    List<int> bytes,
+    String fileName,
+  ) async {
     final dir = await ZebraPaths.received;
     await dir.create(recursive: true);
 

@@ -16,6 +16,36 @@ class DatabaseService {
 
   static String get dbPath => _dbPath ?? '';
   static String get dbDirPath => _dbPath != null ? p.dirname(_dbPath!) : '';
+  static Database get rawDb => _db!;
+
+  static void _openDb({required bool withKey}) {
+    _db = sqlite3.open(_dbPath!);
+    if (withKey) {
+      _db!.execute("PRAGMA key = '$_dbEncryptionKey'");
+    }
+  }
+
+  static void _verifyDb() {
+    final check = _db!
+        .select('PRAGMA quick_check')
+        .first
+        .values
+        .first
+        .toString();
+    if (check != 'ok') {
+      throw StateError('database corrupt: $check');
+    }
+  }
+
+  static void _backupCorruptDb() {
+    try {
+      final bak = '$_dbPath.corrupt-${DateTime.now().millisecondsSinceEpoch}';
+      File(_dbPath!).copySync(bak);
+    } catch (_) {}
+    try {
+      File(_dbPath!).deleteSync();
+    } catch (_) {}
+  }
 
   static Future<void> init() async {
     if (_db != null) return;
@@ -27,11 +57,27 @@ class DatabaseService {
     }
 
     _dbPath = p.join(dbDir.path, 'zebra.db');
-    _db = sqlite3.open(_dbPath!);
 
-    // Release 构建启用数据库加密，调试模式不加密方便开发
-    if (kReleaseMode) {
-      _db!.execute("PRAGMA key = '$_dbEncryptionKey'");
+    // 优先按当前构建模式打开；若库是用另一种模式（加密/未加密）创建的，
+    // 自动切换后再试，避免 debug/release 混用同一份数据时无法启动。
+    try {
+      _openDb(withKey: kReleaseMode);
+      _verifyDb();
+    } catch (_) {
+      _db?.close();
+      _db = null;
+      try {
+        _openDb(withKey: !kReleaseMode);
+        _verifyDb();
+      } catch (e) {
+        // 两种模式都打不开：备份坏库后按当前模式重建
+        debugPrint('Database init failed ($e), backing up and rebuilding');
+        _db?.close();
+        _db = null;
+        _backupCorruptDb();
+        _openDb(withKey: kReleaseMode);
+        _verifyDb();
+      }
     }
 
     _db!.execute('''
@@ -92,12 +138,67 @@ class DatabaseService {
         unread_count INTEGER NOT NULL DEFAULT 0
       )
     ''');
+
+    _db!.execute('''
+      CREATE TABLE IF NOT EXISTS lan_conversations (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL DEFAULT 'direct',
+        peer_id TEXT NOT NULL DEFAULT '',
+        title TEXT NOT NULL DEFAULT '',
+        owner TEXT NOT NULL DEFAULT '',
+        members TEXT NOT NULL DEFAULT '[]',
+        created_at INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0,
+        unread INTEGER NOT NULL DEFAULT 0,
+        pinned INTEGER NOT NULL DEFAULT 0,
+        muted INTEGER NOT NULL DEFAULT 0,
+        draft TEXT NOT NULL DEFAULT ''
+      )
+    ''');
+    _db!.execute('''
+      CREATE TABLE IF NOT EXISTS lan_messages (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT NOT NULL,
+        conv_id TEXT NOT NULL,
+        sender_id TEXT NOT NULL,
+        sender_name TEXT NOT NULL DEFAULT '',
+        kind TEXT NOT NULL DEFAULT 'text',
+        text TEXT NOT NULL DEFAULT '',
+        file_name TEXT,
+        file_size INTEGER NOT NULL DEFAULT 0,
+        file_mime TEXT,
+        file_url TEXT,
+        file_token TEXT,
+        file_path TEXT,
+        file_width INTEGER NOT NULL DEFAULT 0,
+        file_height INTEGER NOT NULL DEFAULT 0,
+        sent_at INTEGER NOT NULL DEFAULT 0,
+        edited_at INTEGER,
+        status TEXT NOT NULL DEFAULT '',
+        delivered INTEGER NOT NULL DEFAULT 0,
+        read INTEGER NOT NULL DEFAULT 0,
+        recalled INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(conv_id, id)
+      )
+    ''');
+    _db!.execute('''
+      CREATE INDEX IF NOT EXISTS idx_lan_messages_conv
+      ON lan_messages(conv_id, sent_at, seq)
+    ''');
+    _db!.execute('''
+      CREATE TABLE IF NOT EXISTS lan_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
   }
 
   // ==================== Connections ====================
 
   static List<SshConnection> getAllConnections() {
-    final results = _db!.select('SELECT * FROM connections ORDER BY updated_at DESC');
+    final results = _db!.select(
+      'SELECT * FROM connections ORDER BY updated_at DESC',
+    );
     return results.map((row) => SshConnection.fromMap(row)).toList();
   }
 
@@ -162,8 +263,11 @@ class DatabaseService {
 
   // ==================== Chat Messages ====================
 
-  static List<Map<String, dynamic>> getChatMessages(String peerId,
-      {int page = 1, int size = 50}) {
+  static List<Map<String, dynamic>> getChatMessages(
+    String peerId, {
+    int page = 1,
+    int size = 50,
+  }) {
     final offset = (page - 1) * size;
     final results = _db!.select(
       'SELECT * FROM chat_messages WHERE peer_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?',
@@ -197,8 +301,12 @@ class DatabaseService {
     stmt.close();
   }
 
-  static void updateChatPeerLastMessage(String peerId, String peerName,
-      String lastMessage, String lastTime) {
+  static void updateChatPeerLastMessage(
+    String peerId,
+    String peerName,
+    String lastMessage,
+    String lastTime,
+  ) {
     final stmt = _db!.prepare('''
       INSERT INTO chat_peers (peer_id, peer_name, last_message, last_time, unread_count)
       VALUES (?, ?, ?, ?, 1)
@@ -213,7 +321,9 @@ class DatabaseService {
   }
 
   static void markChatPeerRead(String peerId) {
-    _db!.execute('UPDATE chat_peers SET unread_count = 0 WHERE peer_id = ?', [peerId]);
+    _db!.execute('UPDATE chat_peers SET unread_count = 0 WHERE peer_id = ?', [
+      peerId,
+    ]);
   }
 
   static List<Map<String, dynamic>> getChatPeers() {

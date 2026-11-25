@@ -8,12 +8,10 @@ class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations)!;
   }
 
-  static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
+  static const LocalizationsDelegate<AppLocalizations> delegate =
+      _AppLocalizationsDelegate();
 
-  static const supportedLocales = [
-    Locale('en'),
-    Locale('zh'),
-  ];
+  static const supportedLocales = [Locale('en'), Locale('zh')];
 
   Map<String, String> get _translations {
     switch (locale.languageCode) {
@@ -56,7 +54,8 @@ class AppLocalizations {
   String get download => translate('download');
   String get newFolder => translate('newFolder');
 
-  String folderCreated(String name) => translate('folderCreated').replaceAll('{name}', name);
+  String folderCreated(String name) =>
+      translate('folderCreated').replaceAll('{name}', name);
   String get delete => translate('delete');
   String get rename => translate('rename');
   String get copy => translate('copy');
@@ -153,11 +152,15 @@ class AppLocalizations {
   String get user => translate('user');
   String get memSize => translate('memSize');
   String confirmKillSystemProcessMsg(int pid, String user) {
-    return translate('confirmKillSystemProcessMsg').replaceAll('{pid}', '$pid').replaceAll('{user}', user);
+    return translate(
+      'confirmKillSystemProcessMsg',
+    ).replaceAll('{pid}', '$pid').replaceAll('{user}', user);
   }
+
   String processSentSignal(int pid) {
     return translate('processSentSignal').replaceAll('{pid}', '$pid');
   }
+
   String get diskCleanup => translate('diskCleanup');
   String get totalCleanable => translate('totalCleanable');
   String get quickClean => translate('quickClean');
@@ -167,9 +170,11 @@ class AppLocalizations {
   String cleanAllMsgParam(String size) {
     return translate('cleanAllMsg').replaceAll('{size}', size);
   }
+
   String cleanCompleted(String label) {
     return translate('cleanCompleted').replaceAll('{label}', label);
   }
+
   String get cleanFailed => translate('cleanFailed');
   String get confirmClean => translate('confirmClean');
   String get scanTempFiles => translate('scanTempFiles');
@@ -178,11 +183,15 @@ class AppLocalizations {
   String get rescan => translate('rescan');
   String get confirmDeleteSelected => translate('confirmDeleteSelected');
   String confirmDeleteSelectedMsg(int count) {
-    return translate('confirmDeleteSelectedMsg').replaceAll('{count}', '$count');
+    return translate(
+      'confirmDeleteSelectedMsg',
+    ).replaceAll('{count}', '$count');
   }
+
   String deletedFiles(int count) {
     return translate('deletedFiles').replaceAll('{count}', '$count');
   }
+
   String get deleteFailed => translate('deleteFailed');
   String get recentLogins => translate('recentLogins');
   String get noLoginHistory => translate('noLoginHistory');
@@ -215,24 +224,32 @@ class AppLocalizations {
   String get edit => translate('edit');
   String get view => translate('view');
   String get scanning => translate('scanning');
-  String errorWithDetail(String detail) => translate('errorWithDetail').replaceAll('{detail}', detail);
-  String sftpErrorWithDetail(String detail) => translate('sftpError').replaceAll('{detail}', detail);
+  String errorWithDetail(String detail) =>
+      translate('errorWithDetail').replaceAll('{detail}', detail);
+  String sftpErrorWithDetail(String detail) =>
+      translate('sftpError').replaceAll('{detail}', detail);
   String get cannotReadFile => translate('cannotReadFile');
   String get failedToLoadFile => translate('failedToLoadFile');
   String get noDiscoveryItems => translate('noDiscoveryItems');
-  String fileSaved(String name) => translate('fileSaved').replaceAll('{name}', name);
-  String deleteFolderConfirm(String name) => translate('deleteFolderConfirm').replaceAll('{name}', name);
-  String deleteFilesConfirm(int count) => translate('deleteFilesConfirm').replaceAll('{count}', '$count');
+  String fileSaved(String name) =>
+      translate('fileSaved').replaceAll('{name}', name);
+  String deleteFolderConfirm(String name) =>
+      translate('deleteFolderConfirm').replaceAll('{name}', name);
+  String deleteFilesConfirm(int count) =>
+      translate('deleteFilesConfirm').replaceAll('{count}', '$count');
   String get apiServer => translate('apiServer');
   String get apiBaseUrl => translate('apiBaseUrl');
   String get apiUrlResetDefault => translate('apiUrlResetDefault');
-  String apiUrlUpdated(String url) => translate('apiUrlUpdated').replaceAll('{url}', url);
+  String apiUrlUpdated(String url) =>
+      translate('apiUrlUpdated').replaceAll('{url}', url);
   String get shareDatabases => translate('shareDatabases');
-  String readOnlyPreview(String size) => translate('readOnlyPreview').replaceAll('{size}', size);
+  String readOnlyPreview(String size) =>
+      translate('readOnlyPreview').replaceAll('{size}', size);
   String get databaseDirNotFound => translate('databaseDirNotFound');
   String get noDatabaseFiles => translate('noDatabaseFiles');
   String get api => translate('api');
-  String maxTabsReached(int count) => translate('maxTabsReached').replaceAll('{count}', '$count');
+  String maxTabsReached(int count) =>
+      translate('maxTabsReached').replaceAll('{count}', '$count');
   String get newTab => translate('newTab');
   String get noSessions => translate('noSessions');
   String get closeTab => translate('closeTab');
@@ -284,7 +301,8 @@ class AppLocalizations {
   String get feedbackSubject => translate('feedbackSubject');
   String get feedbackSubjectRequired => translate('feedbackSubjectRequired');
   String get feedbackDescription => translate('feedbackDescription');
-  String get feedbackDescriptionRequired => translate('feedbackDescriptionRequired');
+  String get feedbackDescriptionRequired =>
+      translate('feedbackDescriptionRequired');
   String get feedbackSubmit => translate('feedbackSubmit');
   String get feedbackSubmitSuccess => translate('feedbackSubmitSuccess');
   String get feedbackSubmitFailed => translate('feedbackSubmitFailed');
@@ -293,7 +311,8 @@ class AppLocalizations {
   String get fileConflictTitleUpload => translate('fileConflictTitleUpload');
   String get fileConflictMessageCopy => translate('fileConflictMessageCopy');
   String get fileConflictMessageMove => translate('fileConflictMessageMove');
-  String get fileConflictMessageUpload => translate('fileConflictMessageUpload');
+  String get fileConflictMessageUpload =>
+      translate('fileConflictMessageUpload');
   String get overwriteAll => translate('overwriteAll');
   String get renameAll => translate('renameAll');
   String get skipAll => translate('skipAll');
@@ -467,7 +486,8 @@ class AppLocalizations {
   String get rssSyncDays7 => translate('rssSyncDays7');
   String get rssSyncDays30 => translate('rssSyncDays30');
   String get rssSyncToLocal => translate('rssSyncToLocal');
-  String rssSyncToLocalDone(int count) => translate('rssSyncToLocalDone').replaceAll('{count}', '$count');
+  String rssSyncToLocalDone(int count) =>
+      translate('rssSyncToLocalDone').replaceAll('{count}', '$count');
   String get rssTotalCount => translate('rssTotalCount');
   String get rssAddToFolder => translate('rssAddToFolder');
   String get rssAddedToFolder => translate('rssAddedToFolder');
@@ -509,7 +529,8 @@ class AppLocalizations {
   String get rssDeleteSourceConfirm => translate('rssDeleteSourceConfirm');
   String get rssDeleteSourceArticles => translate('rssDeleteSourceArticles');
   String get rssSourceInFolders => translate('rssSourceInFolders');
-  String get rssSourceRemovedFromFolders => translate('rssSourceRemovedFromFolders');
+  String get rssSourceRemovedFromFolders =>
+      translate('rssSourceRemovedFromFolders');
   String get rssSourceDeleted => translate('rssSourceDeleted');
   String get rssSyncSource => translate('rssSyncSource');
   String get rssSourceInfo => translate('rssSourceInfo');
@@ -621,30 +642,39 @@ class AppLocalizations {
   String rssDeleteFolderConfirmValue(String name) {
     return translate('rssDeleteFolderConfirm').replaceAll('{name}', name);
   }
+
   String rssSourcesCountValue(int count) {
     return translate('rssSourcesCount').replaceAll('{count}', '$count');
   }
+
   String rssSelectedCountValue(int count) {
     return translate('rssSelectedCount').replaceAll('{count}', '$count');
   }
+
   String rssSyncedCountValue(int count) {
     return translate('rssSyncedCount').replaceAll('{count}', '$count');
   }
+
   String rssSyncingSourceValue(String name) {
     return translate('rssSyncingSource').replaceAll('{name}', name);
   }
+
   String rssRemoveConfirmValue(String name) {
     return translate('rssRemoveConfirm').replaceAll('{name}', name);
   }
+
   String rssBatchRemoveConfirmValue(int count) {
     return translate('rssBatchRemoveConfirm').replaceAll('{count}', '$count');
   }
+
   String rssAddedCountValue(int count) {
     return translate('rssAddedCount').replaceAll('{count}', '$count');
   }
+
   String rssBatchAddValue(int count) {
     return translate('rssBatchAdd').replaceAll('{count}', '$count');
   }
+
   String get terminalNotAvailable => translate('terminalNotAvailable');
   String get copiedToClipboard => translate('copiedToClipboard');
   String get importExport => translate('importExport');
@@ -659,8 +689,9 @@ class AppLocalizations {
   String get discoveryPort => translate('discoveryPort');
   String get discoveryPortSubtitle => translate('discoveryPortSubtitle');
   String get discoveryPortHint => translate('discoveryPortHint');
-  String discoveryPortDescriptionValue(int defaultValue) =>
-      translate('discoveryPortDescription').replaceAll('{default}', '$defaultValue');
+  String discoveryPortDescriptionValue(int defaultValue) => translate(
+    'discoveryPortDescription',
+  ).replaceAll('{default}', '$defaultValue');
   String get discoveryPortInvalid => translate('discoveryPortInvalid');
   String get chatHistory => translate('chatHistory');
   String get deviceList => translate('deviceList');
@@ -679,10 +710,11 @@ class AppLocalizations {
       translate('selectedCount').replaceAll('{count}', '$count');
   String get deleteDevice => translate('deleteDevice');
   String confirmDeleteDeviceValue(String name, String addr) {
-    return translate('confirmDeleteDevice')
-        .replaceAll('{name}', name)
-        .replaceAll('{addr}', addr);
+    return translate(
+      'confirmDeleteDevice',
+    ).replaceAll('{name}', name).replaceAll('{addr}', addr);
   }
+
   String get fileDefaultName => translate('fileDefaultName');
   String get viewFolderHint => translate('viewFolderHint');
   String get cannotOpenDownloads => translate('cannotOpenDownloads');
@@ -695,6 +727,7 @@ class AppLocalizations {
         .replaceAll('{configured}', '$configured')
         .replaceAll('{default}', '$defaultValue');
   }
+
   String get gotIt => translate('gotIt');
   String get resetNow => translate('resetNow');
   String get discoveryPortReset => translate('discoveryPortReset');
@@ -729,6 +762,7 @@ class AppLocalizations {
   String preparingFiles(int count) {
     return translate('preparingFiles').replaceAll('{count}', '$count');
   }
+
   String get messageHint => translate('messageHint');
   String get transferPending => translate('transferPending');
   String get transferTransferring => translate('transferTransferring');
@@ -943,7 +977,8 @@ class AppLocalizations {
     'killProcess': 'Kill Process',
     'killSystemProcess': 'Kill System Process (Confirm)',
     'confirmKillSystemProcess': 'Kill System Process?',
-    'confirmKillSystemProcessMsg': 'Process {pid} (user: {user}) is a system process. Are you sure you want to kill it?',
+    'confirmKillSystemProcessMsg':
+        'Process {pid} (user: {user}) is a system process. Are you sure you want to kill it?',
     'kill': 'Kill',
     'killFailed': 'Failed to kill process',
     'sortByCpu': 'CPU Usage',
@@ -980,7 +1015,8 @@ class AppLocalizations {
     'uninstallSuccess': 'Uninstalled successfully',
     'uninstallFailed': 'Uninstall failed',
     'confirmUninstall': 'Confirm Uninstall',
-    'confirmUninstallMsg': 'This will remove the application from your system. Continue?',
+    'confirmUninstallMsg':
+        'This will remove the application from your system. Continue?',
     'systemIntegration': 'System Integration',
     'storage': 'Storage Space',
     'storageInfo': 'Storage Info',
@@ -993,7 +1029,8 @@ class AppLocalizations {
     'clearRunningData': 'Clear Running Data',
     'clearAllData': 'Clear All Data',
     'clearRunningDataMsg': 'This will clear temporary cache files. Continue?',
-    'clearAllDataMsg': 'This will clear all cache and database data. This cannot be undone. Continue?',
+    'clearAllDataMsg':
+        'This will clear all cache and database data. This cannot be undone. Continue?',
     'clearSuccess': 'Cleared successfully',
     'clearFailed': 'Clear failed',
     'close': 'Close',
@@ -1080,9 +1117,12 @@ class AppLocalizations {
     'fileConflictTitleCopy': 'File Conflict',
     'fileConflictTitleMove': 'File Conflict',
     'fileConflictTitleUpload': 'File Conflict',
-    'fileConflictMessageCopy': 'The following files already exist in the destination. How would you like to proceed?',
-    'fileConflictMessageMove': 'The following files already exist in the destination. How would you like to proceed?',
-    'fileConflictMessageUpload': 'The following files already exist on the server. How would you like to proceed?',
+    'fileConflictMessageCopy':
+        'The following files already exist in the destination. How would you like to proceed?',
+    'fileConflictMessageMove':
+        'The following files already exist in the destination. How would you like to proceed?',
+    'fileConflictMessageUpload':
+        'The following files already exist on the server. How would you like to proceed?',
     'overwriteAll': 'Overwrite All',
     'renameAll': 'Rename All',
     'skipAll': 'Skip All',
@@ -1099,13 +1139,15 @@ class AppLocalizations {
     'openLink': 'Open Link',
     'downloadingUpdate': 'Downloading Update...',
     'downloadComplete': 'Download Complete',
-    'downloadCompleteMsg': 'The update has been downloaded. Click "Install" to start the installation.',
+    'downloadCompleteMsg':
+        'The update has been downloaded. Click "Install" to start the installation.',
     'downloadPathLabel': 'Saved to:',
     'openFolder': 'Open Folder',
     'installNow': 'Install',
     'skip': 'Skip',
     'forceUpdateRequired': 'Force Update Required',
-    'forceUpdateMessage': 'This update is required. You must update to continue using the app.',
+    'forceUpdateMessage':
+        'This update is required. You must update to continue using the app.',
     'changelog': 'Changelog',
     'releaseDate': 'Release Date',
     'fileSize': 'File Size',
@@ -1198,7 +1240,8 @@ class AppLocalizations {
     'rssCreateFolder': 'New Folder',
     'rssEditFolder': 'Edit Folder',
     'rssDeleteFolder': 'Delete Folder',
-    'rssDeleteFolderConfirm': 'Delete "{name}"? Feeds inside will not be deleted.',
+    'rssDeleteFolderConfirm':
+        'Delete "{name}"? Feeds inside will not be deleted.',
     'rssFolderName': 'Name *',
     'rssFolderDesc': 'Description',
     'rssFolderDescOptional': 'Description (optional)',
@@ -1263,12 +1306,14 @@ class AppLocalizations {
     'rssCleanAll': 'Clean All',
     'rssCleanAllDesc': 'Delete all cached articles',
     'rssCleanConfirm': 'Confirm Cleanup',
-    'rssCleanDaysAgo': 'Delete articles older than {days} days? This cannot be undone.',
+    'rssCleanDaysAgo':
+        'Delete articles older than {days} days? This cannot be undone.',
     'rssCleanedAll': 'Cleaned articles older than {days} days',
     'rssMarkAllRead': 'Mark All Read',
     'rssMarkedAllRead': 'All marked as read',
     'rssClearArticles': 'Clear Articles',
-    'rssClearArticlesConfirm': 'Clear all articles from "{name}"? This cannot be undone.',
+    'rssClearArticlesConfirm':
+        'Clear all articles from "{name}"? This cannot be undone.',
     'rssArticlesCleared': 'Articles cleared',
     'rssBackToHome': 'Back to Home',
     'rssUnread': 'Unread',
@@ -1286,7 +1331,8 @@ class AppLocalizations {
     'rssSave': 'Save',
     'rssEditSource': 'Edit Feed',
     'rssDeleteSource': 'Delete Feed',
-    'rssDeleteSourceConfirm': 'Delete "{title}"? This will also delete all related articles.',
+    'rssDeleteSourceConfirm':
+        'Delete "{title}"? This will also delete all related articles.',
     'rssDeleteSourceArticles': 'This will also delete all related articles.',
     'rssSourceInFolders': 'This feed is also in folders:',
     'rssSourceRemovedFromFolders': 'It will be removed from these folders.',
@@ -1301,13 +1347,15 @@ class AppLocalizations {
     'rssOpenArticle': 'Open Article',
     'rssSelectArticleHint': 'Select an article to preview',
     'rssAutoBackup': 'Auto Backup',
-    'rssAutoBackupDesc': 'Back up subscriptions as OPML every 7 days (keep latest 3)',
+    'rssAutoBackupDesc':
+        'Back up subscriptions as OPML every 7 days (keep latest 3)',
     'rssBackupNow': 'Back Up Now',
     'rssBackupNowDesc': 'Export subscriptions to local backups folder',
     'rssBackupDone': 'Backup completed',
     'rssBackupFailed': 'Backup failed',
     'rssServerMode': 'Server Mode',
-    'rssServerModeDesc': 'Load articles from the RSS server (unified management)',
+    'rssServerModeDesc':
+        'Load articles from the RSS server (unified management)',
     'rssServerUrl': 'Server URL',
     'rssServerModeOn': 'Server mode enabled',
     'rssServerModeOff': 'Server mode disabled',
@@ -1335,25 +1383,33 @@ class AppLocalizations {
     'rssMarkAllReadConfirm': 'All marked as read',
     'rssFeedExists': 'This feed already exists',
     'rssAddFailed': 'Failed to add feed',
-    'rssAddFailedCheckUrl': 'Failed to add feed, please check if the URL is correct',
+    'rssAddFailedCheckUrl':
+        'Failed to add feed, please check if the URL is correct',
     'rssSyncFailed': 'Sync failed',
     'rssFeedAddedToFolder': 'Feed added to folder',
     // About
     'aboutSlogan': 'A Helpful SSH Client',
-    'aboutDescription': 'Zebra SSH is a cross-platform SSH client with terminal, SFTP file management, server monitoring, process management and disk cleanup features. Supports Linux, macOS, Windows, Android and iOS.',
+    'aboutDescription':
+        'Zebra SSH is a cross-platform SSH client with terminal, SFTP file management, server monitoring, process management and disk cleanup features. Supports Linux, macOS, Windows, Android and iOS.',
     'emailCopied': 'Email copied',
     'featureSshTerminal': 'SSH Terminal',
-    'featureSshTerminalDesc': 'Connect to remote servers and execute commands. Supports password and key authentication with multi-tab management.',
+    'featureSshTerminalDesc':
+        'Connect to remote servers and execute commands. Supports password and key authentication with multi-tab management.',
     'featureSftp': 'SFTP File Manager',
-    'featureSftpDesc': 'Browse, upload, download, delete, rename, and compress remote files visually. Supports drag-and-drop and batch operations.',
+    'featureSftpDesc':
+        'Browse, upload, download, delete, rename, and compress remote files visually. Supports drag-and-drop and batch operations.',
     'featureMonitor': 'Server Monitor',
-    'featureMonitorDesc': 'View real-time CPU, memory, disk, network and other system info with auto-refresh support.',
+    'featureMonitorDesc':
+        'View real-time CPU, memory, disk, network and other system info with auto-refresh support.',
     'featureProcess': 'Process Manager',
-    'featureProcessDesc': 'View and manage system processes. Sort by CPU/memory, kill processes.',
+    'featureProcessDesc':
+        'View and manage system processes. Sort by CPU/memory, kill processes.',
     'featureCleanup': 'Disk Cleanup',
-    'featureCleanupDesc': 'Scan and clean temporary files, logs, and cache on the server.',
+    'featureCleanupDesc':
+        'Scan and clean temporary files, logs, and cache on the server.',
     'featureTheme': 'Theme & Language',
-    'featureThemeDesc': 'Light/Dark/System theme, custom theme colors, Chinese/English language support.',
+    'featureThemeDesc':
+        'Light/Dark/System theme, custom theme colors, Chinese/English language support.',
     'featureBackup': 'Database Backup',
     'featureBackupDesc': 'Share database file for backup on mobile devices.',
     // Starred/Favorites
@@ -1376,10 +1432,12 @@ class AppLocalizations {
     // Image error
     'imageLoadFailed': 'Image failed to load',
     // RSS Settings
-    'rssCleanDaysConfirm': 'Delete all articles older than {days} days? This cannot be undone.',
+    'rssCleanDaysConfirm':
+        'Delete all articles older than {days} days? This cannot be undone.',
     'rssCleanAllConfirm': 'Delete all articles? This cannot be undone.',
     // Feedback
-    'feedbackDescriptionHint': 'Please describe your issue or suggestion in detail, including steps, expected results...',
+    'feedbackDescriptionHint':
+        'Please describe your issue or suggestion in detail, including steps, expected results...',
     'feedbackHint': 'Briefly describe your feedback',
     'feedbackNote': 'Note: Only one feedback per email every 30 minutes.',
     // Blog
@@ -1398,33 +1456,40 @@ class AppLocalizations {
     'lanChat': 'LAN Chat',
     'lanChatSubtitle': 'Discover devices, P2P chat and file transfer',
     'discoveryPort': 'Discovery Port',
-    'discoveryPortSubtitle': 'Port for device discovery; must be the same on all devices',
+    'discoveryPortSubtitle':
+        'Port for device discovery; must be the same on all devices',
     'discoveryPortHint': 'Leave blank to restore default port',
-    'discoveryPortDescription': 'Default port {default}, used to search for LAN devices. All devices must use the same port.',
+    'discoveryPortDescription':
+        'Default port {default}, used to search for LAN devices. All devices must use the same port.',
     'discoveryPortInvalid': 'Please enter a port number between 1 and 65535',
     'chatHistory': 'Chat History',
     'deviceList': 'Device List',
     'viewDetail': 'View Details',
     'messageDetail': 'Message Details',
     'copied': 'Copied',
-    'fileNotShareable': 'The file is not shareable from this device. Open its folder to view it.',
+    'fileNotShareable':
+        'The file is not shareable from this device. Open its folder to view it.',
     'fileInfoMissing': 'Missing file information',
     'multiSelect': 'Multi-select',
     'mergeShare': 'Merge & Share',
     'deleteMessages': 'Delete Messages',
     'confirmDeleteMessage': 'Delete this message? This cannot be undone.',
-    'confirmDeleteMessages': 'Delete the selected {count} messages? This cannot be undone.',
+    'confirmDeleteMessages':
+        'Delete the selected {count} messages? This cannot be undone.',
     'selectedCount': '{count} selected',
     'deleteDevice': 'Delete Device',
-    'confirmDeleteDevice': 'Remove "{name}" ({addr}) from the device list?\n\nOnly the list entry is removed; it does not affect the peer. If the device is still online, it will reappear after the next heartbeat.',
+    'confirmDeleteDevice':
+        'Remove "{name}" ({addr}) from the device list?\n\nOnly the list entry is removed; it does not affect the peer. If the device is still online, it will reappear after the next heartbeat.',
     'fileDefaultName': 'File',
     'viewFolderHint': 'Tap to open folder',
     'cannotOpenDownloads': 'Cannot open downloads folder',
-    'downloadsUnavailable': 'System file manager unavailable. Please open the "Downloads" folder manually.',
+    'downloadsUnavailable':
+        'System file manager unavailable. Please open the "Downloads" folder manually.',
     'cannotOpenFolder': 'Cannot open folder',
     'openFolderFailed': 'Failed to open folder',
     'discoveryPortNonDefault': 'Non-default discovery port',
-    'discoveryPortWarning': 'Current discovery port is {configured}, not the default {default}.\n\nAll devices must use the same discovery port, otherwise other clients may not be found. You can ignore this if you confirm others use the same port.',
+    'discoveryPortWarning':
+        'Current discovery port is {configured}, not the default {default}.\n\nAll devices must use the same discovery port, otherwise other clients may not be found. You can ignore this if you confirm others use the same port.',
     'gotIt': 'Got it',
     'resetNow': 'Reset now',
     'discoveryPortReset': 'Discovery port restored to default',
@@ -1439,7 +1504,8 @@ class AppLocalizations {
     'nicknameUpdated': 'Nickname changed to {name}',
     'discoveryStartFailed': 'Failed to start device discovery: {error}',
     'deleteChatHistory': 'Delete Chat History',
-    'confirmDeleteChatHistory': 'Delete chat history with "{name}"? This cannot be undone.',
+    'confirmDeleteChatHistory':
+        'Delete chat history with "{name}"? This cannot be undone.',
     'connected': 'Connected',
     'disconnected': 'Disconnected',
     'chatDetails': 'Chat Details',
@@ -1467,10 +1533,107 @@ class AppLocalizations {
     'elapsedTimeLabel': 'Elapsed',
     'enableDiscovery': 'Enable discovery',
     'disableDiscovery': 'Disable discovery',
-    'enableDiscoveryHint': 'Tap the WiFi icon in the top-right to enable discovery',
+    'enableDiscoveryHint':
+        'Tap the WiFi icon in the top-right to enable discovery',
     'lastStartFailed': 'Last start failed: {error}',
     'searchingDevices': 'Searching for LAN devices...',
     'noChatHistory': 'No chat history',
+    'groups': 'Groups',
+    'groupChat': 'Group Chat',
+    'createGroup': 'Create Group',
+    'groupNameHint': 'Group name',
+    'unnamedGroup': 'Unnamed group',
+    'members': 'Members',
+    'addMembers': 'Add members',
+    'selectMembers': 'Select members',
+    'create': 'Create',
+    'next': 'Next',
+    'add': 'Add',
+    'renamedGroup': 'Group renamed to "',
+    'youCreatedGroup': 'You created group "',
+    'youJoinedGroup': 'You joined group "',
+    'quoteEnd': '"',
+    'invitedYou': 'invited you to a group',
+    'colon': ': ',
+    'leftGroup': 'left the group',
+    'removedMember': 'was removed from the group',
+    'addedMembers': 'Added members: ',
+    'youWereRemoved': 'You were removed from group ',
+    'leftGroupToast': 'You left group ',
+    'groupDisbanded': 'Group disbanded: ',
+    'disbandGroup': 'Disband group',
+    'leaveGroup': 'Leave group',
+    'unknownMember': 'Unknown member',
+    'removeMember': 'Remove member',
+    'owner': 'Owner',
+    'manualConnect': 'Connect by IP',
+    'connectFailed': 'Connection failed',
+    'unknownDevice': 'Unknown device',
+    'chatSettings': 'Chat settings',
+    'signature': 'Signature',
+    'status': 'Status',
+    'online': 'Online',
+    'away': 'Away',
+    'busy': 'Busy',
+    'dnd': 'Do not disturb',
+    'invisible': 'Invisible',
+    'offline': 'Offline',
+    'alias': 'Alias',
+    'deviceId': 'Device ID',
+    'autoDownloadImages': 'Auto-download images',
+    'notifications': 'Notifications',
+    'shareServer': 'File share',
+    'shareRunning': 'File share is running',
+    'shareStopped': 'File share is stopped',
+    'startShare': 'Start sharing',
+    'stopShare': 'Stop sharing',
+    'shareStarted': 'File share started',
+    'shareStartFailed': 'Cannot start file share: ',
+    'shareDir': 'Shared folder',
+    'uploadDir': 'Upload folder',
+    'shareDirMissing': 'Shared folder does not exist',
+    'uploadDirMissing': 'Upload folder does not exist',
+    'sharePort': 'Share port',
+    'transferPort': 'Transfer port',
+    'choose': 'Choose',
+    'clear': 'Clear',
+    'notSet': 'Not set',
+    'copyAll': 'Copy all',
+    'copySelected': 'Copy selected',
+    'select': 'Select',
+    'open': 'Open',
+    'fileLabel': 'File',
+    'imageLabel': 'Image',
+    'isTyping': 'typing...',
+    'messageRecalled': 'recalled a message',
+    'you': 'You',
+    'recall': 'Recall',
+    'recallExpired': 'Messages older than 2 minutes cannot be recalled',
+    'pin': 'Pin',
+    'unpin': 'Unpin',
+    'mute': 'Mute',
+    'unmute': 'Unmute',
+    'clearHistory': 'Clear history',
+    'draft': 'Draft',
+    'conversationMissing': 'Conversation not found',
+    'openChatFirst': 'Open a chat first',
+    'noDevices': 'No devices found',
+    'noSendableFiles': 'No files to send',
+    'transferUnavailable': 'File transfer is unavailable',
+    'downloadUnavailable': 'Cannot download: sender is offline',
+    'savedTo': 'Saved to ',
+    'sizeMismatch': 'File size mismatch',
+    'errBadRequest': 'Bad request',
+    'errNotFound': 'File not found or sender restarted',
+    'errFileMissing': 'File moved or deleted',
+    'errBadOffset': 'Invalid resume offset',
+    'errFileChanged': 'File changed',
+    'errIo': 'Cannot read file',
+    'errIncomplete': 'Incomplete transfer',
+    'errTooLarge': 'File too large',
+    'errBusy': 'Sender is busy',
+    'errFileExpired': 'File not found or expired',
+    'errDisconnected': 'Connection closed',
     'roomChat': 'Chat Room',
     'createRoom': 'Create Room',
     'roomNameHint': 'Room name',
@@ -1488,12 +1651,16 @@ class AppLocalizations {
     'reconnecting': 'Connection lost, reconnecting...',
     'memberDetails': 'Member Details',
     'sendMessage': 'Send Message',
-    'createRoomLeaveConfirm': 'Creating a new room will leave the current chat room. Continue?',
-    'joinRoomLeaveConfirm': 'Joining another room will leave the current chat room. Continue?',
-    'hostJoinOthersHint': 'You are the host. Disband the current room before joining another.',
+    'createRoomLeaveConfirm':
+        'Creating a new room will leave the current chat room. Continue?',
+    'joinRoomLeaveConfirm':
+        'Joining another room will leave the current chat room. Continue?',
+    'hostJoinOthersHint':
+        'You are the host. Disband the current room before joining another.',
     'roomFull': 'Room is full',
     'roomNotExist': 'Room not found or already dissolved',
-    'cannotConnectHost': 'Cannot connect to host. Make sure the host is online.',
+    'cannotConnectHost':
+        'Cannot connect to host. Make sure the host is online.',
     'roomNameDefault': 'My Room',
     'roomMemberCount': '{count} members',
     'waitingForPeer': 'Waiting for the peer to connect...',
@@ -1532,7 +1699,8 @@ class AppLocalizations {
     'qrLogo': 'Embedded Logo',
     'qrNoLogo': 'No logo',
     'qrLogoSet': 'Logo set',
-    'qrLogoErrorLevelHint': 'Logo covers data modules; error correction is raised to Q (25%) automatically',
+    'qrLogoErrorLevelHint':
+        'Logo covers data modules; error correction is raised to Q (25%) automatically',
     'qrPickLogo': 'Pick logo image',
     'qrRemoveLogo': 'Remove logo',
     'qrSavedToGallery': 'Saved to gallery',
@@ -2061,7 +2229,8 @@ class AppLocalizations {
     'rssFeedAddedToFolder': '订阅源已添加到收藏夹',
     // About
     'aboutSlogan': '友好的 SSH 客户端',
-    'aboutDescription': 'Zebra SSH 是一款跨平台 SSH 客户端，支持终端、SFTP 文件管理、服务器监控、进程管理和磁盘清理等功能。支持 Linux、macOS、Windows、Android 和 iOS。',
+    'aboutDescription':
+        'Zebra SSH 是一款跨平台 SSH 客户端，支持终端、SFTP 文件管理、服务器监控、进程管理和磁盘清理等功能。支持 Linux、macOS、Windows、Android 和 iOS。',
     'emailCopied': '邮箱已复制',
     'featureSshTerminal': 'SSH 终端',
     'featureSshTerminalDesc': '连接远程服务器，执行命令。支持密码和密钥认证，多标签页管理。',
@@ -2137,7 +2306,8 @@ class AppLocalizations {
     'confirmDeleteMessages': '确定删除选中的 {count} 条消息吗?删除后不可恢复。',
     'selectedCount': '已选 {count} 条',
     'deleteDevice': '删除设备',
-    'confirmDeleteDevice': '确定要从设备列表中移除 "{name}"({addr})吗?\n\n仅移除列表中的条目,不会影响对方。若该设备仍在线,收到下一次心跳后会自动重新出现。',
+    'confirmDeleteDevice':
+        '确定要从设备列表中移除 "{name}"({addr})吗?\n\n仅移除列表中的条目,不会影响对方。若该设备仍在线,收到下一次心跳后会自动重新出现。',
     'fileDefaultName': '文件',
     'viewFolderHint': '点击查看目录',
     'cannotOpenDownloads': '无法打开下载目录',
@@ -2145,7 +2315,8 @@ class AppLocalizations {
     'cannotOpenFolder': '无法打开目录',
     'openFolderFailed': '打开目录失败',
     'discoveryPortNonDefault': '发现端口非默认',
-    'discoveryPortWarning': '当前发现端口为 {configured},不是默认端口 {default}。\n\n发现端口需要所有设备一致,否则可能无法正常搜索到本地其他客户端。若确认其他客户端也使用相同端口,可忽略本提示。',
+    'discoveryPortWarning':
+        '当前发现端口为 {configured},不是默认端口 {default}。\n\n发现端口需要所有设备一致,否则可能无法正常搜索到本地其他客户端。若确认其他客户端也使用相同端口,可忽略本提示。',
     'gotIt': '知道了',
     'resetNow': '一键重置',
     'discoveryPortReset': '已恢复默认发现端口',
@@ -2192,6 +2363,102 @@ class AppLocalizations {
     'lastStartFailed': '上次启动失败:{error}',
     'searchingDevices': '正在搜索局域网设备...',
     'noChatHistory': '暂无聊天记录',
+    'groups': '群聊',
+    'groupChat': '群聊',
+    'createGroup': '创建群聊',
+    'groupNameHint': '群聊名称',
+    'unnamedGroup': '未命名群聊',
+    'members': '成员',
+    'addMembers': '添加成员',
+    'selectMembers': '选择成员',
+    'create': '创建',
+    'next': '下一步',
+    'add': '添加',
+    'renamedGroup': '群聊改名为 "',
+    'youCreatedGroup': '你创建了群聊 "',
+    'youJoinedGroup': '你加入了群聊 "',
+    'quoteEnd': '"',
+    'invitedYou': '邀请你加入群聊',
+    'colon': '：',
+    'leftGroup': '退出了群聊',
+    'removedMember': '被移出了群聊',
+    'addedMembers': '新增成员: ',
+    'youWereRemoved': '你已被移出群聊 ',
+    'leftGroupToast': '已退出群聊 ',
+    'groupDisbanded': '群聊已解散: ',
+    'disbandGroup': '解散群聊',
+    'leaveGroup': '退出群聊',
+    'unknownMember': '未知成员',
+    'removeMember': '移除成员',
+    'owner': '群主',
+    'manualConnect': '通过 IP 连接',
+    'connectFailed': '连接失败',
+    'unknownDevice': '未知设备',
+    'chatSettings': '聊天设置',
+    'signature': '个性签名',
+    'status': '状态',
+    'online': '在线',
+    'away': '离开',
+    'busy': '忙碌',
+    'dnd': '请勿打扰',
+    'invisible': '隐身',
+    'offline': '离线',
+    'alias': '备注名',
+    'deviceId': '设备 ID',
+    'autoDownloadImages': '自动下载图片',
+    'notifications': '通知',
+    'shareServer': '文件共享',
+    'shareRunning': '文件共享已开启',
+    'shareStopped': '文件共享已关闭',
+    'startShare': '开始共享',
+    'stopShare': '停止共享',
+    'shareStarted': '文件共享已开启',
+    'shareStartFailed': '无法开启文件共享：',
+    'shareDir': '共享目录',
+    'uploadDir': '上传目录',
+    'shareDirMissing': '共享目录不存在',
+    'uploadDirMissing': '上传目录不存在',
+    'sharePort': '共享端口',
+    'transferPort': '传输端口',
+    'choose': '选择',
+    'clear': '清除',
+    'notSet': '未设置',
+    'copyAll': '复制全部',
+    'copySelected': '复制所选',
+    'select': '选择',
+    'open': '打开',
+    'fileLabel': '文件',
+    'imageLabel': '图片',
+    'isTyping': '正在输入...',
+    'messageRecalled': '撤回了一条消息',
+    'you': '你',
+    'recall': '撤回',
+    'recallExpired': '超过 2 分钟的消息不能撤回',
+    'pin': '置顶',
+    'unpin': '取消置顶',
+    'mute': '消息免打扰',
+    'unmute': '取消免打扰',
+    'clearHistory': '清空聊天记录',
+    'draft': '草稿',
+    'conversationMissing': '会话不存在',
+    'openChatFirst': '先打开一个聊天',
+    'noDevices': '暂无设备',
+    'noSendableFiles': '没有可发送的文件',
+    'transferUnavailable': '文件传输服务未启动',
+    'downloadUnavailable': '无法下载：发送方离线',
+    'savedTo': '已保存到 ',
+    'sizeMismatch': '文件大小不一致',
+    'errBadRequest': '请求格式错误',
+    'errNotFound': '文件不存在或发送方已重启',
+    'errFileMissing': '文件已被移动或删除',
+    'errBadOffset': '续传位置无效',
+    'errFileChanged': '文件已改变',
+    'errIo': '无法读取文件',
+    'errIncomplete': '接收不完整',
+    'errTooLarge': '文件过大',
+    'errBusy': '发送方正忙',
+    'errFileExpired': '文件不存在或已过期',
+    'errDisconnected': '连接已断开',
     'roomChat': '聊天室',
     'createRoom': '创建房间',
     'roomNameHint': '房间名',
@@ -2268,7 +2535,8 @@ class AppLocalizations {
   };
 }
 
-class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override

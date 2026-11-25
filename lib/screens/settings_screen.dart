@@ -22,8 +22,7 @@ import 'diary_screen.dart';
 import 'rss/rss_explore_screen.dart';
 import '../features/qr_tool/screens/qr_tool_screen.dart';
 import '../features/lan_chat/screens/lan_chat_home_screen.dart';
-import '../features/lan_chat/providers/lan_discovery_provider.dart';
-import '../features/lan_chat/services/lan_chat_settings.dart';
+import '../features/lan_chat/providers/chat_provider.dart';
 import 'update_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -241,10 +240,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _showDiscoveryPortDialog(BuildContext context) async {
     final loc = AppLocalizations.of(context);
     final controller = TextEditingController();
-    final provider = context.read<LanDiscoveryProvider>();
-    final current = await LanChatSettings.getDiscoveryPort();
-    if (!context.mounted) return;
-    if (current != null) controller.text = '$current';
+    final provider = context.read<ChatProvider>();
+    final current = provider.settings.discoveryPort;
+    if (current != 42223) controller.text = '$current';
 
     showDialog(
       context: context,
@@ -265,7 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              loc.discoveryPortDescriptionValue(LanChatSettings.defaultDiscoveryPort),
+              loc.discoveryPortDescriptionValue(42223),
               style: TextStyle(
                 fontSize: 12,
                 color: Theme.of(ctx).colorScheme.onSurfaceVariant,
@@ -281,23 +279,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           FilledButton(
             onPressed: () async {
               final text = controller.text.trim();
+              var port = 42223;
               if (text.isNotEmpty) {
-                final port = int.tryParse(text);
-                if (port == null || port < 1 || port > 65535) {
+                final parsed = int.tryParse(text);
+                if (parsed == null || parsed < 1 || parsed > 65535) {
                   ScaffoldMessenger.of(ctx).showSnackBar(
                     SnackBar(content: Text(loc.discoveryPortInvalid)),
                   );
                   return;
                 }
-                await LanChatSettings.setDiscoveryPort(port);
-              } else {
-                await LanChatSettings.setDiscoveryPort(null);
+                port = parsed;
               }
-              // 重启发现服务,让新端口立即生效
-              if (provider.isRunning) {
-                provider.stop();
-                await provider.start();
-              }
+              await provider.setSettings((s) => s.discoveryPort = port);
+              await provider.restartNetwork();
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: Text(loc.save),

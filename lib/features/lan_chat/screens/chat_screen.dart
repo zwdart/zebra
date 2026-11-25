@@ -1,444 +1,226 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
-import '../models/lan_device.dart';
-import '../providers/chat_provider.dart';
-import '../models/chat_message.dart';
-import '../widgets/message_bubble.dart';
-import '../widgets/file_transfer_tile.dart';
-import '../services/receive_directory.dart';
-import '../services/lan_chat_settings.dart';
-import '../services/native_file_stream.dart';
-import '../../../widgets/custom_title_bar.dart';
-import '../../../widgets/window_drag_region.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../l10n/app_localizations.dart';
+import '../../../widgets/custom_title_bar.dart';
+import '../models/lan_models.dart';
+import '../providers/chat_provider.dart';
+import '../widgets/message_bubble.dart';
 
-/// 聊天界面（私聊）
 class ChatScreen extends StatefulWidget {
-  final String peerId;
-  final String peerName;
-  final String peerIp;
-  final int peerPort;
+  final String conversationId;
 
-  const ChatScreen({
-    super.key,
-    required this.peerId,
-    required this.peerName,
-    required this.peerIp,
-    this.peerPort = LanChatSettings.defaultChatPort,
-  });
+  const ChatScreen({super.key, required this.conversationId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final _textController = TextEditingController();
-  final _scrollController = ScrollController();
-  late final ChatProvider _chatProvider;
-  late List<ChatMessage> _messages;
-  bool _isConnected = false;
-  bool _isConnecting = false;
-  bool _isWaiting = false; // 连接失败,等待对方上线并自动重试
-  Timer? _retryTimer;
-  final FocusNode _inputFocusNode = FocusNode();
-  StreamSubscription<ChatMessage>? _messageSub;
-  // ---- 多选模式状态 ----
+  late final ChatProvider _chat = context.read<ChatProvider>();
+  final _input = TextEditingController();
+  final _scroll = ScrollController();
+  final _focus = FocusNode();
+  final Set<String> _selected = {};
   bool _selectionMode = false;
-  final Set<String> _selectedIds = {};
-  // ---- 拖拽发送状态(桌面端拖文件进聊天窗口直接发送)----
-  bool _isDragOver = false;
+  bool _dragOver = false;
+  String _sig = '';
+
+  Conversation? get _conv => _chat.conversation(widget.conversationId);
 
   @override
   void initState() {
     super.initState();
-    _chatProvider = context.read<ChatProvider>();
-    _messages = _chatProvider.getMessages(widget.peerId);
-    debugPrint(
-      '[ChatScreen] init: peerId=${widget.peerId} peerIp=${widget.peerIp} peerPort=${widget.peerPort} history=${_messages.length}',
-    );
-    _chatProvider.markRead(widget.peerId);
-    _checkConnection();
-    _chatProvider.addListener(_onProviderChanged);
-    _messageSub = _chatProvider.onMessageReceived.listen((msg) {
-      debugPrint(
-        '[ChatScreen] stream msg: senderId=${msg.senderId} peerId=${widget.peerId} type=${msg.type.name}',
-      );
-      if (msg.senderId != widget.peerId) {
-        // 收到但被过滤的消息：说明 senderId 与当前 peerId 对不上（设备 ID 不一致/路由错位）
-        debugPrint(
-          '[ChatScreen] !!! message FILTERED OUT: senderId=${msg.senderId} != peerId=${widget.peerId} content=${msg.content}',
-        );
-        return;
-      }
-      if (mounted) {
-        setState(() {
-          _messages = _chatProvider.getMessages(widget.peerId);
-        });
-        _scrollToBottom();
-      }
-    });
+    _chat.addListener(_onChanged);
+    _chat.openConversation(widget.conversationId);
+    _chat.setAppVisible(true);
+    final c = _conv;
+    if (c != null && c.draft.isNotEmpty) _input.text = c.draft;
+    _input.addListener(_onInput);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-      // 进入聊天页自动发起连接:未连接时先显示"正在连接中",
-      // 失败后进入"等待对方连接中"并自动重试
-      if (!_isConnected) _ensureConnected();
+      _scrollToBottom(animate: false);
+      _focus.requestFocus();
     });
   }
 
   @override
   void dispose() {
-    _chatProvider.removeListener(_onProviderChanged);
-    _messageSub?.cancel();
-    _stopAutoRetry();
-    _textController.dispose();
-    _inputFocusNode.dispose();
-    _scrollController.dispose();
+    _input.removeListener(_onInput);
+    _chat.removeListener(_onChanged);
+    _chat.leaveConversation();
+    _input.dispose();
+    _scroll.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
-  void _checkConnection() {
-    setState(() {
-      _isConnected = _chatProvider.isConnectedTo(widget.peerId);
-      _isConnecting = false;
-    });
-  }
-
-  String _lastMessagesSig = '';
-
-  /// 连接状态/消息变化时同步 UI（server 通道建立/断开、发送状态流转等都会 notifyListeners）
-  void _onProviderChanged() {
-    if (!mounted) return;
-    final connected = _chatProvider.isConnectedTo(widget.peerId);
-    final msgs = _chatProvider.getMessages(widget.peerId);
-    final last = msgs.isEmpty ? null : msgs.last;
-    // 消息数量、最后一条消息 ID 与发送状态变化时才刷新(避免文件传输进度频繁重建)
-    final sig = last == null
-        ? '0'
-        : '${msgs.length}:${last.id}:${last.sendStatus.name}';
-    if (connected == _isConnected && sig == _lastMessagesSig) return;
-    _lastMessagesSig = sig;
-    setState(() {
-      _isConnected = connected;
-      _isWaiting = !connected;
-      _messages = msgs;
-    });
-    _scrollToBottom();
-    if (connected) {
-      _stopAutoRetry();
-    } else if (!_isConnecting) {
-      _startAutoRetry();
+  void _onInput() {
+    _chat.setDraft(widget.conversationId, _input.text);
+    if (_input.text.trim().isNotEmpty) {
+      _chat.sendTyping(true);
+    } else {
+      _chat.sendTyping(false);
     }
   }
 
-  Future<void> _ensureConnected() async {
-    if (_isConnected) {
-      _stopAutoRetry();
+  void _onChanged() {
+    if (!mounted) return;
+    final list = _chat.messagesOf(widget.conversationId);
+    final last = list.isEmpty ? null : list.last;
+    final sig =
+        '${list.length}|${last?.id}|${last?.read}|${last?.recalled}'
+        '|${_chat.typingNames(_conv ?? Conversation(id: '', kind: ConvKind.direct)).length}';
+    if (sig == _sig) {
+      setState(() {});
       return;
     }
-    if (_isConnecting) return;
-    setState(() {
-      _isConnecting = true;
-      _isWaiting = false;
-    });
-    final chatProvider = context.read<ChatProvider>();
-    final ok = await chatProvider.connectToDevice(_makePeerDevice());
-    debugPrint('[ChatScreen] ensureConnected result=$ok');
-    if (mounted) {
-      setState(() {
-        _isConnected = ok;
-        _isConnecting = false;
-        _isWaiting = !ok;
-      });
-      if (ok) {
-        _stopAutoRetry();
-      } else {
-        // 对方服务器当前不可达(应用未开启/已离线):
-        // 显示"等待对方连接中"并周期性自动重试,对方上线后即可自动连上
-        _startAutoRetry();
-      }
-    }
+    _sig = sig;
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
 
-  /// 未连接时周期性自动重试连接
-  void _startAutoRetry() {
-    _retryTimer ??= Timer.periodic(const Duration(seconds: 4), (_) {
-      if (!mounted || _isConnected || _isConnecting) return;
-      _ensureConnected();
-    });
-  }
-
-  void _stopAutoRetry() {
-    _retryTimer?.cancel();
-    _retryTimer = null;
-  }
-
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      // 列表是 reverse:true,offset 0 才是底部(最新消息),
-      // maxScrollExtent 反而是最旧消息的位置
-      _scrollController.animateTo(
-        0.0,
-        duration: const Duration(milliseconds: 200),
+  void _scrollToBottom({bool animate = true}) {
+    if (!_scroll.hasClients) return;
+    final target = _scroll.position.maxScrollExtent;
+    if (animate) {
+      _scroll.animateTo(
+        target,
+        duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
       );
-    }
-  }
-
-  Widget _buildConnectionStatus(ColorScheme colorScheme) {
-    if (_isConnecting) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 10,
-            height: 10,
-            child: CircularProgressIndicator(
-              strokeWidth: 1.5,
-              color: colorScheme.outline,
-            ),
-          ),
-          const SizedBox(width: 3),
-          Text(
-            AppLocalizations.of(context).connecting,
-            style: TextStyle(fontSize: 10, color: colorScheme.outline),
-          ),
-        ],
-      );
-    }
-    if (_isWaiting) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 10,
-            height: 10,
-            child: CircularProgressIndicator(
-              strokeWidth: 1.5,
-              color: colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 3),
-          Text(
-            AppLocalizations.of(context).waitingForPeer,
-            style: TextStyle(fontSize: 10, color: colorScheme.primary),
-          ),
-        ],
-      );
-    }
-    if (_isConnected) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.check_circle, size: 10, color: Colors.green),
-          const SizedBox(width: 3),
-          Text(
-            AppLocalizations.of(context).connected,
-            style: TextStyle(fontSize: 10, color: Colors.green),
-          ),
-        ],
-      );
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.error_outline, size: 10, color: colorScheme.error),
-        const SizedBox(width: 3),
-        Text(
-          AppLocalizations.of(context).disconnected,
-          style: TextStyle(fontSize: 10, color: colorScheme.error),
-        ),
-      ],
-    );
-  }
-
-  LanDevice _makePeerDevice() {
-    return LanDevice(
-      id: widget.peerId,
-      name: widget.peerName,
-      ip: widget.peerIp,
-      port: widget.peerPort,
-    );
-  }
-
-  void _sendMessage() {
-    final text = _textController.text.trim();
-    if (text.isEmpty) return;
-
-    final chatProvider = context.read<ChatProvider>();
-    chatProvider.sendTextMessage(_makePeerDevice(), text);
-    _textController.clear();
-    // 发送后重新聚焦输入框,避免桌面端发送一次后焦点丢失
-    _inputFocusNode.requestFocus();
-
-    setState(() {
-      _messages = chatProvider.getMessages(widget.peerId);
-    });
-    _scrollToBottom();
-
-    // 如果未连接，尝试连接
-    if (!_isConnected && !_isConnecting) {
-      _ensureConnected();
-    }
-  }
-
-  Future<void> _pickAndSendFile() async {
-    if (!mounted) return;
-    final loc = AppLocalizations.of(context);
-    // 打开文件选择器前先提示,避免 pickFiles 内部复制大文件期间看似无反应
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(loc.pickingFiles),
-          duration: const Duration(seconds: 4),
-        ),
-      );
-
-    final chatProvider = context.read<ChatProvider>();
-    final peer = _makePeerDevice();
-    var sent = 0;
-
-    if (NativeFileStream.isSupported) {
-      // Android/iOS:原生直读流(SAF/UIDocumentPicker),零复制、选完即传;
-      // 可重开流工厂支持断点续传(重试时按已传 offset 重新定位)
-      // 仅支持单文件传输:原生选择器已限制单选,这里再兜底只取第一个
-      final picked = await NativeFileStream.pickFiles();
-      if (picked.isEmpty || !mounted) return;
-      final f = picked.first;
-      // 无法确定大小的文件跳过(本地 provider 一般都能返回)
-      if (f.size >= 0) {
-        chatProvider.sendFile(
-          target: peer,
-          fileName: f.name,
-          fileSize: f.size,
-          readStreamFactory: (offset) =>
-              NativeFileStream.openRead(f.uri, offset: offset),
-        );
-        sent++;
-      }
     } else {
-      // 桌面:file_picker 路径方案(选中即得真实路径,无复制等待);
-      // 仅支持单文件传输:allowMultiple=false
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: false,
-        withReadStream: true,
-      );
-      if (result == null || result.files.isEmpty || !mounted) return;
-
-      // 选完后立即反馈"正在准备传输",大文件此时可能仍在复制/准备
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(loc.preparingFiles(1)),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-
-      final file = result.files.first;
-      // path 可能为 null(readStream 模式);两者任一可用即可发送
-      if (file.path != null || file.readStream != null) {
-        chatProvider.sendFile(
-          target: peer,
-          filePath: file.path,
-          fileName: file.name,
-          fileSize: file.size,
-          readStream: file.readStream,
-        );
-        sent++;
-      }
+      _scroll.jumpTo(target);
     }
-    if (sent == 0) return;
-
-    setState(() {
-      _messages = chatProvider.getMessages(widget.peerId);
-    });
-    _scrollToBottom();
   }
 
-  /// 处理拖拽进入的文件列表(桌面端拖文件进聊天窗口直接发送)。
-  /// 逐文件发送到当前聊天对象;跳过无法读取的路径。
-  Future<void> _handleDroppedFiles(List<DropItem> files) async {
-    if (files.isEmpty || !mounted) return;
-    final chatProvider = context.read<ChatProvider>();
-    final peer = _makePeerDevice();
-    var sent = 0;
-    for (final f in files) {
-      final path = f.path;
-      if (path.isEmpty) continue;
-      // 目录不支持直接发送,跳过
-      if (await FileSystemEntity.isDirectory(path)) continue;
-      final size = await f.length();
-      chatProvider.sendFile(
-        target: peer,
-        filePath: path,
-        fileName: f.name,
-        fileSize: size,
-      );
-      sent++;
-    }
-    if (sent == 0) return;
-
-    setState(() {
-      _messages = chatProvider.getMessages(widget.peerId);
-    });
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (text.isEmpty) return;
+    _input.clear();
+    await _chat.sendText(text);
     _scrollToBottom();
+    _focus.requestFocus();
   }
 
-  /// 打开接收文件目录(右上角菜单"文件夹")。
-  /// 目录不存在时 ReceiveDirectory 会先创建再打开;失败时提示用户。
-  Future<void> _openReceivedFolder() async {
+  Future<void> _pickFiles() async {
     final loc = AppLocalizations.of(context);
-    final ok = await ReceiveDirectory.openReceivedFolder();
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(loc.openFolderFailed)),
-      );
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+    if (result == null) return;
+    final paths = result.files
+        .map((f) => f.path)
+        .whereType<String>()
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (paths.isEmpty) return;
+    final added = await _chat.sendFiles(paths);
+    if (added == 0 && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(loc.translate('noSendableFiles'))));
     }
   }
 
-  // ==================== 多选模式 ====================
+  void _toggleSelect(String id) {
+    setState(() {
+      if (!_selected.add(id)) _selected.remove(id);
+      if (_selected.isEmpty) _selectionMode = false;
+    });
+  }
 
-  /// 长按菜单选择"多选"后进入多选模式,并选中当前消息
-  void _enterSelectionMode(String messageId) {
+  void _enterSelection(String id) {
     setState(() {
       _selectionMode = true;
-      _selectedIds.clear();
-      _selectedIds.add(messageId);
+      _selected.add(id);
     });
   }
 
-  void _exitSelectionMode() {
-    if (!_selectionMode) return;
+  void _selectAll() {
+    final list = _chat.messagesOf(widget.conversationId);
+    final all = list.map((m) => m.id).toSet();
     setState(() {
-      _selectionMode = false;
-      _selectedIds.clear();
-    });
-  }
-
-  void _toggleSelect(String messageId) {
-    setState(() {
-      if (!_selectedIds.add(messageId)) {
-        _selectedIds.remove(messageId);
+      if (_selected.length == all.length) {
+        _selected.clear();
+        _selectionMode = false;
+      } else {
+        _selected
+          ..clear()
+          ..addAll(all);
+        _selectionMode = true;
       }
     });
   }
 
-  /// 删除选中的消息(二次确认)
-  Future<void> _confirmDeleteSelected() async {
+  String _copyText(Message m) {
     final loc = AppLocalizations.of(context);
-    final count = _selectedIds.length;
-    final confirmed = await showDialog<bool>(
+    if (m.recalled) return loc.translate('messageRecalled');
+    if (m.kind == MessageKind.system) return m.text;
+    if (m.kind == MessageKind.image) {
+      final path = m.file?.path ?? '';
+      if (path.isNotEmpty) return path;
+      return m.file?.url ?? m.text;
+    }
+    if (m.kind == MessageKind.file) {
+      final file = m.file;
+      if (file == null) return m.text;
+      final path = file.path.isNotEmpty ? file.path : file.url;
+      return path.isNotEmpty ? path : file.name;
+    }
+    return m.text;
+  }
+
+  Future<void> _copyMessages(List<Message> list) async {
+    final loc = AppLocalizations.of(context);
+    if (list.isEmpty) return;
+    final text = list.map(_copyText).where((s) => s.isNotEmpty).join('\n\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(loc.copied)));
+  }
+
+  void _copySelected() {
+    final list = _chat
+        .messagesOf(widget.conversationId)
+        .where((m) => _selected.contains(m.id))
+        .toList();
+    _copyMessages(list);
+  }
+
+  Future<void> _shareSelected() async {
+    final list = _chat
+        .messagesOf(widget.conversationId)
+        .where((m) => _selected.contains(m.id))
+        .toList();
+    final files = <XFile>[];
+    for (final m in list) {
+      final path = m.file?.path ?? '';
+      if (path.isNotEmpty && await File(path).exists()) files.add(XFile(path));
+    }
+    if (files.isNotEmpty) {
+      await Share.shareXFiles(files);
+      return;
+    }
+    final text = list.map(_copyText).where((s) => s.isNotEmpty).join('\n\n');
+    if (text.isNotEmpty) await Share.share(text);
+  }
+
+  Future<void> _deleteSelected() async {
+    final loc = AppLocalizations.of(context);
+    if (_selected.isEmpty) return;
+    final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(loc.deleteMessages),
-        content: Text(loc.confirmDeleteMessagesValue(count)),
+        content: Text(loc.confirmDeleteMessagesValue(_selected.length)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -451,572 +233,725 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
-    final ids = _selectedIds.toList();
-    _chatProvider.deleteMessages(widget.peerId, ids);
+    if (ok != true) return;
+    _chat.deleteMessages(widget.conversationId, _selected.toList());
     setState(() {
+      _selected.clear();
       _selectionMode = false;
-      _selectedIds.clear();
-      _messages = _chatProvider.getMessages(widget.peerId);
     });
   }
 
-  /// 合并分享:文字消息合并为一段文本,文件消息附带真实路径一起分享
-  Future<void> _mergeShareSelected() async {
+  Future<void> _deleteMessage(Message m) async {
     final loc = AppLocalizations.of(context);
-    final selected = _messages.where((m) => _selectedIds.contains(m.id)).toList();
-    if (selected.isEmpty) return;
-
-    final textParts = <String>[];
-    final filePaths = <String>[];
-    for (final msg in selected) {
-      if (msg.type == MessageType.text) {
-        textParts.add(msg.content);
-      } else if (msg.type == MessageType.file) {
-        final path = _filePathOf(msg);
-        if (path != null && File(path).existsSync()) {
-          filePaths.add(path);
-        }
-      }
-    }
-
-    // 文件分享走 shareXFiles,文本作为附带说明;纯文本直接合并分享
-    if (filePaths.isNotEmpty) {
-      await Share.shareXFiles(
-        filePaths.map((p) => XFile(p)).toList(),
-        text: textParts.isEmpty ? null : textParts.join('\n\n'),
-      );
-    } else if (textParts.isNotEmpty) {
-      await Share.share(textParts.join('\n\n'));
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(loc.fileNotShareable)),
-      );
-    }
-    if (!mounted) return;
-    setState(() {
-      _selectionMode = false;
-      _selectedIds.clear();
-    });
-  }
-
-  /// 从文件消息的 JSON 内容中解析本地文件路径
-  String? _filePathOf(ChatMessage msg) {
-    try {
-      final map = jsonDecode(msg.content) as Map<String, dynamic>;
-      return map['path'] as String?;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// 获取本机局域网 IPv4 地址
-  Future<String> _getLocalIp() async {
-    try {
-      final interfaces = await NetworkInterface.list();
-      for (final iface in interfaces) {
-        if (iface.name.startsWith('lo') ||
-            iface.name.startsWith('docker') ||
-            iface.name.startsWith('veth')) {
-          continue;
-        }
-        for (final addr in iface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-            return addr.address;
-          }
-        }
-      }
-    } catch (_) {}
-    return '127.0.0.1';
-  }
-
-  /// 查看详情:展示当前对话双方的详细信息
-  Future<void> _showDetailsDialog() async {
-    final chatProvider = context.read<ChatProvider>();
-    final localIp = await _getLocalIp();
-    if (!mounted) return;
-
-    showDialog(
+    final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.info_outline, size: 20),
-            const SizedBox(width: 8),
-            Text(AppLocalizations.of(ctx).chatDetails),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _detailSectionTitle(ctx, AppLocalizations.of(ctx).peerDevice),
-            _infoRow(ctx, Icons.person, AppLocalizations.of(ctx).deviceName, widget.peerName),
-            _infoRow(ctx, Icons.tag, 'ID', widget.peerId),
-            _infoRow(ctx, Icons.lan, AppLocalizations.of(ctx).ipAddress, widget.peerIp),
-            _infoRow(ctx, Icons.settings_ethernet, AppLocalizations.of(ctx).portNumber, '${widget.peerPort}'),
-            const Divider(height: 24),
-            _detailSectionTitle(ctx, AppLocalizations.of(ctx).localDevice),
-            _infoRow(ctx, Icons.person, AppLocalizations.of(ctx).deviceName, chatProvider.selfName),
-            _infoRow(ctx, Icons.tag, 'ID', chatProvider.selfId),
-            _infoRow(ctx, Icons.lan, AppLocalizations.of(ctx).ipAddress, localIp),
-            _infoRow(
-              ctx,
-              Icons.settings_ethernet,
-              AppLocalizations.of(ctx).portNumber,
-              '${chatProvider.tcpPort}',
-            ),
-          ],
-        ),
+        title: Text(loc.deleteMessages),
+        content: Text(loc.confirmDeleteMessage),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(AppLocalizations.of(ctx).close),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(loc.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(loc.delete),
           ),
         ],
       ),
     );
+    if (ok == true) _chat.deleteMessage(widget.conversationId, m.id);
   }
 
-  Widget _detailSectionTitle(BuildContext context, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: Theme.of(context).colorScheme.primary,
-        ),
+  Future<void> _onMessageMenu(Message m, Offset position) async {
+    final loc = AppLocalizations.of(context);
+    final c = _conv;
+    if (c == null) return;
+    final value = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx,
+        position.dy,
       ),
-    );
-  }
-
-  Widget _infoRow(
-    BuildContext context,
-    IconData icon,
-    String label,
-    String value,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 8),
-          Text('$label：', style: const TextStyle(fontSize: 13)),
-          const SizedBox(width: 4),
-          Expanded(
-            child: SelectableText(
-              value,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                fontFamily: 'monospace',
-              ),
-            ),
+      items: [
+        if (m.kind != MessageKind.system)
+          PopupMenuItem(value: 'copy', child: Text(loc.translate('copy'))),
+        if (m.kind != MessageKind.system)
+          PopupMenuItem(value: 'select', child: Text(loc.translate('select'))),
+        if (m.file != null && !m.recalled) ...[
+          PopupMenuItem(
+            value: 'download',
+            child: Text(loc.translate('download')),
           ),
+          if (m.file!.path.isNotEmpty)
+            PopupMenuItem(value: 'open', child: Text(loc.translate('open'))),
+          if (m.file!.path.isNotEmpty)
+            PopupMenuItem(value: 'share', child: Text(loc.translate('share'))),
         ],
-      ),
-    );
-  }
-
-  /// 构建标题栏标题(多选模式显示已选数量,普通模式显示头像+用户名+IP+连接状态)
-  Widget _buildTitleWidget(ColorScheme colorScheme) {
-    if (_selectionMode) {
-      return Text(
-        AppLocalizations.of(context).selectedCountValue(_selectedIds.length),
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-        ),
-      );
-    }
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 16,
-          backgroundColor: colorScheme.primaryContainer,
-          child: Text(
-            widget.peerName.isNotEmpty
-                ? widget.peerName[0].toUpperCase()
-                : '?',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: colorScheme.onPrimaryContainer,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 用户名过长时省略号截断,避免挤占右上角按钮区域
-              Text(
-                widget.peerName,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      widget.peerIp,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  _buildConnectionStatus(colorScheme),
-                ],
-              ),
-            ],
-          ),
-        ),
+        if (m.mine && !m.recalled)
+          PopupMenuItem(value: 'recall', child: Text(loc.translate('recall'))),
+        PopupMenuItem(value: 'delete', child: Text(loc.delete)),
       ],
     );
+    if (value == null || !mounted) return;
+    switch (value) {
+      case 'copy':
+        await _copyMessages([m]);
+        break;
+      case 'select':
+        _enterSelection(m.id);
+        break;
+      case 'download':
+        final path = await _chat.downloadMessage(c.id, m.id);
+        if (path != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${loc.translate('savedTo')}$path')),
+          );
+        }
+        break;
+      case 'open':
+        await _openFile(m);
+        break;
+      case 'share':
+        await _shareMessage(m);
+        break;
+      case 'recall':
+        _chat.recallMessage(c.id, m.id);
+        break;
+      case 'delete':
+        await _deleteMessage(m);
+        break;
+    }
   }
 
-  /// 构建标题栏操作按钮(多选模式:合并分享/删除;普通模式:更多菜单)
-  List<Widget> _buildAppBarActions(ColorScheme colorScheme) {
-    if (_selectionMode) {
-      return [
-        // 合并分享:文字合并为一段文本,文件附带真实路径
-        TextButton.icon(
-          onPressed: _selectedIds.isEmpty ? null : () => _mergeShareSelected(),
-          icon: const Icon(Icons.ios_share, size: 18),
-          label: Text(AppLocalizations.of(context).mergeShare),
-        ),
-        TextButton.icon(
-          onPressed: _selectedIds.isEmpty
-              ? null
-              : () => _confirmDeleteSelected(),
-          icon: Icon(Icons.delete_outline, size: 18, color: colorScheme.error),
-          label: Text(
-            AppLocalizations.of(context).delete,
-            style: TextStyle(color: colorScheme.error),
-          ),
-        ),
-      ];
+  Future<void> _openFile(Message m) async {
+    final path = m.file?.path ?? '';
+    if (path.isEmpty) return;
+    try {
+      await launchUrl(Uri.file(path));
+    } catch (_) {
+      await Share.shareXFiles([XFile(path)]);
     }
-    return [
-      PopupMenuButton<String>(
-        tooltip: AppLocalizations.of(context).more,
-        onSelected: (value) {
-          switch (value) {
-            case 'details':
-              _showDetailsDialog();
-            case 'folder':
-              _openReceivedFolder();
-            case 'reconnect':
-              _ensureConnected();
-          }
-        },
-        itemBuilder: (ctx) => [
-          PopupMenuItem(
-            value: 'details',
-            child: ListTile(
-              leading: const Icon(Icons.info_outline, size: 18),
-              title: Text(
-                AppLocalizations.of(ctx).viewDetail,
-                style: const TextStyle(fontSize: 14),
-              ),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          PopupMenuItem(
-            value: 'folder',
-            child: ListTile(
-              leading: const Icon(Icons.folder_open, size: 18),
-              title: Text(
-                AppLocalizations.of(ctx).openFolder,
-                style: const TextStyle(fontSize: 14),
-              ),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          if (!_isConnected)
-            PopupMenuItem(
-              value: 'reconnect',
-              enabled: !_isConnecting,
-              child: ListTile(
-                leading: Icon(Icons.wifi_off, size: 18),
-                title: Text(
-                  _isConnecting
-                      ? AppLocalizations.of(ctx).connecting
-                      : AppLocalizations.of(ctx).reconnect,
-                  style: const TextStyle(fontSize: 14),
-                ),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-        ],
-      ),
-    ];
+  }
+
+  Future<void> _shareMessage(Message m) async {
+    final path = m.file?.path ?? '';
+    if (path.isNotEmpty && await File(path).exists()) {
+      await Share.shareXFiles([XFile(path)]);
+      return;
+    }
+    final text = _copyText(m);
+    if (text.isNotEmpty) await Share.share(text);
+  }
+
+  Future<void> _copyAll() async {
+    await _copyMessages(_chat.messagesOf(widget.conversationId));
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
+    final loc = AppLocalizations.of(context);
+    final c = _conv;
+    if (c == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: Center(child: Text(loc.translate('conversationMissing'))),
+      );
+    }
+    final isDesktop = CustomTitleBar.isDesktop;
+    final title = _chat.conversationTitle(c);
+    final subtitle = _subtitle(loc, c);
     return Scaffold(
-      appBar: CustomTitleBar.isDesktop
+      appBar: isDesktop
           ? null
-          : WindowDragRegion(
-              child: AppBar(
-                // 压缩标题与返回按钮的默认间距,给长用户名留更多空间
-                titleSpacing: _selectionMode ? 4 : 8,
-                // 多选模式下:leading 变为关闭按钮,标题变为已选数量
-                leading: _selectionMode
-                    ? IconButton(
-                        icon: const Icon(Icons.close),
-                        tooltip: AppLocalizations.of(context).cancel,
-                        onPressed: _exitSelectionMode,
-                      )
-                    : null,
-                title: _buildTitleWidget(colorScheme),
-                actions: _buildAppBarActions(colorScheme),
-              ),
+          : AppBar(
+              title: _title(context, title, subtitle),
+              actions: _selectionMode
+                  ? _selectionActions(loc)
+                  : _actions(loc, c),
             ),
       body: Column(
         children: [
-          // 桌面端:自定义标题栏(含最小化/最大化/关闭按钮),支持返回
-          if (CustomTitleBar.isDesktop)
+          if (isDesktop)
             CustomTitleBar(
-              titleWidget: _buildTitleWidget(colorScheme),
+              title: title,
               showBackButton: true,
-              onBack: () => Navigator.of(context).maybePop(),
-              actions: _buildAppBarActions(colorScheme),
+              actions: _selectionMode
+                  ? _selectionActions(loc)
+                  : _actions(loc, c),
             ),
-          Expanded(
-            child: DropTarget(
-        onDragEntered: (_) {
-          if (mounted) setState(() => _isDragOver = true);
+          if (isDesktop) _desktopSubtitle(context, subtitle),
+          if (_selectionMode) _selectionBar(loc),
+          Expanded(child: _messageArea(c)),
+          _typingBar(loc, c),
+          _inputBar(loc),
+        ],
+      ),
+    );
+  }
+
+  Widget _title(BuildContext context, String title, String? subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (subtitle != null)
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _desktopSubtitle(BuildContext context, String? subtitle) {
+    if (subtitle == null) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Text(
+        subtitle,
+        style: TextStyle(
+          fontSize: 12,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  String? _subtitle(AppLocalizations loc, Conversation c) {
+    if (c.kind == ConvKind.group) {
+      return '${loc.translate('members')} · ${c.members.length}';
+    }
+    final peer = _chat.peer(c.peerId);
+    if (peer.connected) {
+      return '${peer.addr} · ${loc.connected}';
+    }
+    return '${peer.addr} · ${loc.disconnected}';
+  }
+
+  List<Widget> _actions(AppLocalizations loc, Conversation c) {
+    return [
+      IconButton(
+        icon: const Icon(Icons.copy_all),
+        tooltip: loc.translate('copyAll'),
+        onPressed: _copyAll,
+      ),
+      IconButton(
+        icon: const Icon(Icons.checklist),
+        tooltip: loc.multiSelect,
+        onPressed: () {
+          setState(() {
+            _selectionMode = true;
+            _selected.clear();
+          });
         },
-        onDragExited: (_) {
-          if (mounted) setState(() => _isDragOver = false);
-        },
-        onDragDone: (details) {
-          if (mounted) setState(() => _isDragOver = false);
-          _handleDroppedFiles(details.files);
-        },
-        child: Stack(
+      ),
+      IconButton(
+        icon: const Icon(Icons.info_outline),
+        tooltip: loc.chatDetails,
+        onPressed: () => _showInfo(c),
+      ),
+    ];
+  }
+
+  List<Widget> _selectionActions(AppLocalizations loc) {
+    return [
+      IconButton(
+        icon: const Icon(Icons.close),
+        tooltip: loc.cancel,
+        onPressed: () => setState(() {
+          _selectionMode = false;
+          _selected.clear();
+        }),
+      ),
+      IconButton(
+        icon: const Icon(Icons.select_all),
+        tooltip: loc.translate('selectAll'),
+        onPressed: _selectAll,
+      ),
+      IconButton(
+        icon: const Icon(Icons.copy),
+        tooltip: loc.translate('copySelected'),
+        onPressed: _selected.isEmpty ? null : _copySelected,
+      ),
+      IconButton(
+        icon: const Icon(Icons.ios_share),
+        tooltip: loc.translate('share'),
+        onPressed: _selected.isEmpty ? null : _shareSelected,
+      ),
+      IconButton(
+        icon: const Icon(Icons.delete_outline),
+        tooltip: loc.deleteMessages,
+        onPressed: _selected.isEmpty ? null : _deleteSelected,
+      ),
+    ];
+  }
+
+  Widget _selectionBar(AppLocalizations loc) {
+    return Material(
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
           children: [
-            Column(
-              children: [
-          // 重连中提示条(发送/文件传输前自动重连时显示)
-          Consumer<ChatProvider>(
-            builder: (ctx, provider, _) {
-              if (!provider.isReconnecting) return const SizedBox.shrink();
-              final cs = Theme.of(ctx).colorScheme;
-              return Container(
-                width: double.infinity,
-                color: cs.tertiaryContainer.withValues(alpha: 0.4),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cs.onTertiaryContainer,
+            Text(loc.selectedCountValue(_selected.length)),
+            const Spacer(),
+            TextButton(
+              onPressed: _selectAll,
+              child: Text(loc.translate('selectAll')),
+            ),
+            TextButton(
+              onPressed: _selected.isEmpty ? null : _copySelected,
+              child: Text(loc.translate('copySelected')),
+            ),
+            TextButton(
+              onPressed: _selected.isEmpty ? null : _deleteSelected,
+              child: Text(loc.delete),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _messageArea(Conversation c) {
+    final list = _chat.messagesOf(widget.conversationId);
+    if (list.isEmpty) {
+      return DropTarget(
+        onDragEntered: (_) => setState(() => _dragOver = true),
+        onDragExited: (_) => setState(() => _dragOver = false),
+        onDragDone: (details) {
+          setState(() => _dragOver = false);
+          final paths = details.files.map((f) => f.path).toList();
+          if (paths.isNotEmpty) _chat.sendFiles(paths);
+        },
+        child: Center(
+          child: _dragOver
+              ? const Icon(Icons.download, size: 56)
+              : _EmptyChat(text: AppLocalizations.of(context).startChat),
+        ),
+      );
+    }
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _dragOver = true),
+      onDragExited: (_) => setState(() => _dragOver = false),
+      onDragDone: (details) {
+        setState(() => _dragOver = false);
+        final paths = details.files.map((f) => f.path).toList();
+        if (paths.isNotEmpty) _chat.sendFiles(paths);
+      },
+      child: Stack(
+        children: [
+          ListView.builder(
+            controller: _scroll,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            itemCount: list.length,
+            itemBuilder: (ctx, i) {
+              final m = list[i];
+              final prev = i == 0 ? null : list[i - 1];
+              final showName =
+                  c.kind == ConvKind.group &&
+                  !m.mine &&
+                  m.kind != MessageKind.system &&
+                  (prev == null ||
+                      prev.senderId != m.senderId ||
+                      prev.kind == MessageKind.system);
+              return MessageBubble(
+                message: m,
+                conversation: c,
+                showSender: showName,
+                senderName: _chat.peerName(m.senderId),
+                selectionMode: _selectionMode,
+                selected: _selected.contains(m.id),
+                download: _chat.downloads[m.id],
+                sendProgress: _chat.sends[m.id],
+                onTap: _selectionMode ? () => _toggleSelect(m.id) : null,
+                onMenu: (pos) => _onMessageMenu(m, pos),
+                onDownload: () => _chat.downloadMessage(c.id, m.id),
+                onOpen: () => _openFile(m),
+                onShare: () => _shareMessage(m),
+                onToggleSelect: () => _toggleSelect(m.id),
+              );
+            },
+          ),
+          if (_dragOver)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.08),
+                  child: const Center(child: Icon(Icons.download, size: 64)),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _typingBar(AppLocalizations loc, Conversation c) {
+    final names = _chat.typingNames(c);
+    if (names.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          '${names.join(', ')} ${loc.translate('isTyping')}',
+          style: TextStyle(
+            fontSize: 12,
+            fontStyle: FontStyle.italic,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _inputBar(AppLocalizations loc) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 6, 8, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.attach_file),
+              tooltip: loc.sendFile,
+              onPressed: _pickFiles,
+            ),
+            Expanded(
+              child: TextField(
+                controller: _input,
+                focusNode: _focus,
+                minLines: 1,
+                maxLines: 6,
+                textInputAction: TextInputAction.newline,
+                decoration: InputDecoration(
+                  hintText: loc.messageHint,
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                ),
+                onSubmitted: (_) => _send(),
+              ),
+            ),
+            const SizedBox(width: 6),
+            IconButton.filled(
+              icon: const Icon(Icons.send),
+              tooltip: loc.send,
+              onPressed: _send,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showInfo(Conversation c) async {
+    final loc = AppLocalizations.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _chat.conversationTitle(c),
+                      style: Theme.of(ctx).textTheme.titleLarge,
+                    ),
+                  ),
+                  if (c.kind == ConvKind.group && c.owner == _chat.profile.id)
+                    TextButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _renameGroup(c);
+                      },
+                      child: Text(loc.translate('rename')),
+                    ),
+                ],
+              ),
+              if (c.kind == ConvKind.direct) ...[
+                const SizedBox(height: 8),
+                _infoLine(ctx, loc.ipAddress, _chat.peer(c.peerId).ip),
+                _infoLine(ctx, loc.portNumber, '${_chat.peer(c.peerId).port}'),
+                _infoLine(
+                  ctx,
+                  loc.translate('transferPort'),
+                  '${_chat.peer(c.peerId).transferPort}',
+                ),
+              ] else ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${loc.translate('members')} (${c.members.length})',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                for (final p in _chat.groupMembers(c))
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      child: Text(
+                        p.displayName.isEmpty
+                            ? '?'
+                            : p.displayName.characters.first.toUpperCase(),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      AppLocalizations.of(ctx).connecting,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onTertiaryContainer,
+                    title: Text(
+                      '${p.displayName}${p.id == _chat.profile.id ? ' (${loc.localDevice})' : ''}',
+                    ),
+                    subtitle: p.id == _chat.profile.id
+                        ? null
+                        : Text(p.addr, style: const TextStyle(fontSize: 12)),
+                    trailing:
+                        c.owner == _chat.profile.id && p.id != _chat.profile.id
+                        ? IconButton(
+                            icon: const Icon(Icons.person_remove_outlined),
+                            tooltip: loc.translate('removeMember'),
+                            onPressed: () {
+                              _chat.removeGroupMember(c.id, p.id);
+                              Navigator.pop(ctx);
+                            },
+                          )
+                        : null,
+                  ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _addMembers(c);
+                      },
+                      icon: const Icon(Icons.group_add),
+                      label: Text(loc.translate('addMembers')),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        if (c.owner == _chat.profile.id) {
+                          _chat.disbandGroup(c);
+                        } else {
+                          _chat.leaveGroup(c);
+                        }
+                      },
+                      icon: const Icon(Icons.logout),
+                      label: Text(
+                        c.owner == _chat.profile.id
+                            ? loc.translate('disbandGroup')
+                            : loc.translate('leaveGroup'),
                       ),
                     ),
                   ],
                 ),
-              );
-            },
-          ),
-          // 当前文件传输列表(批量/取消,仅当前会话的传输)
-          Consumer<ChatProvider>(
-            builder: (ctx, provider, _) {
-              final active = provider
-                  .transfersForPeer(widget.peerId)
-                  .where((t) {
-                    final s = t.status;
-                    return s == TransferStatus.pending ||
-                        s == TransferStatus.transferring;
-                  })
-                  .toList();
-              if (active.isEmpty) return const SizedBox.shrink();
-              return ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 220),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  itemCount: active.length,
-                  itemBuilder: (ctx, i) {
-                    final s = active[i];
-                    return FileTransferTile(
-                      session: s,
-                      onCancel: () => provider.cancelTransfer(s.transferId),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-          // 消息列表
-          Expanded(
-            child: _messages.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat,
-                          size: 48,
-                          color: colorScheme.onSurfaceVariant.withValues(
-                            alpha: 0.4,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          AppLocalizations.of(context).startChat,
-                          style: TextStyle(color: colorScheme.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: _messages.length,
-                    reverse: true,
-                    itemBuilder: (ctx, i) {
-                      final msg = _messages[_messages.length - 1 - i];
-                      return MessageBubble(
-                        message: msg,
-                        peerId: widget.peerId,
-                        selectionMode: _selectionMode,
-                        isSelected: _selectedIds.contains(msg.id),
-                        onToggleSelect: () => _toggleSelect(msg.id),
-                        onMultiSelect: () => _enterSelectionMode(msg.id),
-                        onDelete: () {
-                          _chatProvider.deleteMessages(widget.peerId, [msg.id]);
-                          setState(() {
-                            _messages =
-                                _chatProvider.getMessages(widget.peerId);
-                          });
-                        },
-                      );
-                    },
-                  ),
-          ),
-
-          // 输入区域
-          Container(
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              border: Border(
-                top: BorderSide(color: colorScheme.outlineVariant, width: 0.5),
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline),
-                  onPressed: _pickAndSendFile,
-                  tooltip: AppLocalizations.of(context).sendFile,
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    focusNode: _inputFocusNode,
-                    decoration: InputDecoration(
-                      hintText: AppLocalizations.of(context).messageHint,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: colorScheme.surfaceContainerHighest,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                    ),
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _sendMessage(),
-                    maxLines: 4,
-                    minLines: 1,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                IconButton.filled(
-                  icon: const Icon(Icons.send),
-                  onPressed: _sendMessage,
-                  tooltip: AppLocalizations.of(context).send,
-                ),
               ],
-            ),
-          ),
-              ],
-            ),
-            // 拖拽悬停提示层:提示松开即可发送文件
-            if (_isDragOver)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Container(
-                    color: colorScheme.primaryContainer.withValues(alpha: 0.35),
-                    alignment: Alignment.center,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.file_upload_outlined,
-                              color: colorScheme.primary),
-                          const SizedBox(width: 8),
-                          Text(AppLocalizations.of(context).dragFilesHere),
-                        ],
-                      ),
-                    ),
-                  ),
+              const Divider(height: 28),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  c.pinned ? Icons.push_pin : Icons.push_pin_outlined,
                 ),
+                title: Text(
+                  c.pinned ? loc.translate('unpin') : loc.translate('pin'),
+                ),
+                onTap: () {
+                  _chat.togglePinned(c.id);
+                  Navigator.pop(ctx);
+                },
               ),
-          ],
-        ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  c.muted
+                      ? Icons.notifications_off
+                      : Icons.notifications_outlined,
+                ),
+                title: Text(
+                  c.muted ? loc.translate('unmute') : loc.translate('mute'),
+                ),
+                onTap: () {
+                  _chat.toggleMuted(c.id);
+                  Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.cleaning_services_outlined),
+                title: Text(loc.translate('clearHistory')),
+                onTap: () {
+                  _chat.clearHistory(c.id);
+                  Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ),
         ),
       ),
-      ],
+    );
+  }
+
+  Widget _infoLine(BuildContext context, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(fontFamily: 'monospace')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _renameGroup(Conversation c) async {
+    final loc = AppLocalizations.of(context);
+    final controller = TextEditingController(text: c.title);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(loc.translate('rename')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: loc.translate('groupNameHint'),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(loc.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: Text(loc.save),
+          ),
+        ],
+      ),
+    );
+    if (name != null && name.isNotEmpty) _chat.renameGroup(c.id, name);
+  }
+
+  Future<void> _addMembers(Conversation c) async {
+    final loc = AppLocalizations.of(context);
+    final existing = c.members.toSet();
+    final candidates = _chat
+        .sortedPeers()
+        .where((p) => !existing.contains(p.id))
+        .toList();
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(loc.translate('noDevices'))));
+      return;
+    }
+    final selected = <String>{};
+    final picked = await showDialog<List<String>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(loc.translate('selectMembers')),
+          content: SizedBox(
+            width: 380,
+            height: 360,
+            child: ListView.builder(
+              itemCount: candidates.length,
+              itemBuilder: (_, i) {
+                final p = candidates[i];
+                return CheckboxListTile(
+                  value: selected.contains(p.id),
+                  title: Text(p.displayName),
+                  subtitle: Text(p.addr, style: const TextStyle(fontSize: 12)),
+                  onChanged: (v) => setDialogState(() {
+                    if (v == true) {
+                      selected.add(p.id);
+                    } else {
+                      selected.remove(p.id);
+                    }
+                  }),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(loc.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, selected.toList()),
+              child: Text(loc.translate('add')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && picked.isNotEmpty) {
+      _chat.addGroupMembers(c.id, picked);
+    }
+  }
+}
+
+class _EmptyChat extends StatelessWidget {
+  final String text;
+
+  const _EmptyChat({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.chat_bubble_outline,
+            size: 48,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            text,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }
