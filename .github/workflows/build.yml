@@ -98,9 +98,10 @@ jobs:
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libsecret-1-dev
           # linuxdeploy-plugin-gtk 生成 immodules/pixbuf 缓存所需工具
-          # (libgdk-pixbuf-2.0-bin 是 24.04 的包名,22.04 是 libgdk-pixbuf2.0-bin,失败则回退)
-          sudo apt-get install -y libgtk-3-bin libgdk-pixbuf-2.0-bin || \
-            sudo apt-get install -y libgtk-3-bin libgdk-pixbuf2.0-bin
+          # (libgdk-pixbuf-2.0-bin 是部分版本的包名,失败则回退到 libgdk-pixbuf2.0-bin)
+          # librsvg2-common 提供 SVG pixbuf loader，避免 AppImage 图标缺失
+          sudo apt-get install -y libgtk-3-bin librsvg2-common libgdk-pixbuf-2.0-bin || \
+            sudo apt-get install -y libgtk-3-bin librsvg2-common libgdk-pixbuf2.0-bin
 
       - uses: subosito/flutter-action@v2
         with:
@@ -312,6 +313,17 @@ jobs:
           Terminal=false
           Categories=Network;Utility;
           EOF
+
+          # gdk-pixbuf >= 2.44 不再随包提供 loaders 目录，但 linuxdeploy-plugin-gtk
+          # 仍会无条件复制该目录并因此失败。这里按 pkg-config 的实际路径补建目录和缓存。
+          GDK_PIXBUF_BINARYDIR="$(pkg-config --variable=gdk_pixbuf_binarydir gdk-pixbuf-2.0 2>/dev/null || true)"
+          if [ -z "$GDK_PIXBUF_BINARYDIR" ]; then
+            GDK_PIXBUF_BINARYDIR="/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)/gdk-pixbuf-2.0/2.10.0"
+          fi
+          sudo mkdir -p "$GDK_PIXBUF_BINARYDIR/loaders"
+          if command -v gdk-pixbuf-query-loaders >/dev/null 2>&1; then
+            gdk-pixbuf-query-loaders | sudo tee "$GDK_PIXBUF_BINARYDIR/loaders.cache" >/dev/null || true
+          fi
 
           # 部署依赖 + 把 GTK3 及资源(schemas/pixbuf/immodules/主题)打进 AppDir,
           # 同时生成标准 AppRun 和 apprun-hooks(由 AppRun 在运行时 source)
